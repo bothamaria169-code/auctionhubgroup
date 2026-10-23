@@ -53,7 +53,7 @@ try {
         FROM auctions a
         LEFT JOIN makes m ON m.id = a.make_id
         LEFT JOIN bids  b ON b.auction_id = a.id
-        WHERE a.status IN ('active', 'upcoming')
+        WHERE a.status IN ('active', 'upcoming') AND a.is_sold = 0
         GROUP BY a.id
         ORDER BY
             CASE a.status WHEN 'active' THEN 0 WHEN 'upcoming' THEN 1 END ASC,
@@ -63,6 +63,22 @@ try {
     $featuredAuctions = $stmt->fetchAll();
 } catch (Exception $e) {
     $featuredAuctions = [];
+}
+
+// 2b. Recently sold (social proof strip under the featured grid)
+$recentlySold = [];
+try {
+    $recentlySold = $pdo->query("
+        SELECT a.id, a.item_name, a.year, a.mileage, a.image_url,
+               COALESCE(a.final_price, a.current_price) AS sold_price,
+               COALESCE(a.sold_date, a.end_time)        AS sold_on
+        FROM auctions a
+        WHERE a.is_sold = 1
+        ORDER BY COALESCE(a.sold_date, a.end_time) DESC
+        LIMIT 12
+    ")->fetchAll();
+} catch (Exception $e) {
+    $recentlySold = [];
 }
 
 // 3. Nearest upcoming auction (for CTA countdown)
@@ -546,6 +562,50 @@ function displayPrice(array $auction): string {
         <?php endif; ?>
     </div>
 </section>
+
+
+<?php if (!empty($recentlySold)): ?>
+<!-- ══════════════════════════════════════════════════════════
+     RECENTLY SOLD
+     ══════════════════════════════════════════════════════════ -->
+<section class="section recently-sold" id="recently-sold" aria-labelledby="recently-sold-title">
+    <div class="container">
+        <div class="rs-header">
+            <div>
+                <h2 class="section-title" id="recently-sold-title">Recently Sold</h2>
+                <p class="section-subtitle">Real prices our buyers paid at recent auctions</p>
+            </div>
+            <a href="sold_vehicles.php" class="btn btn-outline btn-sm">
+                All Sold Prices <i class="fas fa-arrow-right" aria-hidden="true"></i>
+            </a>
+        </div>
+
+        <div class="rs-strip" role="list">
+            <?php foreach ($recentlySold as $s): ?>
+            <a href="auction.php?id=<?= (int)$s['id'] ?>" class="rs-card" role="listitem">
+                <div class="rs-card-img">
+                    <img src="<?= e(cldImg($s['image_url'], CLD_CARD) ?: 'assets/no-image.jpg') ?>"
+                         alt="<?= e($s['item_name']) ?>" loading="lazy"
+                         onerror="this.src='assets/no-image.jpg'">
+                    <div class="sold-stamp"><span>Sold</span></div>
+                </div>
+                <div class="rs-card-body">
+                    <h3 class="rs-card-title"><?= e($s['item_name']) ?></h3>
+                    <div class="rs-card-price">
+                        <small>Sold for</small>
+                        <?= formatRand((float)$s['sold_price']) ?>
+                    </div>
+                    <div class="rs-card-date">
+                        <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                        <?= safeDate('d M Y', $s['sold_on']) ?>
+                    </div>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<?php endif; ?>
 
 
 <!-- ══════════════════════════════════════════════════════════

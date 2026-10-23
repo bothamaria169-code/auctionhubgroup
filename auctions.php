@@ -13,7 +13,7 @@ $currentUser = $token ? verifyJWT($token) : null;
 if ($currentUser) syncSession($currentUser);
 
 // ── FILTER & SORT PARAMETERS ──────────────────────────────────
-$allowedStatuses = ['active', 'upcoming', 'closed', 'all'];
+$allowedStatuses = ['active', 'upcoming', 'closed', 'all', 'sold'];
 $allowedSorts    = ['ending_soon', 'newest', 'price_low', 'price_high', 'most_bids'];
 $allowedFuels    = ['Petrol', 'Diesel', 'Hybrid', 'Electric'];
 $allowedTrans    = ['Automatic', 'Manual'];
@@ -38,9 +38,13 @@ $params     = [];
 
 if ($filterStatus === 'all') {
     $conditions[] = "a.status IN ('active','upcoming','closed')";
+} elseif ($filterStatus === 'sold') {
+    $conditions[] = "a.is_sold = 1";
 } else {
     $conditions[] = "a.status = ?";
     $params[]     = $filterStatus;
+    // Live/upcoming lists show only lots still for sale
+    if ($filterStatus !== 'closed') $conditions[] = "a.is_sold = 0";
 }
 
 if ($filterMakeId > 0) {
@@ -112,7 +116,7 @@ $auctions = [];
 $listSql  = "
     SELECT a.id, a.item_name, a.make_id, a.year, a.mileage, a.fuel_type, a.transmission,
            a.color, a.current_price, a.start_price, a.reserve_price, a.min_increment,
-           a.status, a.start_time, a.end_time, a.image_url, a.condition_grade, a.is_sold,
+           a.status, a.start_time, a.end_time, a.image_url, a.condition_grade, a.is_sold, a.final_price, a.sold_date,
            m.name AS make_name,
            COUNT(DISTINCT b.id) AS bid_count
     FROM auctions a
@@ -273,6 +277,7 @@ $auctionsCrumbLd = [
                     <option value="active"   <?= $filterStatus === 'active'   ? 'selected' : '' ?>>Live Now</option>
                     <option value="upcoming" <?= $filterStatus === 'upcoming' ? 'selected' : '' ?>>Upcoming</option>
                     <option value="closed"   <?= $filterStatus === 'closed'   ? 'selected' : '' ?>>Closed</option>
+                    <option value="sold"     <?= $filterStatus === 'sold'     ? 'selected' : '' ?>>Sold</option>
                     <option value="all"      <?= $filterStatus === 'all'      ? 'selected' : '' ?>>All</option>
                 </select>
             </div>
@@ -489,7 +494,8 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                 $bidCount   = (int)$a['bid_count'];
                 $imgSrc     = !empty($a['image_url']) ? e(cldImg($a['image_url'], CLD_CARD)) : 'assets/no-image.jpg';
                 $title      = e(lotTitle($a));   // item_name often already carries year + make
-                $isClosed   = $a['status'] === 'closed';
+                $isSold     = !empty($a['is_sold']);
+                $isClosed   = $a['status'] === 'closed' || $isSold;
             ?>
             <article class="auction-card <?= $isClosed ? 'auction-card-closed' : '' ?>"
                      role="listitem"
@@ -499,11 +505,13 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                     <div class="auction-card-img-wrap">
                         <img src="<?= $imgSrc ?>" alt="<?= $title ?>" class="auction-card-img"
                              loading="lazy" width="400" height="270">
-                        <?php if (!empty($a['is_sold'])): ?>
+                        <?php if ($isSold): ?>
                             <div class="sold-stamp"><span>Sold</span></div>
                         <?php endif; ?>
                         <div class="auction-card-badges">
-                            <?php if ($a['status'] === 'active'): ?>
+                            <?php if ($isSold): ?>
+                                <span class="badge badge-sold">Sold</span>
+                            <?php elseif ($a['status'] === 'active'): ?>
                                 <span class="badge badge-active">
                                     <span class="live-dot live-dot-sm" aria-hidden="true"></span> Live
                                 </span>
@@ -511,8 +519,6 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                                 <span class="badge badge-upcoming">
                                     <i class="fas fa-clock" aria-hidden="true"></i> Upcoming
                                 </span>
-                            <?php elseif (!empty($a['is_sold'])): ?>
-                                <span class="badge badge-closed">Sold</span>
                             <?php else: ?>
                                 <span class="badge badge-closed">Closed</span>
                             <?php endif; ?>
@@ -558,13 +564,20 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                     </h2>
 
                     <div class="auction-card-pricing">
+                        <?php if ($isSold): ?>
+                        <div class="auction-card-price-main auction-card-price-sold">
+                            <span class="price-label">Sold For</span>
+                            <span class="price-value"><?= formatRand((float)($a['final_price'] ?: $price)) ?></span>
+                        </div>
+                        <?php else: ?>
                         <div class="auction-card-price-main">
                             <span class="price-label"><?= $bidCount > 0 ? 'Current Bid' : 'Starting Bid' ?></span>
                             <span class="price-value" id="price-<?= $a['id'] ?>" data-auction-price="<?= $a['id'] ?>">
                                 <?= formatRand($price) ?>
                             </span>
                         </div>
-                        <?php if ($hasReserve): ?>
+                        <?php endif; ?>
+                        <?php if ($hasReserve && !$isSold): ?>
                         <div class="auction-card-reserve">
                             <span class="reserve-label">Reserve:</span>
                             <span class="reserve-value <?= $reserveMet ? 'reserve-met' : '' ?>">
@@ -578,7 +591,12 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                     </div>
 
                     <div class="auction-card-footer">
-                        <?php if ($a['status'] === 'active' && $a['end_time']): ?>
+                        <?php if ($isSold): ?>
+                            <div class="auction-card-closed-label auction-card-sold-label" aria-label="Vehicle sold">
+                                <i class="fas fa-circle-check" aria-hidden="true"></i> Sold
+                                <?php if ($a['sold_date'] || $a['end_time']): ?> · <?= safeDate('d M Y', $a['sold_date'] ?: $a['end_time']) ?><?php endif; ?>
+                            </div>
+                        <?php elseif ($a['status'] === 'active' && $a['end_time']): ?>
                             <div class="auction-card-timer"
                                  data-countdown="<?= e($a['end_time']) ?>" aria-label="Time remaining">
                                 <i class="fas fa-clock" aria-hidden="true"></i>

@@ -177,9 +177,15 @@ $reservePrice  = (float)($auction['reserve_price'] ?? 0);
 $minIncrement  = (float)($auction['min_increment'] ?? 500);
 $minNextBid    = $currentPrice + $minIncrement;
 $reserveMet    = $reservePrice > 0 && $currentPrice >= $reservePrice;
-$isClosed      = $auction['status'] === 'closed';
-$isActive      = $auction['status'] === 'active';
-$isUpcoming    = $auction['status'] === 'upcoming';
+$isSold        = !empty($auction['is_sold']);
+$isClosed      = $auction['status'] === 'closed' || $isSold;
+$isActive      = $auction['status'] === 'active' && !$isSold;
+$isUpcoming    = $auction['status'] === 'upcoming' && !$isSold;
+// Sold price: the recorded final price, else the winning bid, else the last price shown
+$soldPrice     = $isSold
+                 ? (float)($auction['final_price'] ?: ($bidsRecent[0]['amount'] ?? $currentPrice))
+                 : 0.0;
+$soldDate      = $auction['sold_date'] ?? null;
 $canBid        = $isActive
                  && $currentUser
                  && ($currentUser['bidder_status'] ?? '') === 'verified_bidder';
@@ -353,6 +359,10 @@ $breadcrumbLd = [
             <?php elseif ($isUpcoming): ?>
                 <span class="badge badge-upcoming badge-lg">
                     <i class="fas fa-clock" aria-hidden="true"></i> Upcoming
+                </span>
+            <?php elseif ($isSold): ?>
+                <span class="badge badge-sold badge-lg">
+                    <i class="fas fa-circle-check" aria-hidden="true"></i> Sold
                 </span>
             <?php else: ?>
                 <span class="badge badge-closed badge-lg">
@@ -794,6 +804,15 @@ $breadcrumbLd = [
                             Starts <?= date('d M Y H:i', strtotime($auction['start_time'])) ?>
                         </div>
                     <?php endif; ?>
+                <?php elseif ($isSold): ?>
+                    <span class="badge badge-sold">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i> Sold
+                    </span>
+                    <?php if ($soldDate || $auction['end_time']): ?>
+                        <span class="bid-panel-closed-date">
+                            Sold <?= safeDate('d M Y', $soldDate ?: $auction['end_time']) ?>
+                        </span>
+                    <?php endif; ?>
                 <?php else: ?>
                     <span class="badge badge-closed">
                         <i class="fas fa-lock" aria-hidden="true"></i> Closed
@@ -807,6 +826,19 @@ $breadcrumbLd = [
             </div>
 
             <!-- Current price (big) -->
+            <?php if ($isSold): ?>
+            <div class="bid-panel-price-block bid-panel-price-sold">
+                <div class="bid-panel-price-label">Sold For</div>
+                <div class="bid-panel-price" aria-label="Sold price">
+                    <?= formatRand($soldPrice) ?>
+                </div>
+                <?php if ($bidCount > 0): ?>
+                <div class="bid-panel-bid-count">
+                    after <?= $bidCount ?> bid<?= $bidCount !== 1 ? 's' : '' ?>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php else: ?>
             <div class="bid-panel-price-block">
                 <div class="bid-panel-price-label">
                     <?= $bidCount > 0 ? 'Current Bid' : 'Starting Price' ?>
@@ -822,6 +854,7 @@ $breadcrumbLd = [
                     <?= $bidCount ?> bid<?= $bidCount !== 1 ? 's' : '' ?> placed
                 </div>
             </div>
+            <?php endif; ?>
 
             <!-- Reserve price -->
             <?php if ($reservePrice > 0): ?>
@@ -1003,6 +1036,30 @@ $breadcrumbLd = [
                 <?php if (!$currentUser): ?>
                 <a href="login.php?tab=register" class="btn btn-primary bid-locked-btn">
                     Register Free
+                </a>
+                <?php endif; ?>
+            </div>
+
+            <?php elseif ($isSold): ?>
+            <!-- Vehicle sold -->
+            <div class="bid-locked bid-locked-closed bid-locked-sold">
+                <i class="fas fa-circle-check bid-locked-icon" aria-hidden="true"></i>
+                <h3 class="bid-locked-title">This Vehicle Has Been Sold</h3>
+                <p class="bid-locked-text">
+                    Sold for <strong class="bid-closed-final"><?= formatRand($soldPrice) ?></strong>
+                    <?= $soldDate ? 'on ' . e(safeDate('d M Y', $soldDate)) : '' ?>.
+                    Similar vehicles come up every week &mdash; don't miss the next one.
+                </p>
+                <a href="auctions.php?status=active" class="btn btn-primary bid-locked-btn">
+                    View Live Auctions
+                </a>
+                <?php if (!$currentUser): ?>
+                <a href="login.php?tab=register" class="btn btn-outline bid-locked-btn bid-locked-btn-sec">
+                    Register to Bid
+                </a>
+                <?php else: ?>
+                <a href="sold_vehicles.php" class="btn btn-outline bid-locked-btn bid-locked-btn-sec">
+                    See More Sold Prices
                 </a>
                 <?php endif; ?>
             </div>
