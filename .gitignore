@@ -1,0 +1,53 @@
+# ── Secrets — NEVER commit (the GitHub repo is public) ─────────────
+config.secrets.php
+ahg_secrets.php
+.env
+*.key
+
+# ── Database dumps and SQL holding user data / password hashes ─────
+auctionhubgroupc_db.sql
+parkvillageauctions_db.sql
+park_village_auctions.sql
+update_online_db.sql
+ahg_add_master_admin.sql
+ahg_add_team_admins.sql
+ahg_reset_admin_password.sql
+ahg_production_import.sql
+*.sql.gz
+*_backup_*.sql
+
+# ── Company / client documents ─────────────────────────────────────
+Invoice.pdf
+cipc.pdf
+SARS*
+generated_invoices/
+previous_db/
+_seo_backup_*/
+
+# ── User uploads and media (live on the server / ImageKit) ─────────
+uploads/*
+!uploads/.htaccess
+!uploads/*/.htaccess
+
+# ── Dependencies (install with: composer install) ──────────────────
+vendor/
+
+# ── Dev-only / throwaway files ─────────────────────────────────────
+gen_hash.php
+test.php
+test_connections.php
+diagnose.php
+*.bak
+*.log
+*.zip
+*.tmp
+migrate_log.txt
+file_list.txt
+prompt*.txt
+
+# ── Editor / OS / Claude local settings ────────────────────────────
+.claude/settings.local.json
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

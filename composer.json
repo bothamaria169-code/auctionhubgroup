@@ -1,0 +1,22 @@
+{
+    "name": "park-village-auctions/pva-site",
+    "description": "Park Village Auctions — vehicle auction platform",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "cloudinary/cloudinary_php": "^3.1",
+        "phpmailer/phpmailer": "^6.9",
+        "tymon/jwt-auth": "^2.3"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "PVA\\": "src/"
+        }
+    }
+}

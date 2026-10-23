@@ -1,0 +1,133 @@
+DirectoryIndex index.php index.html
+
+# ═══════════════════════════════════════════════════════════════════════
+#  AUCTION HUB GROUP — .htaccess
+#  Apache 2.4 syntax (XAMPP). Requires mod_authz_core (always on).
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Disable directory listing ────────────────────────────────────────────
+Options -Indexes
+
+# ── Block database dumps, migrations, and schema files ───────────────────
+# These files contain passwords, user data, and full DB schemas.
+# None of them should ever be downloadable via a browser.
+<FilesMatch "\.sql$">
+    Require all denied
+</FilesMatch>
+
+# ── Block sensitive documents and plain-text data ────────────────────────
+# Covers: SARS tax doc, file_list.txt, any future .log or .bak files.
+<FilesMatch "\.(txt|log|bak|sh|env|ini)$">
+    Require all denied
+</FilesMatch>
+
+# ── Block CSV import/export files ────────────────────────────────────────
+<FilesMatch "\.csv$">
+    Require all denied
+</FilesMatch>
+
+# ── Block Composer dependency manifests ──────────────────────────────────
+# composer.json exposes the JWT library and other package names to attackers.
+<FilesMatch "^composer\.(json|lock)$">
+    Require all denied
+</FilesMatch>
+
+# ── Block old HTML prototype / template files ────────────────────────────
+# These were development previews, not live pages.
+# google064e49145ce07bc0.html (Google Search Console) is intentionally excluded.
+<FilesMatch "^(PVA_Complete_System.*|pva-sales-agent.*|pva-chatbot|auction-template)\.html$">
+    Require all denied
+</FilesMatch>
+
+# ── Prevent access to hidden files (.gitignore, .DS_Store, etc.) ─────────
+# Apache reads .htaccess from disk (not via HTTP), so this rule is safe.
+# XAMPP's httpd.conf also blocks .ht* files by default; this is belt-and-suspenders.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# ── Uploads folder ───────────────────────────────────────────────────────
+# uploads/proof_of_payment/.htaccess already contains "Deny from all".
+# PHP script execution in uploads/ is controlled per-directory there.
+
+# ── robots.txt must stay publicly readable ───────────────────────────────
+# (overrides the .txt deny above — search engines need this file)
+<Files "robots.txt">
+    Require all granted
+</Files>
+
+# ── Dynamic XML sitemap ──────────────────────────────────────────────────
+# /sitemap.xml is generated live by sitemap.php (vehicles, news, events)
+# If a real static .xml file exists (written by generate_sitemaps.php) it is
+# served directly — no PHP, no rewrite needed. Otherwise fall back to the live
+# PHP generator. The !-f guard is what lets the static file win.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^sitemap\.xml$        sitemap.php       [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^news-sitemap\.xml$   news-sitemap.php  [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^articles\.xml$       news-sitemap.php  [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^feed\.xml$           feed.php          [L]
+</IfModule>
+
+# ═══════════════════════════════════════════════════════════════════════
+#  PHP UPLOAD LIMITS (mod_php / Apache handler — cPanel)
+#  For PHP-FPM/CGI these are ignored; see .user.ini in the same folder.
+# ═══════════════════════════════════════════════════════════════════════
+<IfModule mod_php.c>
+    php_value upload_max_filesize 110M
+    php_value post_max_size       115M
+    php_value max_execution_time  300
+    php_value max_input_time      300
+    php_value memory_limit        256M
+</IfModule>
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 110M
+    php_value post_max_size       115M
+    php_value max_execution_time  300
+    php_value max_input_time      300
+    php_value memory_limit        256M
+</IfModule>
+
+# ═══════════════════════════════════════════════════════════════════════
+#  PERFORMANCE — compression + browser caching (big PageSpeed win)
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Gzip compression for text assets ─────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+    AddOutputFilterByType DEFLATE application/json application/xml application/rss+xml
+    AddOutputFilterByType DEFLATE image/svg+xml
+    AddOutputFilterByType DEFLATE font/ttf font/otf font/woff font/woff2
+</IfModule>
+
+# ── Browser caching ──────────────────────────────────────────────────────
+# Static assets cache for a long time; HTML is never cached (live auction data).
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/html              "access plus 0 seconds"
+    ExpiresByType image/jpeg             "access plus 1 year"
+    ExpiresByType image/png              "access plus 1 year"
+    ExpiresByType image/webp             "access plus 1 year"
+    ExpiresByType image/gif              "access plus 1 year"
+    ExpiresByType image/svg+xml          "access plus 1 year"
+    ExpiresByType image/x-icon           "access plus 1 year"
+    ExpiresByType text/css               "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType font/woff              "access plus 1 year"
+    ExpiresByType font/woff2             "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpg|jpeg|png|webp|gif|svg|ico|css|js|woff2?|ttf|otf)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    # Never cache the dynamic sitemap
+    <Files "sitemap.php">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </Files>
+</IfModule>

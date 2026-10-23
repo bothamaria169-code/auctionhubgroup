@@ -1,0 +1,70 @@
+# ============================================================
+#  Auction Hub Group — robots.txt
+#  https://auctionhubgroup.co.za
+# ============================================================
+
+User-agent: *
+
+# ── Private / authenticated areas ────────────────────────────
+Disallow: /admin_dashboard.php
+Disallow: /admin_career_api.php
+Disallow: /admin_test.php
+Disallow: /user_dashboard.php
+Disallow: /worker_portal.php
+Disallow: /manage_auction.php
+Disallow: /process_auction.php
+Disallow: /process_career.php
+Disallow: /sign_contract.php
+
+# ── Auth / account endpoints ─────────────────────────────────
+Disallow: /login.php
+Disallow: /logout.php
+Disallow: /forgot_password.php
+Disallow: /reset_password.php
+
+# ── APIs / generators / file servers (no SEO value) ──────────
+Disallow: /api.php
+Disallow: /invoice_api.php
+Disallow: /vehicles_api.php
+Disallow: /invoice_generator.php
+Disallow: /invoice_print.php
+Disallow: /invoice_pop_upload.php
+Disallow: /serve_pop.php
+Disallow: /serve_career_doc.php
+Disallow: /chatbot_proxy.php
+Disallow: /cloudinary_upload_manager.php
+
+# ── Cron / maintenance / seed / diagnostic scripts ───────────
+Disallow: /cron_close_auctions.php
+Disallow: /cron_generate_article.php
+Disallow: /generate_sitemaps.php
+Disallow: /diagnose.php
+Disallow: /diagnose_auction.php
+Disallow: /test.php
+Disallow: /test_login.php
+Disallow: /test_connections.php
+Disallow: /gen_hash.php
+Disallow: /fix_online_db.php
+Disallow: /import_old_vehicles.php
+Disallow: /backup_cloudinary_images.php
+Disallow: /uploads/vehicle_backup/
+
+# ── Private upload folders ───────────────────────────────────
+Disallow: /uploads/proof_of_payment/
+Disallow: /uploads/csv_imports/
+
+# ── Don't index internal search result pages ─────────────────
+Disallow: /news.php?q=
+Disallow: /*?q=$
+
+# Everything else is open to crawling
+Allow: /
+
+# ── Sitemaps ─────────────────────────────────────────────────
+Sitemap: https://auctionhubgroup.co.za/sitemap.xml
+Sitemap: https://auctionhubgroup.co.za/articles.xml
+Sitemap: https://auctionhubgroup.co.za/news-sitemap.xml
+
+# Outbound RSS — the URL to give Google Publisher Center / Opera News Hub.
+# Not a sitemap, listed here so it is easy to find:
+#   https://auctionhubgroup.co.za/feed.xml

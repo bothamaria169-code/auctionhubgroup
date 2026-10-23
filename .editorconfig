@@ -1,0 +1,13 @@
+# Auction Hub Group — editor defaults
+# Prevents editors from re-adding a UTF-8 BOM to PHP files (the BOM breaks
+# header()/redirects and corrupts sitemap.xml / feed.xml for Google).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.php]
+charset = utf-8

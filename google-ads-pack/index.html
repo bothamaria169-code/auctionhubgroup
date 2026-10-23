@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<style>
+  :root{color-scheme:light dark}
+  html,body{margin:0}
+  body{font:14px system-ui,sans-serif}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>AHG Google Ads Launch Pack</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#eef2f7; --surface:#ffffff; --surface-2:#f6f8fb;
+  --line:#d7e0ec; --line-soft:#e6ecf4;
+  --ink:#141b25; --ink-2:#4a5b70; --ink-3:#77879b;
+  --navy:#00306e; --gold:#a8700a; --gold-soft:#fdf3e0;
+  --ok:#1a7a4a; --near:#a86a08; --over:#bd3b2c;
+  --shadow:0 1px 2px rgba(16,32,56,.05),0 8px 24px rgba(16,32,56,.06);
+}
+:root:not([data-theme="light"]){ @media (prefers-color-scheme:dark){} }
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0d1219; --surface:#141b25; --surface-2:#19212c;
+    --line:#28323f; --line-soft:#212a35;
+    --ink:#e2e8f1; --ink-2:#a2b0c2; --ink-3:#76859a;
+    --navy:#7aa7e6; --gold:#e2a63f; --gold-soft:#2a2113;
+    --ok:#4cc38a; --near:#e2a63f; --over:#f0776a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0d1219; --surface:#141b25; --surface-2:#19212c;
+  --line:#28323f; --line-soft:#212a35;
+  --ink:#e2e8f1; --ink-2:#a2b0c2; --ink-3:#76859a;
+  --navy:#7aa7e6; --gold:#e2a63f; --gold-soft:#2a2113;
+  --ok:#4cc38a; --near:#e2a63f; --over:#f0776a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:15px; line-height:1.6; margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.mono,code,.asset-text,.terms li,.terms-inline{
+  font-family:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+h1,h2,h3{font-family:'Barlow Condensed','IBM Plex Sans',sans-serif;font-weight:700;
+  letter-spacing:.005em;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.1rem,4.5vw,3.1rem);line-height:1.02;text-transform:uppercase}
+h2{font-size:1.75rem;line-height:1.1;text-transform:uppercase}
+h3{font-size:1.3rem;line-height:1.15}
+h4{font-family:'IBM Plex Sans',sans-serif;font-size:.9rem;font-weight:600;margin:0}
+p{margin:0}
+a{color:var(--navy)}
+code{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:4px;
+  padding:.08em .35em;font-size:.86em;color:var(--ink)}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(1rem,3vw,2.5rem)}
+
+/* ── masthead ───────────────────────────────────────────── */
+.mast{border-bottom:1px solid var(--line);background:var(--surface)}
+.mast-in{padding:2.6rem 0 2.2rem;display:grid;gap:1.4rem}
+.kicker{font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--gold)}
+.lede{color:var(--ink-2);max-width:62ch;font-size:1.02rem}
+.mast-stats{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line);
+  border-radius:8px;overflow:hidden;background:var(--surface-2)}
+.mast-stats div{flex:1 1 150px;padding:.85rem 1.1rem;border-right:1px solid var(--line)}
+.mast-stats div:last-child{border-right:none}
+.mast-stats b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;
+  line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
+.mast-stats span{font-size:.76rem;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+
+/* ── layout ─────────────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:minmax(0,1fr);gap:2.5rem;padding:2.5rem 0 4rem}
+@media(min-width:1000px){.cols{grid-template-columns:210px minmax(0,1fr);gap:3rem}}
+.rail{display:none}
+@media(min-width:1000px){
+  .rail{display:block;position:sticky;top:1.5rem;align-self:start;font-size:.86rem}
+  .rail a{display:block;padding:.3rem 0 .3rem .8rem;color:var(--ink-2);text-decoration:none;
+    border-left:2px solid var(--line)}
+  .rail a:hover,.rail a:focus-visible{color:var(--ink);border-left-color:var(--gold)}
+  .rail .rail-h{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+    margin:1.3rem 0 .4rem;font-family:'IBM Plex Mono',monospace}
+  .rail .rail-h:first-child{margin-top:0}
+}
+main{display:grid;gap:3.2rem;min-width:0}
+/* Every grid item defaults to min-width:auto and refuses to shrink below its
+   content. Without this the widest table sets the page width and the whole
+   body scrolls sideways instead of the table scrolling inside its own box. */
+main > *{min-width:0}
+.sheet,.panel,.tbl-wrap{min-width:0;max-width:100%}
+.terms li{overflow-wrap:anywhere}
+section > h2{margin-bottom:.4rem}
+.sec-lede{color:var(--ink-2);max-width:66ch;margin-bottom:1.4rem}
+
+/* ── asset sheets ───────────────────────────────────────── */
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  box-shadow:var(--shadow);overflow:hidden;margin-bottom:1.25rem}
+.sheet-head{padding:1.1rem 1.3rem;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.sheet-dest{font-size:.8rem;color:var(--ink-3);margin-top:.25rem}
+.block{padding:1.15rem 1.3rem;border-bottom:1px solid var(--line-soft)}
+.block-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;
+  margin-bottom:.7rem}
+.lim{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--ink-3);
+  letter-spacing:.04em;margin-left:.5rem;font-weight:400}
+
+.assets{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.asset{display:grid;grid-template-columns:minmax(0,1fr) 42px 62px 52px;align-items:center;gap:.75rem;
+  padding:.4rem .55rem;border-radius:5px;background:var(--surface-2)}
+.asset-text{font-size:.86rem;min-width:0;overflow-wrap:anywhere}
+.meter{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ink-3);border-radius:2px}
+.count{font-family:'IBM Plex Mono',monospace;font-size:.74rem;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;text-align:right}
+.count b{font-weight:500}
+.count.ok b{color:var(--ok)} .count.near b{color:var(--near)} .count.over b{color:var(--over)}
+.copy,.copy-all{font:inherit;font-size:.74rem;font-weight:500;cursor:pointer;
+  background:var(--surface);color:var(--ink-2);border:1px solid var(--line);
+  border-radius:5px;padding:.24rem .5rem;transition:background .15s,color .15s,border-color .15s}
+.copy:hover,.copy-all:hover,.copy:focus-visible,.copy-all:focus-visible{
+  background:var(--navy);border-color:var(--navy);color:var(--surface)}
+:root:not([data-theme="light"]) .copy:hover,:root:not([data-theme="light"]) .copy-all:hover{color:#0d1219}
+.copy.done,.copy-all.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.copy-all{padding:.28rem .65rem}
+
+.kw{display:grid;grid-template-columns:minmax(0,1fr);gap:1.4rem;padding:1.15rem 1.3rem}
+@media(min-width:620px){.kw{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.terms{list-style:none;margin:0;padding:0;display:grid;gap:1px;font-size:.8rem;color:var(--ink-2)}
+.terms li{padding:.18rem .4rem;background:var(--surface-2);border-radius:4px}
+.terms-inline{font-size:.79rem;color:var(--ink-2);line-height:1.75}
+
+/* ── generic panels ─────────────────────────────────────── */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:1.3rem;box-shadow:var(--shadow)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:1rem}
+@media(min-width:680px){.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.neg-set,.snip{padding:.85rem 0;border-bottom:1px solid var(--line-soft)}
+.neg-set:last-child,.snip:last-child{border-bottom:none;padding-bottom:0}
+.neg-set h4,.snip h4{margin-bottom:.3rem;color:var(--ink)}
+
+.chip{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.76rem;
+  padding:.25rem .6rem;border:1px solid var(--line);border-radius:20px;
+  background:var(--surface-2);margin:0 .3rem .45rem 0;color:var(--ink-2)}
+
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);
+  box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:.86rem}
+th{text-align:left;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;padding:.7rem .9rem;background:var(--surface-2);
+  border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:.7rem .9rem;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td strong{color:var(--ink);font-weight:600}
+td.dim{color:var(--ink-3);font-size:.78rem}
+.tag{display:inline-block;font-size:.68rem;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;padding:.18rem .5rem;border-radius:4px;white-space:nowrap}
+.tag.req{background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold)}
+.tag.rec{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+.tag.ok-tag{background:var(--surface-2);color:var(--ok);border:1px solid var(--ok)}
+.tag.over-tag{background:var(--surface-2);color:var(--over);border:1px solid var(--over)}
+
+/* ── steps: a real sequence, so it is numbered ──────────── */
+.steps{list-style:none;counter-reset:s;margin:0;padding:0;display:grid;gap:.15rem}
+.steps li{counter-increment:s;display:grid;grid-template-columns:2rem minmax(0,1fr);gap:.9rem;
+  padding:.9rem 0;border-bottom:1px solid var(--line-soft)}
+.steps li:last-child{border-bottom:none}
+.steps li::before{content:counter(s,decimal-leading-zero);
+  font-family:'IBM Plex Mono',monospace;font-size:.8rem;color:var(--gold);padding-top:.1rem}
+.steps h4{grid-column:2;margin-bottom:.2rem;color:var(--ink)}
+.steps p{grid-column:2;font-size:.87rem;color:var(--ink-2)}
+/* Long inline code must wrap inside the step, not force the column wider */
+.steps code{overflow-wrap:anywhere}
+
+.warn{padding:.95rem 0;border-bottom:1px solid var(--line-soft)}
+.warn:last-child{border-bottom:none;padding-bottom:0}
+.warn h4{color:var(--ink);margin-bottom:.25rem;
+  padding-left:.75rem;border-left:3px solid var(--gold)}
+.warn p{font-size:.87rem;color:var(--ink-2);padding-left:.75rem}
+
+.findings{list-style:none;margin:0;padding:0;display:grid;gap:.15rem}
+.finding{padding:1rem 0;border-bottom:1px solid var(--line-soft)}
+.finding:last-child{border-bottom:none}
+.finding-head{display:flex;gap:.8rem;align-items:baseline;justify-content:space-between;
+  margin-bottom:.3rem;flex-wrap:wrap}
+.finding h4{color:var(--ink);font-size:.95rem}
+.finding p{font-size:.87rem;color:var(--ink-2)}
+
+.shots{margin:0;padding-left:1.1rem;display:grid;gap:.45rem;font-size:.88rem;color:var(--ink-2)}
+.shots li::marker{color:var(--gold)}
+
+footer{border-top:1px solid var(--line);padding:1.8rem 0 2.6rem;color:var(--ink-3);font-size:.82rem}
+
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<header class="mast">
+  <div class="wrap mast-in">
+    <span class="kicker">Auction Hub Group · paid search</span>
+    <h1>Google Ads Launch Pack</h1>
+    <p class="lede">Every asset below is written to Google's character limits and checked against them —
+      the counter on each row is the real length, not an estimate. Copy them straight into the account.
+      Claims are drawn from your own FAQ and auction guide, so the ads and the landing page agree,
+      which is what Quality Score actually measures.</p>
+    <div class="mast-stats">
+      <div><b>57</b><span>headlines</span></div>
+      <div><b>16</b><span>descriptions</span></div>
+      <div><b>4</b><span>ad groups</span></div>
+      <div><b>%(negcount)d</b><span>negative keywords</span></div>
+      <div><b>3</b><span>conversion actions</span></div>
+      <div><b>R10,000</b><span>refundable deposit</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap cols">
+  <nav class="rail" aria-label="Contents">
+    <div class="rail-h">Campaign</div>
+    <a href="#structure">Structure &amp; budget</a>
+    <a href="#ga">Ad groups</a>
+    <a href="#negatives">Negative keywords</a>
+    <div class="rail-h">Assets</div>
+    <a href="#extensions">Extensions</a>
+    <a href="#images">Images &amp; video</a>
+    <a href="#shotlist">Shot list</a>
+    <div class="rail-h">Setup</div>
+    <a href="#conversions">Conversion tracking</a>
+    <a href="#launch">Launch order</a>
+    <a href="#policy">Policy risks</a>
+    <div class="rail-h">Organic</div>
+    <a href="#seo">Why articles get no traffic</a>
+  </nav>
+
+  <main>
+
+    <section id="structure">
+      <h2>Structure &amp; budget</h2>
+      <p class="sec-lede">One Search campaign, four ad groups, one conversion goal: a registered bidder.
+        Groups A–C land on <code>/register-to-bid.php</code>, which was built for this campaign and
+        carries the same claims as the ads. The brand group goes to the homepage.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Phase</th><th>Daily</th><th>Monthly</th><th>What runs</th></tr></thead>
+          <tbody><tr><td><strong>Test</strong></td><td class="mono">R250 / day</td><td class="mono">~R7,500 / mo</td><td>Groups A and D only. Goal is to find which keywords convert, not to scale.</td></tr>
+<tr><td><strong>Build</strong></td><td class="mono">R500 / day</td><td class="mono">~R15,000 / mo</td><td>Add groups B and C once A is producing registrations under target cost.</td></tr>
+<tr><td><strong>Scale</strong></td><td class="mono">R1,000+ / day</td><td class="mono">~R30,000+ / mo</td><td>Only once cost per registration is stable and Smart Bidding has data. Add Performance Max here, not before.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ga">
+      <h2>Ad groups</h2>
+      <p class="sec-lede">Responsive search ads. Google needs a minimum of 3 headlines and 2 descriptions,
+        but rotates through all 15 and 4 to find combinations that work — give it the full set.
+        Pin nothing at first; let it learn, then pin only if a legal or factual line must always show.</p>
+      
+<section class="sheet" id="ga">
+  <header class="sheet-head">
+    <h3>A — Bank Repossessed Cars</h3>
+    <p class="sheet-dest">Final URL <code>/register-to-bid.php</code> &nbsp;·&nbsp; Display path <code>/register</code> <code>/to-bid</code></p>
+  </header>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Headlines <span class="lim">30 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Bank Repossessed Cars SA
+Repossessed Car Auctions
+Bid at the Bank&#x27;s Price
+Register Free to Bid
+Every Car DEKRA Inspected
+No Buyer&#x27;s Commission
+Hundreds of Cars on Auction
+R10,000 Deposit, Refundable
+Priced Below Retail Value
+Centurion Auction Floor
+Bid Online or In Person
+Verified in 1-2 Days
+Full Condition Report
+Auction Hub Group
+Next Auction Filling Up">Copy all 15</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Bank Repossessed Cars SA"><span class="asset-text">Bank Repossessed Cars SA</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Repossessed Car Auctions"><span class="asset-text">Repossessed Car Auctions</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Bid at the Bank&#x27;s Price"><span class="asset-text">Bid at the Bank&#x27;s Price</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Register Free to Bid"><span class="asset-text">Register Free to Bid</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Every Car DEKRA Inspected"><span class="asset-text">Every Car DEKRA Inspected</span><span class="meter" aria-hidden="true"><i style="width:83%"></i></span><span class="count ok"><b>25</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="No Buyer&#x27;s Commission"><span class="asset-text">No Buyer&#x27;s Commission</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Hundreds of Cars on Auction"><span class="asset-text">Hundreds of Cars on Auction</span><span class="meter" aria-hidden="true"><i style="width:90%"></i></span><span class="count ok"><b>27</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="R10,000 Deposit, Refundable"><span class="asset-text">R10,000 Deposit, Refundable</span><span class="meter" aria-hidden="true"><i style="width:90%"></i></span><span class="count ok"><b>27</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Priced Below Retail Value"><span class="asset-text">Priced Below Retail Value</span><span class="meter" aria-hidden="true"><i style="width:83%"></i></span><span class="count ok"><b>25</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Centurion Auction Floor"><span class="asset-text">Centurion Auction Floor</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Bid Online or In Person"><span class="asset-text">Bid Online or In Person</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Verified in 1-2 Days"><span class="asset-text">Verified in 1-2 Days</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Full Condition Report"><span class="asset-text">Full Condition Report</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Auction Hub Group"><span class="asset-text">Auction Hub Group</span><span class="meter" aria-hidden="true"><i style="width:57%"></i></span><span class="count ok"><b>17</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Next Auction Filling Up"><span class="asset-text">Next Auction Filling Up</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li></ul>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Descriptions <span class="lim">90 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Cars come direct from banks at the outstanding balance, not retail. Register free to bid.
+Every lot DEKRA inspected with a full condition report. Bring your own mechanic to view.
+No buyer&#x27;s commission. Hammer price plus R2,600 admin and VAT. Nothing hidden.
+R10,000 deposit is fully refundable if you don&#x27;t buy. Verified in 1-2 business days.">Copy all 4</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Cars come direct from banks at the outstanding balance, not retail. Register free to bid."><span class="asset-text">Cars come direct from banks at the outstanding balance, not retail. Register free to bid.</span><span class="meter" aria-hidden="true"><i style="width:99%"></i></span><span class="count near"><b>89</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Every lot DEKRA inspected with a full condition report. Bring your own mechanic to view."><span class="asset-text">Every lot DEKRA inspected with a full condition report. Bring your own mechanic to view.</span><span class="meter" aria-hidden="true"><i style="width:98%"></i></span><span class="count near"><b>88</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="No buyer&#x27;s commission. Hammer price plus R2,600 admin and VAT. Nothing hidden."><span class="asset-text">No buyer&#x27;s commission. Hammer price plus R2,600 admin and VAT. Nothing hidden.</span><span class="meter" aria-hidden="true"><i style="width:87%"></i></span><span class="count ok"><b>78</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="R10,000 deposit is fully refundable if you don&#x27;t buy. Verified in 1-2 business days."><span class="asset-text">R10,000 deposit is fully refundable if you don&#x27;t buy. Verified in 1-2 business days.</span><span class="meter" aria-hidden="true"><i style="width:93%"></i></span><span class="count near"><b>84</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li></ul>
+  </div>
+
+  <div class="kw">
+    <div class="kw-col">
+      <div class="block-head"><h4>Exact match</h4>
+        <button class="copy-all" type="button" data-bulk="[repossessed cars for sale]
+[bank repossessed cars]
+[repossessed cars south africa]
+[bank repo cars for sale]
+[repossessed vehicles for sale]
+[bank repossessed vehicles]
+[repossessed cars auction]
+[absa repossessed cars]
+[fnb repossessed cars]
+[standard bank repossessed cars]
+[nedbank repossessed cars]
+[wesbank repossessed cars]">Copy</button></div>
+      <ul class="terms"><li>[repossessed cars for sale]</li>
+<li>[bank repossessed cars]</li>
+<li>[repossessed cars south africa]</li>
+<li>[bank repo cars for sale]</li>
+<li>[repossessed vehicles for sale]</li>
+<li>[bank repossessed vehicles]</li>
+<li>[repossessed cars auction]</li>
+<li>[absa repossessed cars]</li>
+<li>[fnb repossessed cars]</li>
+<li>[standard bank repossessed cars]</li>
+<li>[nedbank repossessed cars]</li>
+<li>[wesbank repossessed cars]</li></ul>
+    </div>
+    <div class="kw-col">
+      <div class="block-head"><h4>Phrase match</h4>
+        <button class="copy-all" type="button" data-bulk="&quot;repossessed cars&quot;
+&quot;bank repo cars&quot;
+&quot;repo cars for sale&quot;
+&quot;liquidation cars for sale&quot;
+&quot;bank stock cars&quot;
+&quot;insolvency vehicles&quot;">Copy</button></div>
+      <ul class="terms"><li>&quot;repossessed cars&quot;</li>
+<li>&quot;bank repo cars&quot;</li>
+<li>&quot;repo cars for sale&quot;</li>
+<li>&quot;liquidation cars for sale&quot;</li>
+<li>&quot;bank stock cars&quot;</li>
+<li>&quot;insolvency vehicles&quot;</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="sheet" id="gb">
+  <header class="sheet-head">
+    <h3>B — Car Auctions (generic)</h3>
+    <p class="sheet-dest">Final URL <code>/register-to-bid.php</code> &nbsp;·&nbsp; Display path <code>/register</code> <code>/to-bid</code></p>
+  </header>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Headlines <span class="lim">30 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Car Auctions South Africa
+Vehicle Auctions Gauteng
+Live Car Auction Today
+Browse 500+ Auction Cars
+Register Free to Bid
+Bank &amp; Liquidation Stock
+Cars From Every Major Make
+DEKRA Report on Every Lot
+No Buyer&#x27;s Commission
+Bid Online From Anywhere
+Licensed Auctioneers
+Auction Hub Group
+See What Cars Sold For
+Refundable R10,000 Deposit
+Centurion, Durban &amp; More">Copy all 15</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Car Auctions South Africa"><span class="asset-text">Car Auctions South Africa</span><span class="meter" aria-hidden="true"><i style="width:83%"></i></span><span class="count ok"><b>25</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Vehicle Auctions Gauteng"><span class="asset-text">Vehicle Auctions Gauteng</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Live Car Auction Today"><span class="asset-text">Live Car Auction Today</span><span class="meter" aria-hidden="true"><i style="width:73%"></i></span><span class="count ok"><b>22</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Browse 500+ Auction Cars"><span class="asset-text">Browse 500+ Auction Cars</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Register Free to Bid"><span class="asset-text">Register Free to Bid</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Bank &amp; Liquidation Stock"><span class="asset-text">Bank &amp; Liquidation Stock</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Cars From Every Major Make"><span class="asset-text">Cars From Every Major Make</span><span class="meter" aria-hidden="true"><i style="width:87%"></i></span><span class="count ok"><b>26</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="DEKRA Report on Every Lot"><span class="asset-text">DEKRA Report on Every Lot</span><span class="meter" aria-hidden="true"><i style="width:83%"></i></span><span class="count ok"><b>25</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="No Buyer&#x27;s Commission"><span class="asset-text">No Buyer&#x27;s Commission</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Bid Online From Anywhere"><span class="asset-text">Bid Online From Anywhere</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Licensed Auctioneers"><span class="asset-text">Licensed Auctioneers</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Auction Hub Group"><span class="asset-text">Auction Hub Group</span><span class="meter" aria-hidden="true"><i style="width:57%"></i></span><span class="count ok"><b>17</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="See What Cars Sold For"><span class="asset-text">See What Cars Sold For</span><span class="meter" aria-hidden="true"><i style="width:73%"></i></span><span class="count ok"><b>22</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Refundable R10,000 Deposit"><span class="asset-text">Refundable R10,000 Deposit</span><span class="meter" aria-hidden="true"><i style="width:87%"></i></span><span class="count ok"><b>26</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Centurion, Durban &amp; More"><span class="asset-text">Centurion, Durban &amp; More</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li></ul>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Descriptions <span class="lim">90 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Browse live vehicle auctions across South Africa. Filter by make, year, price and mileage.
+Bank and liquidation stock, DEKRA inspected, sold to the highest bidder. Register free.
+See real hammer prices from past auctions before you set your limit. No commission to pay.
+Bid in person at our Centurion floor or online by webcast. Verified in 1-2 business days.">Copy all 4</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Browse live vehicle auctions across South Africa. Filter by make, year, price and mileage."><span class="asset-text">Browse live vehicle auctions across South Africa. Filter by make, year, price and mileage.</span><span class="meter" aria-hidden="true"><i style="width:100%"></i></span><span class="count near"><b>90</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Bank and liquidation stock, DEKRA inspected, sold to the highest bidder. Register free."><span class="asset-text">Bank and liquidation stock, DEKRA inspected, sold to the highest bidder. Register free.</span><span class="meter" aria-hidden="true"><i style="width:97%"></i></span><span class="count near"><b>87</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="See real hammer prices from past auctions before you set your limit. No commission to pay."><span class="asset-text">See real hammer prices from past auctions before you set your limit. No commission to pay.</span><span class="meter" aria-hidden="true"><i style="width:100%"></i></span><span class="count near"><b>90</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Bid in person at our Centurion floor or online by webcast. Verified in 1-2 business days."><span class="asset-text">Bid in person at our Centurion floor or online by webcast. Verified in 1-2 business days.</span><span class="meter" aria-hidden="true"><i style="width:99%"></i></span><span class="count near"><b>89</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li></ul>
+  </div>
+
+  <div class="kw">
+    <div class="kw-col">
+      <div class="block-head"><h4>Exact match</h4>
+        <button class="copy-all" type="button" data-bulk="[car auctions south africa]
+[vehicle auctions south africa]
+[car auction gauteng]
+[car auctions johannesburg]
+[car auctions pretoria]
+[car auctions durban]
+[online car auctions south africa]
+[live car auction]
+[cheap car auctions]">Copy</button></div>
+      <ul class="terms"><li>[car auctions south africa]</li>
+<li>[vehicle auctions south africa]</li>
+<li>[car auction gauteng]</li>
+<li>[car auctions johannesburg]</li>
+<li>[car auctions pretoria]</li>
+<li>[car auctions durban]</li>
+<li>[online car auctions south africa]</li>
+<li>[live car auction]</li>
+<li>[cheap car auctions]</li></ul>
+    </div>
+    <div class="kw-col">
+      <div class="block-head"><h4>Phrase match</h4>
+        <button class="copy-all" type="button" data-bulk="&quot;car auction&quot;
+&quot;vehicle auction&quot;
+&quot;auction cars for sale&quot;
+&quot;car auction near me&quot;
+&quot;bid on cars online&quot;">Copy</button></div>
+      <ul class="terms"><li>&quot;car auction&quot;</li>
+<li>&quot;vehicle auction&quot;</li>
+<li>&quot;auction cars for sale&quot;</li>
+<li>&quot;car auction near me&quot;</li>
+<li>&quot;bid on cars online&quot;</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="sheet" id="gc">
+  <header class="sheet-head">
+    <h3>C — Bakkies, LDVs &amp; Trucks</h3>
+    <p class="sheet-dest">Final URL <code>/register-to-bid.php</code> &nbsp;·&nbsp; Display path <code>/register</code> <code>/to-bid</code></p>
+  </header>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Headlines <span class="lim">30 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Repossessed Bakkies for Sale
+Bakkie Auctions South Africa
+Hilux, Ranger, NP200 &amp; More
+Trucks &amp; LDVs on Auction
+Ex-Bank Bakkie Stock
+Register Free to Bid
+DEKRA Inspected Bakkies
+Work Vehicles at Bank Price
+No Buyer&#x27;s Commission
+Canter, Fuso &amp; Dropsides
+Bid Online or In Person
+Auction Hub Group
+Full Condition Report
+Priced Below Retail Value
+Centurion Auction Floor">Copy all 15</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Repossessed Bakkies for Sale"><span class="asset-text">Repossessed Bakkies for Sale</span><span class="meter" aria-hidden="true"><i style="width:93%"></i></span><span class="count near"><b>28</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Bakkie Auctions South Africa"><span class="asset-text">Bakkie Auctions South Africa</span><span class="meter" aria-hidden="true"><i style="width:93%"></i></span><span class="count near"><b>28</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Hilux, Ranger, NP200 &amp; More"><span class="asset-text">Hilux, Ranger, NP200 &amp; More</span><span class="meter" aria-hidden="true"><i style="width:90%"></i></span><span class="count ok"><b>27</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Trucks &amp; LDVs on Auction"><span class="asset-text">Trucks &amp; LDVs on Auction</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Ex-Bank Bakkie Stock"><span class="asset-text">Ex-Bank Bakkie Stock</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Register Free to Bid"><span class="asset-text">Register Free to Bid</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="DEKRA Inspected Bakkies"><span class="asset-text">DEKRA Inspected Bakkies</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Work Vehicles at Bank Price"><span class="asset-text">Work Vehicles at Bank Price</span><span class="meter" aria-hidden="true"><i style="width:90%"></i></span><span class="count ok"><b>27</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="No Buyer&#x27;s Commission"><span class="asset-text">No Buyer&#x27;s Commission</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Canter, Fuso &amp; Dropsides"><span class="asset-text">Canter, Fuso &amp; Dropsides</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Bid Online or In Person"><span class="asset-text">Bid Online or In Person</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Auction Hub Group"><span class="asset-text">Auction Hub Group</span><span class="meter" aria-hidden="true"><i style="width:57%"></i></span><span class="count ok"><b>17</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Full Condition Report"><span class="asset-text">Full Condition Report</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Priced Below Retail Value"><span class="asset-text">Priced Below Retail Value</span><span class="meter" aria-hidden="true"><i style="width:83%"></i></span><span class="count ok"><b>25</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Centurion Auction Floor"><span class="asset-text">Centurion Auction Floor</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li></ul>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Descriptions <span class="lim">90 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Repossessed bakkies, LDVs and trucks from bank and liquidation stock. Register free now.
+Hilux, Ranger, NP200, Canter and more, each with a full DEKRA condition report supplied.
+Buy work vehicles at the outstanding balance, not retail. No buyer&#x27;s commission payable.
+Inspect before you bid. Bring your own mechanic to the viewing. Verified in 1-2 days.">Copy all 4</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Repossessed bakkies, LDVs and trucks from bank and liquidation stock. Register free now."><span class="asset-text">Repossessed bakkies, LDVs and trucks from bank and liquidation stock. Register free now.</span><span class="meter" aria-hidden="true"><i style="width:98%"></i></span><span class="count near"><b>88</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Hilux, Ranger, NP200, Canter and more, each with a full DEKRA condition report supplied."><span class="asset-text">Hilux, Ranger, NP200, Canter and more, each with a full DEKRA condition report supplied.</span><span class="meter" aria-hidden="true"><i style="width:98%"></i></span><span class="count near"><b>88</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Buy work vehicles at the outstanding balance, not retail. No buyer&#x27;s commission payable."><span class="asset-text">Buy work vehicles at the outstanding balance, not retail. No buyer&#x27;s commission payable.</span><span class="meter" aria-hidden="true"><i style="width:98%"></i></span><span class="count near"><b>88</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Inspect before you bid. Bring your own mechanic to the viewing. Verified in 1-2 days."><span class="asset-text">Inspect before you bid. Bring your own mechanic to the viewing. Verified in 1-2 days.</span><span class="meter" aria-hidden="true"><i style="width:94%"></i></span><span class="count near"><b>85</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li></ul>
+  </div>
+
+  <div class="kw">
+    <div class="kw-col">
+      <div class="block-head"><h4>Exact match</h4>
+        <button class="copy-all" type="button" data-bulk="[repossessed bakkies for sale]
+[bakkie auction south africa]
+[repossessed trucks for sale]
+[truck auctions south africa]
+[repossessed hilux for sale]
+[bakkie auctions gauteng]
+[ldv auction south africa]">Copy</button></div>
+      <ul class="terms"><li>[repossessed bakkies for sale]</li>
+<li>[bakkie auction south africa]</li>
+<li>[repossessed trucks for sale]</li>
+<li>[truck auctions south africa]</li>
+<li>[repossessed hilux for sale]</li>
+<li>[bakkie auctions gauteng]</li>
+<li>[ldv auction south africa]</li></ul>
+    </div>
+    <div class="kw-col">
+      <div class="block-head"><h4>Phrase match</h4>
+        <button class="copy-all" type="button" data-bulk="&quot;repossessed bakkies&quot;
+&quot;bakkie auction&quot;
+&quot;truck auction&quot;
+&quot;repo bakkies for sale&quot;
+&quot;used bakkies auction&quot;">Copy</button></div>
+      <ul class="terms"><li>&quot;repossessed bakkies&quot;</li>
+<li>&quot;bakkie auction&quot;</li>
+<li>&quot;truck auction&quot;</li>
+<li>&quot;repo bakkies for sale&quot;</li>
+<li>&quot;used bakkies auction&quot;</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="sheet" id="gd">
+  <header class="sheet-head">
+    <h3>D — Brand</h3>
+    <p class="sheet-dest">Final URL <code>/  (homepage)</code> &nbsp;·&nbsp; Display path <code>/register</code> <code>/to-bid</code></p>
+  </header>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Headlines <span class="lim">30 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="Auction Hub Group
+Official Auction Hub Site
+Register to Bid Free
+Browse Today&#x27;s Live Lots
+Centurion Auction Floor
+Registered Since 2016
+CIPC K2016224499
+Trusted by Banks
+DEKRA Inspected Stock
+No Buyer&#x27;s Commission
+WhatsApp Us Now
+Contact Our Sales Team">Copy all 12</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="Auction Hub Group"><span class="asset-text">Auction Hub Group</span><span class="meter" aria-hidden="true"><i style="width:57%"></i></span><span class="count ok"><b>17</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Official Auction Hub Site"><span class="asset-text">Official Auction Hub Site</span><span class="meter" aria-hidden="true"><i style="width:83%"></i></span><span class="count ok"><b>25</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Register to Bid Free"><span class="asset-text">Register to Bid Free</span><span class="meter" aria-hidden="true"><i style="width:67%"></i></span><span class="count ok"><b>20</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Browse Today&#x27;s Live Lots"><span class="asset-text">Browse Today&#x27;s Live Lots</span><span class="meter" aria-hidden="true"><i style="width:80%"></i></span><span class="count ok"><b>24</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Centurion Auction Floor"><span class="asset-text">Centurion Auction Floor</span><span class="meter" aria-hidden="true"><i style="width:77%"></i></span><span class="count ok"><b>23</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Registered Since 2016"><span class="asset-text">Registered Since 2016</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="CIPC K2016224499"><span class="asset-text">CIPC K2016224499</span><span class="meter" aria-hidden="true"><i style="width:53%"></i></span><span class="count ok"><b>16</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Trusted by Banks"><span class="asset-text">Trusted by Banks</span><span class="meter" aria-hidden="true"><i style="width:53%"></i></span><span class="count ok"><b>16</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="DEKRA Inspected Stock"><span class="asset-text">DEKRA Inspected Stock</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="No Buyer&#x27;s Commission"><span class="asset-text">No Buyer&#x27;s Commission</span><span class="meter" aria-hidden="true"><i style="width:70%"></i></span><span class="count ok"><b>21</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="WhatsApp Us Now"><span class="asset-text">WhatsApp Us Now</span><span class="meter" aria-hidden="true"><i style="width:50%"></i></span><span class="count ok"><b>15</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li>
+<li class="asset" data-copy="Contact Our Sales Team"><span class="asset-text">Contact Our Sales Team</span><span class="meter" aria-hidden="true"><i style="width:73%"></i></span><span class="count ok"><b>22</b>/30</span><button class="copy" type="button" aria-label="Copy this headline">Copy</button></li></ul>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h4>Descriptions <span class="lim">90 characters</span></h4>
+      <button class="copy-all" type="button" data-bulk="The official Auction Hub Group site. Register free, get verified and bid on bank stock.
+Licensed auctioneers registered with CIPC since 2016. Centurion, Boksburg, Durban and PE.
+Beware of scam sites using our name. We never ask for payment without verified invoicing.
+Talk to a real consultant on WhatsApp before you bid. We answer during business hours.">Copy all 4</button>
+    </div>
+    <ul class="assets"><li class="asset" data-copy="The official Auction Hub Group site. Register free, get verified and bid on bank stock."><span class="asset-text">The official Auction Hub Group site. Register free, get verified and bid on bank stock.</span><span class="meter" aria-hidden="true"><i style="width:97%"></i></span><span class="count near"><b>87</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Licensed auctioneers registered with CIPC since 2016. Centurion, Boksburg, Durban and PE."><span class="asset-text">Licensed auctioneers registered with CIPC since 2016. Centurion, Boksburg, Durban and PE.</span><span class="meter" aria-hidden="true"><i style="width:99%"></i></span><span class="count near"><b>89</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Beware of scam sites using our name. We never ask for payment without verified invoicing."><span class="asset-text">Beware of scam sites using our name. We never ask for payment without verified invoicing.</span><span class="meter" aria-hidden="true"><i style="width:99%"></i></span><span class="count near"><b>89</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li>
+<li class="asset" data-copy="Talk to a real consultant on WhatsApp before you bid. We answer during business hours."><span class="asset-text">Talk to a real consultant on WhatsApp before you bid. We answer during business hours.</span><span class="meter" aria-hidden="true"><i style="width:96%"></i></span><span class="count near"><b>86</b>/90</span><button class="copy" type="button" aria-label="Copy this description">Copy</button></li></ul>
+  </div>
+
+  <div class="kw">
+    <div class="kw-col">
+      <div class="block-head"><h4>Exact match</h4>
+        <button class="copy-all" type="button" data-bulk="[auction hub group]
+[auction hub auctioneers]
+[auctionhubgroup]
+[auction hub group centurion]
+[auction hub group register]">Copy</button></div>
+      <ul class="terms"><li>[auction hub group]</li>
+<li>[auction hub auctioneers]</li>
+<li>[auctionhubgroup]</li>
+<li>[auction hub group centurion]</li>
+<li>[auction hub group register]</li></ul>
+    </div>
+    <div class="kw-col">
+      <div class="block-head"><h4>Phrase match</h4>
+        <button class="copy-all" type="button" data-bulk="&quot;auction hub&quot;">Copy</button></div>
+      <ul class="terms"><li>&quot;auction hub&quot;</li></ul>
+    </div>
+  </div>
+</section>
+    </section>
+
+    <section id="negatives">
+      <h2>Negative keywords</h2>
+      <p class="sec-lede">Add these at campaign level before the first impression, not after.
+        In a new South African auto account these terms are where most of the wasted spend goes —
+        job seekers and parts hunters search the same words as buyers.</p>
+      <div class="panel">
+        <div class="block-head" style="margin-bottom:.2rem">
+          <h4>%(negcount)d terms, ready to paste</h4>
+          <button class="copy-all" type="button" data-bulk="-jobs
+-vacancies
+-salary
+-career
+-learnership
+-how to become an auctioneer
+-auctioneer course
+-internship
+-cv
+-parts
+-spares
+-scrap
+-scrapyard
+-stripping
+-salvage
+-accident damaged
+-code 3
+-write off
+-non runner
+-engine only
+-rental
+-car hire
+-rent a car
+-lease
+-insurance
+-valuation
+-trade in
+-sell my car
+-how much is my car worth
+-free
+-pdf
+-meaning
+-definition
+-wikipedia
+-reddit
+-house
+-property
+-furniture
+-livestock
+-cattle
+-farm equipment
+-estate sale
+-art auction
+-tractor
+-boat
+-caravan
+-sheriff
+-police auction
+-stolen
+-impound
+-court
+-liquidator jobs
+-debt review">Copy all</button>
+        </div>
+        <div class="neg-set"><h4>Job seekers</h4><p class="terms-inline">jobs, vacancies, salary, career, learnership, how to become an auctioneer, auctioneer course, internship, cv</p></div>
+<div class="neg-set"><h4>Wrong intent — parts &amp; scrap</h4><p class="terms-inline">parts, spares, scrap, scrapyard, stripping, salvage, accident damaged, code 3, write off, non runner, engine only</p></div>
+<div class="neg-set"><h4>Wrong intent — not buying</h4><p class="terms-inline">rental, car hire, rent a car, lease, insurance, valuation, trade in, sell my car, how much is my car worth, free, pdf, meaning, definition, wikipedia, reddit</p></div>
+<div class="neg-set"><h4>Wrong asset class</h4><p class="terms-inline">house, property, furniture, livestock, cattle, farm equipment, estate sale, art auction, tractor, boat, caravan</p></div>
+<div class="neg-set"><h4>Legal / distress</h4><p class="terms-inline">sheriff, police auction, stolen, impound, court, liquidator jobs, debt review</p></div>
+      </div>
+    </section>
+
+    <section id="extensions">
+      <h2>Extensions</h2>
+      <p class="sec-lede">Extensions are free real estate — they widen the ad and lift click-through
+        without raising the bid. Add all four types.</p>
+
+      <div class="panel" style="margin-bottom:1rem">
+        <h4 style="margin-bottom:.7rem">Sitelinks <span class="lim">25 char text · 35 char lines</span></h4>
+        <div class="tbl-wrap" style="box-shadow:none">
+          <table>
+            <thead><tr><th>Link text</th><th>Description lines</th><th>URL</th></tr></thead>
+            <tbody><tr><td class="mono">Browse Live Auctions</td><td class="mono dim">See every vehicle open for<br>bidding right now.</td><td class="mono dim">/auctions.php</td></tr>
+<tr><td class="mono">How Bidding Works</td><td class="mono dim">Register, verify, bid.<br>The full process explained.</td><td class="mono dim">/auction-guide.php</td></tr>
+<tr><td class="mono">What It Actually Costs</td><td class="mono dim">No commission. Admin fee<br>and VAT only.</td><td class="mono dim">/auction-guide.php</td></tr>
+<tr><td class="mono">Past Selling Prices</td><td class="mono dim">See what cars really sold<br>for at our auctions.</td><td class="mono dim">/sold_vehicles.php</td></tr>
+<tr><td class="mono">Pre-Auction Deals</td><td class="mono dim">Buy before it hits the<br>auction floor.</td><td class="mono dim">/preauction.php</td></tr>
+<tr><td class="mono">In-House Finance</td><td class="mono dim">Finance options for<br>auction buyers.</td><td class="mono dim">/financing.php</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="block-head"><h4>Callouts <span class="lim">25 char</span></h4>
+            <button class="copy-all" type="button" data-bulk="No Buyer&#x27;s Commission
+DEKRA Inspected
+Refundable Deposit
+Free Registration
+Bid Online or In Person
+Bank &amp; Liquidation Stock
+Registered Since 2016
+Nationwide Delivery">Copy</button></div>
+          <div><span class="chip">No Buyer&#x27;s Commission</span> <span class="chip">DEKRA Inspected</span> <span class="chip">Refundable Deposit</span> <span class="chip">Free Registration</span> <span class="chip">Bid Online or In Person</span> <span class="chip">Bank &amp; Liquidation Stock</span> <span class="chip">Registered Since 2016</span> <span class="chip">Nationwide Delivery</span></div>
+        </div>
+        <div class="panel">
+          <h4 style="margin-bottom:.4rem">Structured snippets <span class="lim">25 char per value</span></h4>
+          <div class="snip"><h4>Brands</h4><p class="terms-inline">Toyota · Volkswagen · BMW · Nissan · Hyundai · Ford · Renault · Audi · Kia · Mitsubishi</p></div>
+<div class="snip"><h4>Types</h4><p class="terms-inline">Sedans · Hatchbacks · Bakkies · SUVs · Trucks · LDVs · Panel Vans · Minibuses</p></div>
+<div class="snip"><h4>Service catalog</h4><p class="terms-inline">Bidder Registration · Vehicle Viewing · DEKRA Reports · In-House Finance · Nationwide Delivery</p></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:1rem">
+        <h4 style="margin-bottom:.55rem">Call extension &amp; business name</h4>
+        <p class="terms-inline">Call: <strong>+27 10 516 0683</strong> · Business name (Performance Max):
+          <strong>Auction Hub Group</strong> · Location extension: link the Google Business Profile for
+          80 Sterling Rd, Kosmosdal, Centurion.</p>
+        <h4 style="margin:1rem 0 .5rem">Long headlines <span class="lim">90 char, Performance Max only</span></h4>
+        <ul class="assets" style="grid-template-columns:1fr"><li class="asset" data-copy="Bid on bank repossessed cars at the outstanding balance, not retail. Register free."><span class="asset-text">Bid on bank repossessed cars at the outstanding balance, not retail. Register free.</span><span class="count ok"><b>83</b>/90</span><button class="copy" type="button">Copy</button></li>
+<li class="asset" data-copy="DEKRA-inspected auction vehicles with no buyer&#x27;s commission. Verified in 1-2 days."><span class="asset-text">DEKRA-inspected auction vehicles with no buyer&#x27;s commission. Verified in 1-2 days.</span><span class="count ok"><b>82</b>/90</span><button class="copy" type="button">Copy</button></li></ul>
+      </div>
+    </section>
+
+    <section id="images">
+      <h2>Images &amp; video to submit</h2>
+      <p class="sec-lede">These are the exact files Google will ask for. Supply the required ratios or
+        the asset group cannot publish; supply the recommended ones or you lose the placements that
+        use them. JPG or PNG, under 5 MB, no text baked into the image — Google overlays its own.</p>
+      <div class="tbl-wrap" style="margin-bottom:1rem">
+        <table>
+          <thead><tr><th>Asset</th><th>Ratio</th><th>Pixels</th><th></th><th>What to shoot</th></tr></thead>
+          <tbody><tr><td><strong>Landscape</strong></td><td class="mono">1.91:1</td><td class="mono">1200 × 628</td><td><span class="tag req">Required</span></td><td>Wide shot of the auction floor with lots lined up and the AHG banner visible. Keep the right third clear — Google overlays text there.</td></tr>
+<tr><td><strong>Square</strong></td><td class="mono">1:1</td><td class="mono">1200 × 1200</td><td><span class="tag req">Required</span></td><td>Single hero vehicle, three-quarter front, shot at the Centurion floor. Car fills the frame, no text baked in.</td></tr>
+<tr><td><strong>Portrait</strong></td><td class="mono">4:5</td><td class="mono">960 × 1200</td><td><span class="tag rec">Recommended</span></td><td>Vertical crop for mobile feeds. Buyer inspecting a car with a DEKRA sticker visible on the windscreen.</td></tr>
+<tr><td><strong>Logo (square)</strong></td><td class="mono">1:1</td><td class="mono">1200 × 1200</td><td><span class="tag req">Required</span></td><td>AHG mark on a transparent or solid background, generous padding, no strapline.</td></tr>
+<tr><td><strong>Logo (wide)</strong></td><td class="mono">4:1</td><td class="mono">1200 × 300</td><td><span class="tag rec">Recommended</span></td><td>Full horizontal lockup with the wordmark. This is the one most placements actually show.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Video</th><th>Length</th><th>Aspect</th><th>Treatment</th></tr></thead>
+          <tbody><tr><td><strong>Auction floor walk-through</strong></td><td class="mono">15–30 s</td><td class="mono">Vertical 9:16 + landscape 16:9</td><td>Pan across the lots, then cut to a hammer drop and a buyer shaking hands. Caption burned in — most views are muted.</td></tr>
+<tr><td><strong>How registration works</strong></td><td class="mono">20–30 s</td><td class="mono">Landscape 16:9</td><td>Screen recording of the register-to-bid form being filled in, ending on the verified-bidder badge.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="shotlist">
+      <h2>Shot list</h2>
+      <p class="sec-lede">Give this to whoever is holding the camera. Stock photography of generic
+        showroom cars is the single fastest way to make an auction ad look like a scam — and your own
+        site already warns buyers about auction scams, so the photography has to carry proof.</p>
+      <div class="panel"><ol class="shots"><li>Wide auction floor with 20+ lots and buyers present — this is the credibility shot.</li>
+<li>Auctioneer mid-call at the podium, gavel raised.</li>
+<li>Close-up of a DEKRA inspection sticker on a windscreen (green, gold and platinum if you have them).</li>
+<li>A buyer walking around a car with a clipboard or phone — inspection, not sales.</li>
+<li>Hand-over moment: keys and paperwork passing across a desk.</li>
+<li>The Centurion premises from the street, signage legible.</li>
+<li>Three-quarter front hero shots of six representative lots on a clean background.</li>
+<li>A bakkie or truck lot — this is a separate ad group and needs its own imagery.</li></ol></div>
+    </section>
+
+    <section id="conversions">
+      <h2>Conversion tracking</h2>
+      <p class="sec-lede">The tags are already wired into the site and fire the moment you paste real
+        IDs into <code>config.php</code>. Until then they stay dormant, so nothing breaks and nothing
+        is double-counted. Create the three actions below and copy each label into its constant.</p>
+
+      <div class="panel" style="margin-bottom:1.2rem">
+        <h4 style="margin-bottom:.4rem">Two paths — pick one, never both</h4>
+        <p style="font-size:.88rem;color:var(--ink-2);margin-bottom:.6rem">
+          Google Tag Manager (<code>GTM-N5LK7BDP</code>) is installed sitewide, and the site also
+          pushes each conversion to the dataLayer as <code>ahg_registration</code> and
+          <code>ahg_contact_click</code>. So you can measure through <em>either</em> route:
+        </p>
+        <p style="font-size:.88rem;color:var(--ink-2);margin-bottom:.6rem">
+          <strong>Direct</strong> — keep <code>GA_MEASUREMENT_ID</code> and <code>GOOGLE_ADS_ID</code>
+          filled in below, and add no GA4 or Ads conversion tags inside GTM. Already wired, nothing
+          more to build. Use GTM only for other vendors.
+        </p>
+        <p style="font-size:.88rem;color:var(--ink-2);margin-bottom:.6rem">
+          <strong>Via GTM</strong> — blank those two constants and build the GA4 config and Ads
+          conversion tags in GTM, triggered off the dataLayer events. More flexible; you then change
+          tags in the GTM UI instead of re-uploading PHP.
+        </p>
+        <p style="font-size:.88rem;color:var(--over)">
+          Doing both fires two GA4 configs on every pageview and two conversion tags on every signup.
+          Your conversion count and cost-per-registration would both be wrong by roughly double.
+        </p>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Action</th><th></th><th>Constant in config.php</th><th>Value</th><th>Fires when</th></tr></thead>
+          <tbody><tr><td><strong>Bidder registration</strong></td><td><span class="tag req">Primary</span></td><td class="mono">GADS_LABEL_REGISTRATION</td><td class="mono">R350 (GADS_REGISTRATION_VALUE)</td><td>Fires when auth.php returns success on a new signup, from both the landing page and login.php. This is the action Smart Bidding optimises towards.</td></tr>
+<tr><td><strong>WhatsApp click</strong></td><td><span class="tag rec">Secondary</span></td><td class="mono">GADS_LABEL_WHATSAPP</td><td class="mono">No value</td><td>Fires on any element with data-ahg-contact=&quot;whatsapp&quot; — the float button, the hero button, the closing CTA.</td></tr>
+<tr><td><strong>Call click</strong></td><td><span class="tag rec">Secondary</span></td><td class="mono">GADS_LABEL_CALL</td><td class="mono">No value</td><td>Fires on the two landline links in the float popup.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="launch">
+      <h2>Launch order</h2>
+      <p class="sec-lede">Steps 1–4 have to happen before the first ad runs. Spending on traffic you
+        cannot measure is the most expensive mistake available in this account right now.</p>
+      <div class="panel"><ol class="steps"><li><h4>Run the sitemap generator on production</h4><p>Open <code>https://auctionhubgroup.co.za/generate_sitemaps.php?key=ahg-gen-2026</code> in a browser, then add the same script as a daily cPanel cron. Done — the live sitemap now carries 118 URLs including all 88 articles, and news-sitemap.xml, articles.xml and feed.xml all return 200 instead of 404. Still to do: add it as a daily cPanel cron so it stays fresh.</p></li>
+<li><h4>Create the GA4 property and paste the ID</h4><p>analytics.google.com → Admin → Data Streams → Web. Copy the <code>G-</code> ID into <code>GA_MEASUREMENT_ID</code> in config.php. Nothing has been measured on this site so far — the constant is still the placeholder.</p></li>
+<li><h4>Create the Google Ads account and the three conversion actions</h4><p>Tools → Conversions → New. Use the names in the conversions table below. Copy the <code>AW-</code> account ID into <code>GOOGLE_ADS_ID</code> and each label into its constant.</p></li>
+<li><h4>Run the two SQL migrations</h4><p>In phpMyAdmin, import <code>ahg_update_reg_fee.sql</code> first — the deposit moved to R10,000 and the <code>site_settings</code> table overrides the PHP constants, so the site keeps showing the old figure until this runs. Then import <code>ahg_ads_attribution.sql</code>, which adds the <code>acq_*</code> columns so every new bidder row records the keyword that produced it.</p></li>
+<li><h4>Decide GA4 direct or via GTM, and do not do both</h4><p>Google Tag Manager (<code>GTM-N5LK7BDP</code>) is already installed on every page. Either keep the IDs in config.php and add no GA4/Ads tags in GTM, or blank them and build those tags in GTM off the <code>ahg_registration</code> and <code>ahg_contact_click</code> dataLayer events. Configuring both double-counts every conversion.</p></li>
+<li><h4>Link Google Ads to GA4</h4><p>Ads → Tools → Linked accounts. Search Console is already connected; GA4 is the one still missing. Without that link you cannot see what a paid visitor does after the signup, only that the signup happened.</p></li>
+<li><h4>Build the campaign with the assets on this page</h4><p>One Search campaign, ad groups A–D, all pointing at <code>/register-to-bid.php</code> except the brand group, which goes to the homepage.</p></li>
+<li><h4>Start on Maximise Clicks with a manual CPC ceiling</h4><p>Smart Bidding needs roughly 30 conversions in 30 days before it has anything to learn from. Switch to Maximise Conversions only after that.</p></li>
+<li><h4>Check the search terms report every second day for the first fortnight</h4><p>Add anything irrelevant to the negative list. This is where most of the wasted spend gets caught in a new account.</p></li></ol></div>
+    </section>
+
+    <section id="policy">
+      <h2>Policy risks worth knowing before you spend</h2>
+      <p class="sec-lede">Each of these can get an ad — or the whole account — disapproved.
+        Two of them are live on your site today.</p>
+      <div class="panel"><div class="warn"><h4>In-house finance wording</h4><p>&quot;No credit checks&quot; and &quot;blacklisted welcome&quot; appear on financing.php. Google&#x27;s financial-services policy treats that language as high risk and it can get a whole account suspended, not just an ad. Keep it off the ads and off /register-to-bid.php. If you want to advertise finance, build it as a separate campaign with its own landing page so a disapproval cannot take the auction campaign down with it.</p></div>
+<div class="warn"><h4>Price claims must match the landing page</h4><p>Google checks that a price or discount in an ad is findable on the page. Because stock turns over daily, none of the headlines above name a rand figure — they state the pricing basis (&quot;at the bank&#x27;s price&quot;, &quot;below retail value&quot;) instead, which stays true.</p></div>
+<div class="warn"><h4>&quot;Repossessed&quot; is fine, &quot;stolen&quot; and &quot;impounded&quot; are not</h4><p>Keep the vocabulary to repossessed, liquidation, insolvency and bank stock. Those are accurate and policy-safe.</p></div>
+<div class="warn"><h4>Scam-alert positioning</h4><p>Your site already warns about people impersonating AHG. Run the brand group (D) permanently, even at low volume — it is the cheapest way to make sure the real site sits above any impersonator bidding on your name.</p></div></div>
+    </section>
+
+    <section id="seo">
+      <h2>Why the articles get no traffic</h2>
+      <p class="sec-lede">You have 88 published articles and they bring nothing. It is not a content
+        quality problem — your click-through rate is 18.2%, which is well above average. Google was
+        never told the articles exist, and once a reader arrived there was nowhere to go. Every
+        finding below is from your own Search Console or the live site, not an estimate.</p>
+      <div class="panel"><ul class="findings"><li class="finding"><div class="finding-head"><h4>Every one of your top queries is your own brand name.</h4><span class="tag req">Confirmed in Search Console</span></div><p>Search Console shows 1,660 clicks from 9,110 impressions over three months — an 18.2% click-through rate, which is strong. But the top ten queries are <em>auction hub</em>, <em>auctionhub</em>, <em>auction hub sa</em>, <em>auctionhub sa</em>, <em>auction hub group</em> and variants. Every one is someone typing your name because they already knew it. Nothing in the top ten is a person searching for a repossessed car who has never heard of you. That is what the ads and the article funnel are for.</p></li>
+<li class="finding"><div class="finding-head"><h4>The sitemap Google fetches lists 14 URLs. None of them are articles.</h4><span class="tag req">Confirmed in Search Console</span></div><p>Search Console reports <code>/sitemap.xml</code> as Success with <strong>14 discovered pages</strong>, and <code>/articles.xml</code> as <strong>1 error, 0 discovered pages</strong>. <code>sitemap.xml</code> on the live site is a stale static file; <code>sitemap.php</code> generates the real thing at 117 URLs including all 88 articles, but Apache serves the static file whenever it exists so the generator's output never reaches Google.</p></li>
+<li class="finding"><div class="finding-head"><h4>The live site has no vehicles in it at all.</h4><span class="tag over-tag">Blocker</span></div><p><strong>auctions.php on production reports "0 vehicles found", and sold_vehicles.php reports 0 too.</strong> The 524 and 590 figures quoted earlier in this project were from the local development database, not the live site — the production <code>auctions</code> table is empty. The sitemap is therefore correct to list no vehicle URLs. Nothing here is a code fault, but it is a hard blocker: do not switch on ad spend until real stock is loaded, because every rand would send a buyer to an empty listings page.</p></li>
+<li class="finding"><div class="finding-head"><h4>You have one external backlink. It is from TikTok.</h4><span class="tag req">Confirmed in Search Console</span></div><p>Search Console Links reports <strong>1 external link</strong> against 4,860 internal ones. Backlinks are most of what decides whether you can rank for a competitive term like <em>repossessed cars for sale</em>. With one, you cannot — which is why the brand terms rank and nothing else does. This is the slow half of the work: dealer directories, the auctioneers' association, local press, and the banks you already work with.</p></li>
+<li class="finding"><div class="finding-head"><h4><code>news-sitemap.xml</code> and <code>feed.xml</code> both return 404.</h4><span class="tag ok-tag">Fixed by step 1</span></div><p>robots.txt points Google at news-sitemap.xml, which 404s — that is the 1 error on articles.xml. The .htaccess rewrites that should serve them are not being applied on the production host. Running the generator writes them as real files, which sidesteps mod_rewrite entirely.</p></li>
+<li class="finding"><div class="finding-head"><h4>Every page shipped its brand name twice in the title tag.</h4><span class="tag ok-tag">Fixed</span></div><p>header.php appends "— Auction Hub Group" to every title, and eleven pages already included it. "Browse Auctions — Auction Hub Group — Auction Hub Group" spent 20 of the ~60 characters Google displays on a repeated brand. All eleven rewritten to lead with the terms buyers search.</p></li>
+<li class="finding"><div class="finding-head"><h4>Articles had no path into the auction funnel.</h4><span class="tag ok-tag">Fixed</span></div><p>An article ranked, was read, and dead-ended — no links to any vehicle, so no reason for Google to treat the listings as important and no reason for a reader to become a bidder. Every article now carries two strips of live lots, matched to the makes the article mentions.</p></li></ul></div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="wrap">
+  Assets validated against Google Ads limits — headline 30, description 90, sitelink 25/35,
+  callout 25, snippet 25, long headline 90. Claims sourced from the AHG FAQ and auction guide.
+</footer>
+
+<script>
+(function(){
+  function flash(btn){
+    var t = btn.textContent;
+    btn.textContent = 'Copied';
+    btn.classList.add('done');
+    setTimeout(function(){ btn.textContent = t; btn.classList.remove('done'); }, 1200);
+  }
+  function write(text, btn){
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function(){ flash(btn); }, function(){ fallback(text, btn); });
+    } else { fallback(text, btn); }
+  }
+  function fallback(text, btn){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly','');
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); flash(btn); } catch(e){ btn.textContent = 'Select it'; }
+    document.body.removeChild(ta);
+  }
+  document.addEventListener('click', function(e){
+    var one = e.target.closest('.copy');
+    if (one) { write(one.closest('.asset').dataset.copy, one); return; }
+    var all = e.target.closest('.copy-all');
+    if (all) { write(all.dataset.bulk, all); }
+  });
+})();
+</script>
+
+</body>
+</html>

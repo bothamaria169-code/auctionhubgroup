@@ -1,0 +1,11 @@
+# Store text with LF (the files on disk are LF); never touch binaries.
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

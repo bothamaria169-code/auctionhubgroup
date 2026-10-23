@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pva",
+      "runtimeExecutable": "C:/xampp/php/php.exe",
+      "runtimeArgs": ["-S", "localhost:8080", "-t", "C:/xampp/htdocs/auctionhubgroup"],
+      "port": 8080
+    },
+    {
+      "name": "xampp-apache",
+      "runtimeExecutable": "C:/xampp/apache/bin/httpd.exe",
+      "runtimeArgs": [],
+      "port": 80,
+      "url": "http://localhost"
+    }
+  ]
+}
