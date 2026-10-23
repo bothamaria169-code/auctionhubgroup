@@ -40,6 +40,11 @@ What the deploy does by itself:
 5. **Quick check** (private window): the homepage shows vehicle photos; a sold car shows the red **SOLD** stamp;
    you can log in and open your dashboard.
 
+> **Check the account first.** On the repo page, *Repository Path* must start with
+> `/home/auctionhubgroupc/`. If it shows another account (e.g. `/home/bidcoauctionsco/`), you're in a
+> different site's cPanel: don't deploy there, and remove that repository. The deploy only targets the
+> `auctionhubgroupc` account, so it can't overwrite another site, but it won't update Auction Hub Group either.
+
 ## If "Deploy HEAD Commit" is greyed out
 
 cPanel shows *The system cannot deploy* when it can't read `.cpanel.yml` or when the server's copy of the repo has changes.
