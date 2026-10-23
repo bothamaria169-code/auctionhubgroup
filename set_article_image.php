@@ -8,11 +8,11 @@
  *
  * Run on PRODUCTION:
  *   Default (the repossessed-car guide):
- *     https://auctionhubgroup.co.za/set_article_image.php?key=ahg-gen-2026
+ *     https://auctionhubgroup.co.za/set_article_image.php?key=<AHG_CRON_KEY>
  *   A specific article:
- *     https://auctionhubgroup.co.za/set_article_image.php?key=ahg-gen-2026&slug=some-slug
+ *     https://auctionhubgroup.co.za/set_article_image.php?key=<AHG_CRON_KEY>&slug=some-slug
  *   Every article that has no image yet:
- *     https://auctionhubgroup.co.za/set_article_image.php?key=ahg-gen-2026&all=1
+ *     https://auctionhubgroup.co.za/set_article_image.php?key=<AHG_CRON_KEY>&all=1
  * ----------------------------------------------------------------------------
  */
 ob_start();

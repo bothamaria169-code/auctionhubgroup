@@ -9,7 +9,7 @@
  *     feed.xml      ← from feed.php
  *
  * Run on PRODUCTION (it must use the production DB):
- *   Browser:  https://auctionhubgroup.co.za/generate_sitemaps.php?key=ahg-gen-2026
+ *   Browser:  https://auctionhubgroup.co.za/generate_sitemaps.php?key=<AHG_CRON_KEY>
  *   CLI/cron: /usr/local/bin/php /home/<cpaneluser>/public_html/generate_sitemaps.php
  *
  * Schedule it on cPanel cron (e.g. daily) so the static files stay fresh as

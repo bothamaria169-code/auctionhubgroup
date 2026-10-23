@@ -14,7 +14,7 @@
  *     /usr/local/bin/php /home/<cpaneluser>/public_html/cron_generate_article.php
  *
  *   Browser (manual test):
- *     https://auctionhubgroup.co.za/cron_generate_article.php?key=ahg-gen-2026
+ *     https://auctionhubgroup.co.za/cron_generate_article.php?key=<AHG_CRON_KEY from config.secrets.php>
  *
  *   Generate more than one in a run:
  *     php cron_generate_article.php --count=2     (CLI)

@@ -19,7 +19,7 @@ The recommended engine is implemented. To turn it on:
    <https://console.groq.com> → API Keys). Model is already `llama-3.3-70b-versatile`.
 2. **Create the tables + seed topics.** Either run `ahg_article_automation.sql` in
    phpMyAdmin, OR just run the cron once — it auto-creates the tables and seeds 5 topics.
-3. **Test it** (browser): `https://auctionhubgroup.co.za/cron_generate_article.php?key=ahg-gen-2026`
+3. **Test it** (browser): `https://auctionhubgroup.co.za/cron_generate_article.php?key=<AHG_CRON_KEY>`
    or CLI: `php cron_generate_article.php`. It writes ONE draft (`is_active=0`).
 4. **Approve the draft.** It won't show on the site until approved. In phpMyAdmin or admin:
    `UPDATE news_posts SET is_active=1 WHERE id=<draft id>;` → it appears on `news.php`,

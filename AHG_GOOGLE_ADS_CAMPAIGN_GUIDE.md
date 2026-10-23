@@ -31,7 +31,7 @@ Checked on the live site while writing this:
 | 4 | `sold_vehicles.php` reports **0 vehicles sold** | "See what cars sold for" would land on an empty page | Don't link it or claim it until it has data |
 | 5 | `events.php` newest date is **30 April 2026** | Any "auction this week" copy would be false, and the page looks abandoned | Update the events or keep ads away from it |
 | 6 | `financing.php` still says "no credit checks" and "blacklisted welcome" | Google's financial-services policy can suspend the **whole account**, not one ad | Never in ad text, never a sitelink, never an ad landing page |
-| 7 | Sitemap generator is not on a daily cron | Fresh lots take longer to appear in organic results | cPanel → Cron → `generate_sitemaps.php?key=ahg-gen-2026`, daily |
+| 7 | Sitemap generator is not on a daily cron | Fresh lots take longer to appear in organic results | cPanel → Cron → `generate_sitemaps.php?key=<AHG_CRON_KEY>`, daily |
 
 Items 1 and 2 are hard blockers. Items 3–7 can follow in the first week.
 

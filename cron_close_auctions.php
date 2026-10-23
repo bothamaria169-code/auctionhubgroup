@@ -13,7 +13,7 @@
  *   (Never write the cron expression literally here: its star-slash ends this comment.)
  *
  * Can also be called via browser for testing (admin-only):
- *   https://auctionhubgroup.co.za/cron_close_auctions.php?key=YOUR_CRON_KEY
+ *   https://auctionhubgroup.co.za/cron_close_auctions.php?key=<AHG_CRON_KEY from config.secrets.php>
  */
 
 // Allow CLI execution without session
@@ -27,8 +27,8 @@ require_once __DIR__ . '/config.php';
 
 // Security: If called via browser, require a secret key
 if (php_sapi_name() !== 'cli') {
-    $cronKey = 'pva_cron_2026_close'; // Change this to a strong secret
-    if (($_GET['key'] ?? '') !== $cronKey) {
+    // Shared secret from config.secrets.php (never hard-code it: the repo is public)
+    if (!defined('AHG_CRON_KEY') || AHG_CRON_KEY === '' || !hash_equals(AHG_CRON_KEY, (string)($_GET['key'] ?? ''))) {
         http_response_code(403);
         die('Forbidden');
     }

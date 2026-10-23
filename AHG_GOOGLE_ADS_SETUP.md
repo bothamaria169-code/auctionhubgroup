@@ -101,7 +101,7 @@ define('GADS_REGISTRATION_VALUE', 350);   // what one signup is worth, for Smart
 ## 3. Run once, on production
 
 ```
-https://auctionhubgroup.co.za/generate_sitemaps.php?key=ahg-gen-2026
+https://auctionhubgroup.co.za/generate_sitemaps.php?key=<AHG_CRON_KEY>
 ```
 
 Then add it to cPanel cron, daily.
