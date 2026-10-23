@@ -40,6 +40,23 @@ What the deploy does by itself:
 5. **Quick check** (private window): the homepage shows vehicle photos; a sold car shows the red **SOLD** stamp;
    you can log in and open your dashboard.
 
+## If "Deploy HEAD Commit" is greyed out
+
+cPanel shows *The system cannot deploy* when it can't read `.cpanel.yml` or when the server's copy of the repo has changes.
+1. Click **Update from Remote** first. The fixed `.cpanel.yml` (commit `a1f7e09` or later) must be on the server.
+   *HEAD Commit* on that page should show the newest commit.
+2. Still greyed out? cPanel → **Terminal** (or SSH), then run:
+   ```
+   cd ~/repositories/auctionhubgroup && git status
+   ```
+   If it lists changed or extra files, reset the server copy to GitHub's version (this only touches the repo copy, not your live site):
+   ```
+   git fetch origin && git reset --hard origin/main && git clean -fd
+   ```
+   Then reload the Git Version Control page.
+3. No Terminal? In **Git Version Control**, **Remove** the repository (this deletes only `~/repositories/auctionhubgroup`, not `public_html`),
+   then redo step 3 to clone it again.
+
 ## Every update after that
 
 When I push changes to GitHub, go to cPanel → **Git Version Control** → **Manage** → **Pull or Deploy**:
