@@ -1,7 +1,5 @@
 ---
-# cPanel → Git Version Control → Manage → Pull or Deploy → "Deploy HEAD Commit"
-# runs these tasks inside the server's clone of the repo. All the logic is in
-# deploy.sh (copies the site into public_html, skips .htaccess/docs/SQL).
 deployment:
   tasks:
-    - /bin/bash deploy.sh
+    - export DEPLOYPATH=/home/auctionhubgroupc/public_html
+    - /bin/bash /home/auctionhubgroupc/repositories/auctionhubgroup/deploy.sh

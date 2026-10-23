@@ -9,9 +9,14 @@
 #      (database dumps, invoices, dev scripts) if an old upload left them;
 #   3. adds a security block to the live .htaccess once (marked, idempotent).
 # ============================================================
+#
+# .cpanel.yml is kept to cPanel's documented example on purpose (plain ASCII,
+# no comments): cPanel greys out "Deploy HEAD Commit" if it can't parse it.
+# ============================================================
 set -euo pipefail
 
-DEPLOYPATH="$HOME/public_html"
+DEPLOYPATH="${DEPLOYPATH:-$HOME/public_html}"
+DEPLOYPATH="${DEPLOYPATH%/}"
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Deploying $(git -C "$SRC" log -1 --format='%h %s' 2>/dev/null || echo 'unknown commit') → $DEPLOYPATH"
