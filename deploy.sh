@@ -30,21 +30,31 @@ if [ ! -f "$HOME/config.secrets.php" ] && [ ! -f "$DEPLOYPATH/config.secrets.php
 fi
 
 # ── 1. Copy ─────────────────────────────────────────────────────
+# Only files tracked in git, listed one by one. Never archive "." itself:
+# extracting a "./" entry overwrites public_html's own permissions with the
+# clone's (cPanel runs deploys with a strict umask), which made the whole
+# site 404 on 23 Oct 2026. Permissions are then set explicitly below.
 # Not copied: the root .htaccess (the live one has host lines — step 3
 # patches it instead), git/editor files, docs, one-off tools, the secrets
 # template. sql/ IS copied (careers code reads a migration from it) and is
 # locked by its own .htaccess.
+umask 022
 cd "$SRC"
-tar -cf - \
-    --exclude='./.git' --exclude='./.gitignore' --exclude='./.gitattributes' \
-    --exclude='./.editorconfig' --exclude='./.claude' --exclude='./.cpanel.yml' \
-    --exclude='./deploy.sh' --exclude='./.htaccess' \
-    --exclude='./docs' --exclude='./tools' --exclude='./private' \
-    --exclude='./*.md' \
-    --exclude='./composer.json' --exclude='./composer.lock' \
-    --exclude='./config.secrets.example.php' \
-    . | tar -xf - -C "$DEPLOYPATH"
-echo "Files copied."
+FILES="$(mktemp)"
+git ls-files | grep -vE '^(\.gitignore|\.gitattributes|\.editorconfig|\.cpanel\.yml|deploy\.sh|\.htaccess|composer\.(json|lock)|config\.secrets\.example\.php|[^/]+\.md)$|^(\.claude|docs|tools|private)/' > "$FILES"
+tar -cf - -T "$FILES" | tar -xf - -C "$DEPLOYPATH" --no-same-owner --no-same-permissions
+echo "Files copied ($(wc -l < "$FILES") files)."
+
+# Standard cPanel permissions for everything the deploy manages:
+# public_html and folders 755, files 644. uploads/, vendor/ etc. untouched.
+chmod 755 "$DEPLOYPATH"
+while IFS= read -r f; do
+    chmod 644 "$DEPLOYPATH/$f"
+    d="$(dirname "$f")"
+    while [ "$d" != "." ]; do chmod 755 "$DEPLOYPATH/$d"; d="$(dirname "$d")"; done
+done < "$FILES"
+rm -f "$FILES"
+echo "Permissions set (folders 755, files 644)."
 
 # ── 2. Remove private / dead files left by old manual uploads ──────
 cd "$DEPLOYPATH"
@@ -70,6 +80,16 @@ for f in ./*.sql ./*.md; do
 done
 for d in google-ads-pack; do
     if [ -d "$d" ]; then rm -rf -- "$d"; echo "  removed $d/"; fi
+done
+# A full-site backup folder left inside public_html would expose everything
+# (secrets, dumps). Lock it instead of deleting it: its own .htaccess is kept
+# as .htaccess.orig and replaced with deny-all. Move it out of public_html.
+for d in auctionhubgroup backup site-backup; do
+    if [ -d "$d" ] && ! grep -qs "AHG-LOCKED" "$d/.htaccess"; then
+        [ -f "$d/.htaccess" ] && mv -f -- "$d/.htaccess" "$d/.htaccess.orig"
+        printf '# AHG-LOCKED by deploy.sh: backup copy, never public\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n' > "$d/.htaccess"
+        echo "  locked $d/ (backup folder: deny-all .htaccess; move it out of public_html)"
+    fi
 done
 
 # ── 3. Security block in the live .htaccess (added once) ───────────
