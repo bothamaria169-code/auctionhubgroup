@@ -24,7 +24,7 @@ if (isset($_GET['logout'])) {
 
 // ── Ensure career tables exist ────────────────────────────
 try {
-    $pdo->exec(file_get_contents(__DIR__ . '/ahg_career_portal.sql'));
+    $pdo->exec(file_get_contents(__DIR__ . '/sql/ahg_career_portal.sql'));
 } catch (Exception $e) { /* tables already exist */ }
 
 // Migrate existing installs

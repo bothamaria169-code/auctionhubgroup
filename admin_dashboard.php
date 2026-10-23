@@ -56,7 +56,7 @@ syncSession($currentUser);
 
 // ── Active tab ────────────────────────────────────────────────
 $activeTab = $_GET['tab'] ?? 'overview';
-$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers'];
+$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai'];
 if (!in_array($activeTab, $validTabs)) $activeTab = 'overview';
 
 // ── Flash ─────────────────────────────────────────────────────
@@ -141,7 +141,19 @@ function describeAdminActivity(string $action, ?string $detailsJson): string {
             return 'Marked sold for ' . $money($d['final_price'] ?? 0)
                  . (!empty($d['buyer']) ? ' to ' . $d['buyer'] : '') . (!empty($d['bulk']) ? ' (bulk)' : '');
         case 'edit_sale':
-            return 'Changed sale price ' . $money($d['previous_price'] ?? 0) . ' → ' . $money($d['final_price'] ?? 0);
+            $parts = [];
+            if (($d['previous_price'] ?? null) != ($d['final_price'] ?? null)) {
+                $parts[] = 'price ' . (isset($d['previous_price']) ? $money($d['previous_price']) : 'none')
+                         . ' → ' . (isset($d['final_price']) ? $money($d['final_price']) : 'none');
+            }
+            if (!empty($d['previous_date']) && ($d['previous_date'] !== ($d['sold_date'] ?? ''))) {
+                $parts[] = 'date ' . safeDate('d M Y', $d['previous_date']) . ' → ' . safeDate('d M Y', $d['sold_date'] ?? null);
+            }
+            return 'Edited sale' . ($parts ? ': ' . implode(', ', $parts) : '') . (!empty($d['buyer']) ? ' (buyer ' . $d['buyer'] . ')' : '');
+        case 'spread_date':
+            return 'Sold date ' . safeDate('d M Y', $d['previous_date'] ?? null) . ' → ' . safeDate('d M Y', $d['sold_date'] ?? null) . ' (spread)';
+        case 'undo_spread':
+            return 'Undid date spread: ' . (int)($d['restored'] ?? 0) . ' date(s) restored';
         case 'undo_sold':
             return 'Removed sale (was ' . $money($d['previous_price'] ?? 0) . ')';
         case 'relist':
@@ -152,6 +164,12 @@ function describeAdminActivity(string $action, ?string $detailsJson): string {
             return 'Deleted lot' . (!empty($d['bids']) ? ' with ' . $d['bids'] . ' bid(s)' : '') . (!empty($d['bulk']) ? ' (bulk)' : '');
         case 'status':
             return 'Status set to ' . ($d['status'] ?? '?') . (!empty($d['bulk']) ? ' (bulk)' : '');
+        case 'ai_edit':
+            return 'AI photo edit: "' . mb_strimwidth($d['instruction'] ?? '', 0, 70, '…') . '"';
+        case 'ai_save':
+            return 'Saved AI-edited photo as ' . (($d['mode'] ?? '') === 'main' ? 'main photo' : 'gallery photo');
+        case 'ai_settings':
+            return 'xAI key ' . ($d['key'] ?? 'changed');
     }
     return ucfirst(str_replace('_', ' ', $action));
 }
@@ -600,6 +618,7 @@ require_once 'header.php';
     <a href="?tab=careers"       class="admin-mnav-link <?= $activeTab==='careers'       ?'active':'' ?>"><i class="fas fa-user-tie"></i><span>Job Applications</span></a>
     <a href="?tab=workers"       class="admin-mnav-link <?= $activeTab==='workers'       ?'active':'' ?>"><i class="fas fa-id-badge"></i><span>Workers</span></a>
     <a href="?tab=refunds"       class="admin-mnav-link <?= $activeTab==='refunds'       ?'active':'' ?>"><i class="fas fa-rotate-left"></i><span>Refunds<?= $stats['pending_refunds']>0?' ('.$stats['pending_refunds'].')':'' ?></span></a>
+    <a href="?tab=ai"            class="admin-mnav-link <?= $activeTab==='ai'            ?'active':'' ?>"><i class="fas fa-wand-magic-sparkles"></i><span>AI Photos</span></a>
     <a href="invoice_generator.php?tab=builder" class="admin-mnav-link"><i class="fas fa-magic"></i><span>Deal Builder</span></a>
     <a href="manage_auction.php"  class="admin-mnav-link"><i class="fas fa-plus-circle"></i><span>Add Vehicle</span></a>
     <a href="sold_vehicles.php"   class="admin-mnav-link" target="_blank"><i class="fas fa-tag"></i><span>Sold Vehicles</span></a>
@@ -679,6 +698,9 @@ require_once 'header.php';
         <?php if ($stats['pending_refunds'] > 0): ?>
           <span class="sidebar-badge sidebar-badge-danger"><?= $stats['pending_refunds'] ?></span>
         <?php endif; ?>
+      </a>
+      <a href="?tab=ai" class="sidebar-link <?= $activeTab==='ai' ? 'active':'' ?>">
+        <i class="fas fa-wand-magic-sparkles"></i> AI Photos
       </a>
       <a href="invoice_generator.php?tab=builder" class="sidebar-link">
         <i class="fas fa-magic"></i> Deal Builder
@@ -849,7 +871,7 @@ require_once 'header.php';
       </div>
       <?php if ($activityMissing): ?>
         <div class="alert alert-error" style="margin:0;">
-          <i class="fas fa-database"></i> The change log isn't set up on this server yet. Run <code>ahg_admin_activity_log.sql</code> in phpMyAdmin.
+          <i class="fas fa-database"></i> The change log isn't set up on this server yet. Run <code>sql/ahg_admin_activity_log.sql</code> in phpMyAdmin.
           Until then nothing is logged, and Relist is disabled.
         </div>
       <?php elseif (!$activityRows): ?>
@@ -1431,6 +1453,50 @@ require_once 'header.php';
         </a>
       <?php endforeach; ?>
     </nav>
+    <?php
+    // Sold tab: sold dates shared by 5+ lots were bulk-marked, not real sale days
+    if ($auctionStatus === 'sold'):
+        $bulkDays = $pdo->query("
+            SELECT DATE(sold_date) AS d, COUNT(*) AS n FROM auctions
+            WHERE is_sold = 1 AND sold_date IS NOT NULL
+            GROUP BY DATE(sold_date) HAVING n >= 5 ORDER BY n DESC
+        ")->fetchAll();
+        $lastSpread = null;
+        try {
+            $row = $pdo->query("SELECT details, created_at FROM admin_activity_log WHERE action = 'spread_date' ORDER BY id DESC LIMIT 1")->fetch();
+            if ($row) {
+                $b = json_decode($row['details'], true)['batch'] ?? '';
+                $undone = $pdo->prepare("SELECT 1 FROM admin_activity_log WHERE action = 'undo_spread' AND details LIKE ?");
+                $undone->execute(['%"batch":"' . $b . '"%']);
+                if ($b && !$undone->fetchColumn()) $lastSpread = ['batch' => $b, 'at' => $row['created_at']];
+            }
+        } catch (PDOException $e) { /* change log not created yet */ }
+        if ($bulkDays || $lastSpread): ?>
+    <div class="card spread-panel">
+      <?php foreach ($bulkDays as $bd): ?>
+        <div class="spread-row">
+          <div>
+            <strong><?= (int)$bd['n'] ?> sold lots share the date <?= safeDate('d M Y', $bd['d']) ?>.</strong>
+            <small class="text-muted">That's the day they were bulk-marked sold, so the public sold page shows the same date on every car.
+              Spreading gives each one a weekday date between when it was listed (at most 2 years back) and <?= safeDate('d M Y', $bd['d']) ?>.
+              You can undo it, and still edit any single date with <em>Edit Sale</em>.</small>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="spreadSoldDates('<?= e($bd['d']) ?>', <?= (int)$bd['n'] ?>)">
+            <i class="fas fa-calendar-days"></i> Spread these dates
+          </button>
+        </div>
+      <?php endforeach; ?>
+      <?php if ($lastSpread): ?>
+        <div class="spread-row">
+          <small class="text-muted">Dates were spread on <?= safeDate('d M Y H:i', $lastSpread['at']) ?>.</small>
+          <button type="button" class="btn btn-outline btn-sm" onclick="undoSpreadDates('<?= e($lastSpread['batch']) ?>')">
+            <i class="fas fa-rotate-left"></i> Undo spread
+          </button>
+        </div>
+      <?php endif; ?>
+    </div>
+    <?php endif; endif; ?>
+
     <?php if ($auctionStatus === 'attention'): ?>
     <div class="alert alert-info" style="margin-bottom:1rem;font-size:.86rem;">
       <i class="fas fa-info-circle"></i>
@@ -1480,6 +1546,9 @@ require_once 'header.php';
     .av-page-btn.active, .av-page-btn:hover { background:#1565c0; border-color:#1565c0; color:#fff; }
     .av-page-gap { color:#99a; padding:0 .2rem; }
     .av-sold-row { background:#fde8e8; border-radius:8px; padding:.45rem .6rem; }
+    .spread-panel { margin-bottom:1rem; border:1.5px solid #f9a825; background:#fffdf5; }
+    .spread-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; padding:.35rem 0; }
+    .spread-row small { display:block; margin-top:.2rem; max-width:720px; }
     .av-sold-row .val { color:#7b1818; }
     .av-sale-actions { display:flex; gap:.5rem; }
     .av-sale-actions .btn { flex:1; justify-content:center; font-size:.82rem; }
@@ -1601,6 +1670,7 @@ require_once 'header.php';
               'price' => (float)$a['final_price'],
               'date'  => $a['sold_date'] ? substr($a['sold_date'], 0, 10) : '',
               'buyer' => $a['sold_to'] ?? '',
+              'sold'  => (int)$a['is_sold'],
           ], JSON_HEX_APOS | JSON_HEX_QUOT)); ?>
           <div class="av-sale-actions">
             <?php if ($a['is_sold']): ?>
@@ -1640,6 +1710,10 @@ require_once 'header.php';
                     title="Add to event">
               <i class="fas fa-calendar-plus"></i> Event
             </button>
+            <a class="btn btn-outline btn-sm" style="flex:1;border-color:#7b1fa2;color:#7b1fa2;"
+               href="?tab=ai&amp;lot=<?= (int)$a['id'] ?>" title="Edit photos with AI">
+              <i class="fas fa-wand-magic-sparkles"></i> AI
+            </a>
             <?php if ($a['status'] === 'closed' || $a['bid_count'] > 0): ?>
             <button class="btn btn-outline btn-sm" style="flex:1;border-color:#2e7d32;color:#2e7d32;"
                     onclick="openAssignWinnerModal(<?= $a['id'] ?>, '<?= e(addslashes($a['item_name'])) ?>')"
@@ -5475,6 +5549,204 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
 });
 </script>
 
+<?php elseif ($activeTab === 'ai'):
+    require_once __DIR__ . '/ai_image_helper.php';
+    $aiMasked = aiMaskedKey();
+    $aiLot    = (int)($_GET['lot'] ?? 0); ?>
+
+    <div class="dashboard-header">
+      <div>
+        <h1><i class="fas fa-wand-magic-sparkles"></i> AI Photos</h1>
+        <p class="text-muted">Tidy vehicle photos with Grok (xAI): clean backgrounds, better lighting, blurred plates.</p>
+      </div>
+    </div>
+
+    <!-- Key + model -->
+    <div class="card" style="margin-bottom:1.25rem;">
+      <h3 style="margin-top:0"><i class="fas fa-key"></i> xAI API key</h3>
+      <p class="text-muted" style="font-size:.86rem;margin-top:0;">
+        Create a key at <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a> → API Keys, then paste it here.
+        It's stored in the database only (never in the code or GitHub). Each edit is billed to that xAI account.
+      </p>
+      <div id="aiKeyResult"></div>
+      <p style="margin:.25rem 0 .75rem;">
+        Status:
+        <?php if ($aiMasked): ?>
+          <span class="badge badge-success"><i class="fas fa-check"></i> Key saved</span> <code><?= e($aiMasked) ?></code>
+        <?php else: ?>
+          <span class="badge badge-closed">No key yet</span>
+        <?php endif; ?>
+      </p>
+      <form id="aiKeyForm" class="ai-key-form" autocomplete="off">
+        <input type="password" name="api_key" class="form-control" placeholder="<?= $aiMasked ? 'Paste a new key to replace it' : 'xai-…' ?>" autocomplete="new-password">
+        <input type="text" name="model" class="form-control" value="<?= e(aiModel()) ?>" title="Image model" style="max-width:240px">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+        <?php if ($aiMasked): ?>
+          <button type="button" class="btn btn-outline" onclick="aiTestKey()"><i class="fas fa-plug"></i> Test</button>
+          <button type="button" class="btn btn-outline" style="color:#c62828;border-color:#c62828" onclick="aiClearKey()"><i class="fas fa-trash"></i> Remove</button>
+        <?php endif; ?>
+      </form>
+    </div>
+
+    <!-- Editor -->
+    <div class="card">
+      <h3 style="margin-top:0"><i class="fas fa-image"></i> Edit a vehicle photo</h3>
+      <div class="alert alert-info" style="font-size:.84rem;">
+        <i class="fas fa-scale-balanced"></i> Buyers rely on these photos. Every edit is told to keep the vehicle exactly as it is,
+        including any damage. Only use it to tidy the picture, never to hide faults.
+      </div>
+      <form id="aiLotForm" class="ai-key-form" style="margin-bottom:1rem;">
+        <input type="number" id="aiLotId" class="form-control" placeholder="Lot ID (shown on each vehicle card as ID #…)" min="1" value="<?= $aiLot ?: '' ?>" style="max-width:320px">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-images"></i> Load photos</button>
+      </form>
+      <div id="aiLotTitle" class="ai-lot-title"></div>
+      <div id="aiPhotos" class="ai-photos"></div>
+
+      <div id="aiControls" style="display:none;">
+        <h4 style="margin:1.25rem 0 .5rem;">What should change?</h4>
+        <div class="ai-presets">
+          <?php foreach (AI_PRESETS as $k => [$label, $text]): ?>
+            <button type="button" class="btn btn-outline btn-sm ai-preset" data-preset="<?= e($k) ?>" title="<?= e($text) ?>"><?= e($label) ?></button>
+          <?php endforeach; ?>
+        </div>
+        <textarea id="aiInstruction" class="form-control" rows="2" maxlength="600" placeholder="…or describe it, e.g. Remove the orange cones in front of the car" style="margin-top:.6rem;"></textarea>
+        <button type="button" class="btn btn-primary" id="aiRunBtn" style="margin-top:.6rem;" <?= $aiMasked ? '' : 'disabled title="Save an xAI key first"' ?>>
+          <i class="fas fa-wand-magic-sparkles"></i> Run edit
+        </button>
+        <small class="text-muted" style="margin-left:.5rem;">Takes 10–60 seconds.</small>
+      </div>
+
+      <div id="aiResult" class="ai-result" style="display:none;">
+        <div class="ai-compare">
+          <figure><figcaption>Before</figcaption><img id="aiBefore" alt="Original photo"></figure>
+          <figure><figcaption>After (not saved yet)</figcaption><img id="aiAfter" alt="AI-edited photo"></figure>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;">
+          <button type="button" class="btn btn-primary" onclick="aiSave('main')"><i class="fas fa-star"></i> Use as main photo</button>
+          <button type="button" class="btn btn-outline" onclick="aiSave('gallery')"><i class="fas fa-plus"></i> Add to gallery</button>
+          <button type="button" class="btn btn-outline" onclick="aiDiscard()"><i class="fas fa-xmark"></i> Discard</button>
+        </div>
+        <small class="text-muted">Saving keeps the original: "main photo" moves the old one into the gallery.</small>
+      </div>
+    </div>
+
+    <style>
+      .ai-key-form { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+      .ai-key-form .form-control { flex:1; min-width:220px; }
+      .ai-lot-title { font-weight:700; color:#003f73; margin-bottom:.5rem; }
+      .ai-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:.5rem; }
+      .ai-photos button { padding:0; border:3px solid transparent; border-radius:8px; overflow:hidden; cursor:pointer; background:#eef2f7; height:86px; position:relative; }
+      .ai-photos button.selected { border-color:#1565c0; }
+      .ai-photos img { width:100%; height:100%; object-fit:cover; }
+      .ai-photos .ai-main-tag { position:absolute; left:4px; top:4px; background:#1565c0; color:#fff; font-size:.62rem; font-weight:700; padding:1px 6px; border-radius:8px; }
+      .ai-presets { display:flex; gap:.4rem; flex-wrap:wrap; }
+      .ai-preset.active { background:#1565c0; color:#fff; border-color:#1565c0; }
+      .ai-result { margin-top:1.25rem; padding-top:1rem; border-top:1px solid #eef2f7; }
+      .ai-compare { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+      .ai-compare figure { margin:0; }
+      .ai-compare figcaption { font-size:.78rem; font-weight:700; color:#667; margin-bottom:.3rem; }
+      .ai-compare img { width:100%; border-radius:8px; background:#eef2f7; min-height:120px; object-fit:contain; }
+      @media (max-width:640px) { .ai-compare { grid-template-columns:1fr; } }
+    </style>
+    <script>
+    (function () {
+        const post = async (fields) => {
+            const fd = new FormData();
+            Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+            return (await fetch('api.php', {method: 'POST', body: fd})).json();
+        };
+        const say = (el, ok, msg) => document.getElementById(el).innerHTML =
+            `<div class="alert alert-${ok ? 'success' : 'error'}" style="margin-bottom:.75rem">${String(msg).replace(/</g, '&lt;')}</div>`;
+        let lotId = 0, photoUrl = '', preset = '', token = '';
+
+        document.getElementById('aiKeyForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const f = e.target, btn = f.querySelector('button[type=submit]');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+            try {
+                const d = await post({action: 'ai_settings_save', api_key: f.api_key.value.trim(), model: f.model.value.trim()});
+                say('aiKeyResult', d.success, d.message);
+                if (d.success) setTimeout(() => location.reload(), 1200);
+            } catch { say('aiKeyResult', false, 'Could not save.'); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+        });
+        window.aiTestKey = async () => {
+            const d = await post({action: 'ai_settings_test'});
+            say('aiKeyResult', d.success, d.message);
+        };
+        window.aiClearKey = async () => {
+            if (!confirm('Remove the saved xAI key? AI photo editing stops until a new key is saved.')) return;
+            const d = await post({action: 'ai_settings_save', clear: 1});
+            say('aiKeyResult', d.success, d.message);
+            if (d.success) setTimeout(() => location.reload(), 900);
+        };
+
+        async function loadLot(id) {
+            const box = document.getElementById('aiPhotos');
+            box.innerHTML = '<span class="text-muted">Loading…</span>';
+            document.getElementById('aiResult').style.display = 'none';
+            const d = await (await fetch('api.php?action=ai_lot_photos&auction_id=' + id)).json();
+            if (!d.success) { box.innerHTML = ''; document.getElementById('aiLotTitle').textContent = d.message; return; }
+            lotId = id; photoUrl = '';
+            document.getElementById('aiLotTitle').innerHTML = '#' + id + ' · ' + d.lot.item_name.replace(/</g, '&lt;')
+                + ' <a href="auction.php?id=' + id + '" target="_blank" style="font-weight:400;font-size:.82rem">view lot ↗</a>';
+            if (!d.photos.length) { box.innerHTML = '<span class="text-muted">This lot has no photos.</span>'; return; }
+            box.innerHTML = d.photos.map((p, i) =>
+                `<button type="button" data-url="${p.url.replace(/"/g, '&quot;')}">${p.kind === 'main' ? '<span class="ai-main-tag">MAIN</span>' : ''}<img src="${p.thumb.replace(/"/g, '&quot;')}" alt="Photo ${i + 1}" loading="lazy"></button>`).join('');
+            box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+                box.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
+                b.classList.add('selected');
+                photoUrl = b.dataset.url;
+                document.getElementById('aiControls').style.display = '';
+            }));
+            box.querySelector('button').click();
+        }
+        document.getElementById('aiLotForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const id = parseInt(document.getElementById('aiLotId').value, 10);
+            if (id > 0) loadLot(id);
+        });
+        <?php if ($aiLot): ?>loadLot(<?= $aiLot ?>);<?php endif; ?>
+
+        document.querySelectorAll('.ai-preset').forEach(b => b.addEventListener('click', () => {
+            const on = !b.classList.contains('active');
+            document.querySelectorAll('.ai-preset').forEach(x => x.classList.remove('active'));
+            b.classList.toggle('active', on);
+            preset = on ? b.dataset.preset : '';
+            if (on) document.getElementById('aiInstruction').value = '';
+        }));
+        document.getElementById('aiInstruction').addEventListener('input', () => {
+            preset = ''; document.querySelectorAll('.ai-preset').forEach(x => x.classList.remove('active'));
+        });
+
+        document.getElementById('aiRunBtn').addEventListener('click', async () => {
+            const instruction = document.getElementById('aiInstruction').value.trim();
+            if (!photoUrl) { showToast('Pick a photo first.', 'error'); return; }
+            if (!preset && !instruction) { showToast('Pick a preset or describe the change.', 'error'); return; }
+            const btn = document.getElementById('aiRunBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editing… (10–60 s)';
+            try {
+                const d = await post({action: 'ai_edit', auction_id: lotId, photo_url: photoUrl, preset: preset, instruction: instruction});
+                if (!d.success) { showToast(d.message, 'error'); return; }
+                token = d.token;
+                document.getElementById('aiBefore').src = document.querySelector('.ai-photos button.selected img').src.replace(/tr:w-\d+/, 'tr:w-1200');
+                document.getElementById('aiAfter').src = d.preview;
+                document.getElementById('aiResult').style.display = '';
+                document.getElementById('aiResult').scrollIntoView({behavior: 'smooth', block: 'start'});
+            } catch { showToast('The edit timed out or failed. Try again.', 'error'); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Run edit'; }
+        });
+
+        window.aiSave = async (mode) => {
+            if (!token) return;
+            const d = await post({action: 'ai_save', auction_id: lotId, token: token, mode: mode});
+            showToast(d.message, d.success ? 'success' : 'error');
+            if (d.success) { token = ''; document.getElementById('aiResult').style.display = 'none'; loadLot(lotId); }
+        };
+        window.aiDiscard = () => { token = ''; document.getElementById('aiResult').style.display = 'none'; };
+    })();
+    </script>
+
 <?php elseif ($activeTab === 'workers'): ?>
 
 <div class="dashboard-header">
@@ -8385,11 +8657,12 @@ window.onAuctionStatusChange = function(id, sel) {
 
 window.openMarkSoldModal = function(id, info) {
     info = info || {};
-    const editing = (info.price || 0) > 0;
+    const editing = !!info.sold || (info.price || 0) > 0;
+    document.getElementById('markSoldModal').dataset.editing = editing ? '1' : '0';
     document.getElementById('markSoldAuctionId').value = id;
     document.getElementById('markSoldVehicleName').textContent = (info.name || '') + '  (Lot #' + id + ')';
     document.getElementById('markSoldTitle').textContent = editing ? 'Edit Sale' : 'Mark as Sold';
-    document.getElementById('markSoldPrice').value = editing ? info.price : (info.top > 0 ? info.top : '');
+    document.getElementById('markSoldPrice').value = editing ? (info.price > 0 ? info.price : '') : (info.top > 0 ? info.top : '');
     document.getElementById('markSoldTopHint').textContent = info.top > 0
         ? 'Top bid on this lot: ' + randFmt(info.top) : 'No bids on this lot. Enter the agreed price.';
     document.getElementById('markSoldDate').value = info.date || new Date().toISOString().slice(0, 10);
@@ -8442,7 +8715,8 @@ window.openMarkSoldModal = function(id, info) {
 window.submitMarkSold = async function() {
     const id    = document.getElementById('markSoldAuctionId').value;
     const price = parseFloat(document.getElementById('markSoldPrice').value);
-    if (!(price > 0)) { showToast('Enter the final selling price.', 'error'); return; }
+    const editing = document.getElementById('markSoldModal').dataset.editing === '1';
+    if (!(price > 0) && !editing) { showToast('Enter the final selling price.', 'error'); return; }
     const btn = document.getElementById('markSoldSubmit');
     btn.disabled = true;
     try {
@@ -8456,6 +8730,24 @@ window.submitMarkSold = async function() {
         if (data.success) { closeModal('markSoldModal'); setTimeout(() => location.reload(), 900); }
     } catch { showToast('Error saving the sale.', 'error'); }
     finally { btn.disabled = false; }
+};
+
+window.spreadSoldDates = async function(day, n) {
+    if (!confirm(`Give the ${n} lots marked sold on ${day} varied dates?\n\nEach gets a weekday between when it was listed (at most 2 years back) and ${day}. You can undo this.`)) return;
+    try {
+        const data = await postApi({action: 'spread_sold_dates', day: day, years: 2});
+        showToast(data.message, data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => location.reload(), 1400);
+    } catch { showToast('Error spreading the dates.', 'error'); }
+};
+
+window.undoSpreadDates = async function(batch) {
+    if (!confirm('Put every spread sold date back to what it was?')) return;
+    try {
+        const data = await postApi({action: 'undo_spread_dates', batch: batch});
+        showToast(data.message, data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => location.reload(), 1200);
+    } catch { showToast('Error undoing.', 'error'); }
 };
 
 window.undoSold = async function(id, name) {

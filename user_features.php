@@ -232,7 +232,7 @@ function savedSearchUrl(array $f): string {
  */
 function runWatchReminders(callable $log): void {
     global $pdo;
-    if (!ufReady()) { $log('Watch reminders skipped: run ahg_user_features.sql first.'); return; }
+    if (!ufReady()) { $log('Watch reminders skipped: run sql/ahg_user_features.sql first.'); return; }
 
     $live = $pdo->query("
         SELECT w.user_id, a.id, a.item_name, a.end_time

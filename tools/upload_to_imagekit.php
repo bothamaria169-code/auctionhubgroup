@@ -51,7 +51,7 @@ if (isset($opts['part'])) {
     $ledgerName = preg_replace('/\.txt$/', '', $ledgerName) . '_part' . ($part + 1) . '.txt';
 }
 
-$secretsFile = dirname(__DIR__) . '/ahg_secrets.php';
+$secretsFile = dirname(__DIR__, 2) . '/ahg_secrets.php';
 if ($key === '' && is_file($secretsFile)) {
     $secrets = include $secretsFile;
     $key = is_array($secrets) ? (string)($secrets['IMAGEKIT_PRIVATE_KEY'] ?? '') : '';

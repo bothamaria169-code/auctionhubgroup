@@ -45,7 +45,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 
 // ── Ensure tables exist + migrate new columns ─────────────
 try {
-    $pdo->exec(file_get_contents(__DIR__ . '/ahg_career_portal.sql'));
+    $pdo->exec(file_get_contents(__DIR__ . '/sql/ahg_career_portal.sql'));
 } catch (Exception $e) {
     // Tables likely already exist — ignore
 }

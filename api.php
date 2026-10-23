@@ -2165,7 +2165,7 @@ switch ($action) {
             $stmt = $pdo->prepare("INSERT INTO testimonials (headline, image_url, cloudinary_public_id) VALUES (?, ?, ?)");
             $stmt->execute([$headline, $imageUrl, $publicId]);
         } catch (PDOException $e) {
-            fail('Database error — please ensure the testimonials table exists. Run sql_updates.sql first.');
+            fail('Database error — please ensure the testimonials table exists. Run sql/sql_updates.sql first.');
         }
         ok(['message' => 'Testimonial added successfully.', 'id' => $pdo->lastInsertId()]);
     }
@@ -2388,7 +2388,7 @@ switch ($action) {
             $stmt = $pdo->prepare("INSERT INTO popup_notifications (message, type, icon, frequency) VALUES (?, ?, ?, ?)");
             $stmt->execute([$message, $type, $icon, $frequency]);
         } catch (PDOException $e) {
-            fail('Database error — please ensure the popup_notifications table exists. Run sql_updates.sql first.');
+            fail('Database error — please ensure the popup_notifications table exists. Run sql/sql_updates.sql first.');
         }
         ok(['message' => 'Notification added.', 'id' => $pdo->lastInsertId()]);
     }
@@ -3416,6 +3416,126 @@ switch ($action) {
     }
 
 // ════════════════════════════════════════════════════════════
+// AI PHOTOS — Grok (xAI) image editing (admin). See ai_image_helper.php
+// ════════════════════════════════════════════════════════════
+
+    // Save / replace / remove the xAI key and model. A new key is tested first.
+    case 'ai_settings_save': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/ai_image_helper.php';
+        if (!empty($_POST['clear'])) {
+            aiSaveSetting('xai_api_key', null);
+            logAdminAction($admin, 'ai_settings', null, ['key' => 'removed']);
+            ok(['message' => 'xAI key removed.']);
+        }
+        $key   = trim($_POST['api_key'] ?? '');
+        $model = trim($_POST['model'] ?? '');
+        if ($model !== '' && !preg_match('/^[a-z0-9._-]{3,80}$/i', $model)) fail('That model name doesn\'t look right.');
+        $msg = [];
+        if ($key !== '') {
+            if (!preg_match('/^[A-Za-z0-9_-]{20,200}$/', $key)) fail('That doesn\'t look like an xAI API key (it usually starts with "xai-").');
+            try { $models = xaiTestKey($key); } catch (RuntimeException $e) { fail('Key not saved — ' . $e->getMessage()); }
+            aiSaveSetting('xai_api_key', $key);
+            $msg[] = 'Key saved and working' . ($models ? ' (image models: ' . implode(', ', $models) . ')' : '') . '.';
+            logAdminAction($admin, 'ai_settings', null, ['key' => 'updated']);
+        }
+        if ($model !== '') { aiSaveSetting('xai_image_model', $model); $msg[] = "Model set to $model."; }
+        if (!$msg) fail('Paste a key or change the model first.');
+        ok(['message' => implode(' ', $msg), 'masked' => aiMaskedKey()]);
+    }
+
+    case 'ai_settings_test': {
+        adminOnly();
+        require_once __DIR__ . '/ai_image_helper.php';
+        try { $models = xaiTestKey(aiApiKey()); } catch (RuntimeException $e) { fail($e->getMessage()); }
+        ok(['message' => 'The saved key works.' . ($models ? ' Image models: ' . implode(', ', $models) . '.' : '')]);
+    }
+
+    // A lot's photos for the editor (by lot ID)
+    case 'ai_lot_photos': {
+        adminOnly();
+        require_once __DIR__ . '/ai_image_helper.php';
+        $id = (int)($_GET['auction_id'] ?? 0);
+        $st = $pdo->prepare("SELECT id, item_name, is_sold FROM auctions WHERE id = ?");
+        $st->execute([$id]);
+        $lot = $st->fetch();
+        if (!$lot) fail('No lot with that ID.');
+        $photos = array_map(fn($p) => $p + ['thumb' => cldImg($p['url'], CLD_THUMB)], aiLotPhotos($id));
+        ok(['lot' => $lot, 'photos' => $photos]);
+    }
+
+    // Run one edit; the result waits in a private temp folder until saved
+    case 'ai_edit': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/ai_image_helper.php';
+        rateLimit('ai_edit', 20, 600);   // runaway-click guard: 20 edits / 10 min
+        @set_time_limit(200);
+        $id       = (int)($_POST['auction_id'] ?? 0);
+        $photoUrl = trim($_POST['photo_url'] ?? '');
+        $preset   = $_POST['preset'] ?? '';
+        $custom   = trim(strip_tags($_POST['instruction'] ?? ''));
+        $instruction = isset(AI_PRESETS[$preset]) ? AI_PRESETS[$preset][1] : mb_substr($custom, 0, 600);
+        if ($instruction === '') fail('Pick a preset or describe the change.');
+
+        // Only this lot's own photos can be sent (no arbitrary URLs)
+        $owned = array_column(aiLotPhotos($id), 'url');
+        if (!in_array($photoUrl, $owned, true)) fail('Pick one of this lot\'s photos.');
+
+        try {
+            $img = xaiEditImage(cldImg($photoUrl, CLD_LARGE), $instruction);
+        } catch (RuntimeException $e) {
+            fail($e->getMessage());
+        }
+        $token = aiStoreTmp($img, $id);
+        logAdminAction($admin, 'ai_edit', $id, ['instruction' => mb_substr($instruction, 0, 200), 'source' => $photoUrl]);
+        ok([
+            'token'   => $token,
+            'preview' => 'data:' . $img['mime'] . ';base64,' . base64_encode($img['bytes']),
+            'message' => 'Edit ready — compare it, then save or discard.',
+        ]);
+    }
+
+    // Keep an edit: upload to ImageKit as the new main photo (the old main
+    // moves into the gallery, so nothing is lost) or as an extra gallery photo
+    case 'ai_save': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/ai_image_helper.php';
+        require_once __DIR__ . '/imagekit_helper.php';
+        $id    = (int)($_POST['auction_id'] ?? 0);
+        $token = (string)($_POST['token'] ?? '');
+        $mode  = ($_POST['mode'] ?? '') === 'main' ? 'main' : 'gallery';
+        $path  = aiTmpPath($token);
+        if (!$path || strpos($token, $id . '_') !== 0) fail('That edit has expired — run it again.');
+
+        $st = $pdo->prepare("SELECT image_url, cloudinary_public_id FROM auctions WHERE id = ?");
+        $st->execute([$id]);
+        $lot = $st->fetch();
+        if (!$lot) fail('No lot with that ID.');
+
+        try {
+            $up = uploadToImageKit($path, IMAGEKIT_VEHICLE_FOLDER, 'lot-' . $id . '-ai-' . date('YmdHis'));
+        } catch (RuntimeException $e) {
+            fail('Upload to ImageKit failed: ' . $e->getMessage());
+        }
+        $nextSort = $pdo->prepare("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM auction_gallery WHERE auction_id = ?");
+        $nextSort->execute([$id]);
+        $sort = (int)$nextSort->fetchColumn();
+        $addGallery = $pdo->prepare("INSERT INTO auction_gallery (auction_id, file_path, cloudinary_public_id, sort_order) VALUES (?,?,?,?)");
+
+        if ($mode === 'main') {
+            if ($lot['image_url']) $addGallery->execute([$id, $lot['image_url'], $lot['cloudinary_public_id'], $sort]);
+            $pdo->prepare("UPDATE auctions SET image_url = ?, cloudinary_public_id = ? WHERE id = ?")
+                ->execute([$up['url'], $up['file_id'], $id]);
+        } else {
+            $addGallery->execute([$id, $up['url'], $up['file_id'], $sort]);
+        }
+        @unlink($path);
+        logAdminAction($admin, 'ai_save', $id, ['mode' => $mode, 'url' => $up['url']]);
+        ok(['message' => $mode === 'main' ? 'Saved as the main photo (the old one is now in the gallery).' : 'Added to the gallery.',
+            'url' => $up['url']]);
+    }
+
+// ════════════════════════════════════════════════════════════
 // SALES — mark sold / undo / bulk / relist / delete / export (admin)
 // ════════════════════════════════════════════════════════════
 
@@ -3429,20 +3549,24 @@ switch ($action) {
         $buyerName = mb_substr(trim(strip_tags($_POST['buyer_name'] ?? '')), 0, 255);
 
         if (!$auctionId)  fail('Missing auction ID.');
-        if ($price <= 0)  fail('Enter the final selling price.');
 
-        $soldDate = date('Y-m-d H:i:s');
+        $s = $pdo->prepare("SELECT id, item_name, is_sold, final_price, sold_to, sold_date FROM auctions WHERE id = ?");
+        $s->execute([$auctionId]);
+        $lot = $s->fetch();
+        if (!$lot) fail('Auction not found.');
+        $wasSold = (int)$lot['is_sold'] === 1;
+
+        // A new sale needs a price; editing an existing sale may leave it blank
+        // (e.g. lots bulk-marked sold before prices were recorded)
+        if ($price <= 0 && !$wasSold) fail('Enter the final selling price.');
+
+        $soldDate = ($wasSold && $dateIn === '' && $lot['sold_date']) ? $lot['sold_date'] : date('Y-m-d H:i:s');
         if ($dateIn !== '') {
             $d = DateTime::createFromFormat('Y-m-d', $dateIn);
             if (!$d || $d->format('Y-m-d') !== $dateIn) fail('Invalid sold date.');
             if ($dateIn > date('Y-m-d')) fail('Sold date cannot be in the future.');
             if ($dateIn !== date('Y-m-d')) $soldDate = $dateIn . ' 12:00:00';
         }
-
-        $s = $pdo->prepare("SELECT id, item_name, is_sold, final_price, sold_to FROM auctions WHERE id = ?");
-        $s->execute([$auctionId]);
-        $lot = $s->fetch();
-        if (!$lot) fail('Auction not found.');
 
         if ($buyerId) {
             $u = $pdo->prepare("SELECT full_name FROM users WHERE id = ?");
@@ -3456,22 +3580,94 @@ switch ($action) {
             UPDATE auctions SET status = 'closed', is_sold = 1, final_price = ?, sold_date = ?,
                    sold_to = ?, sold_to_user_id = ?
             WHERE id = ?
-        ")->execute([$price, $soldDate, $buyerName !== '' ? $buyerName : null, $buyerId, $auctionId]);
+        ")->execute([$price > 0 ? $price : null, $soldDate, $buyerName !== '' ? $buyerName : null, $buyerId, $auctionId]);
 
-        $wasSold = (int)$lot['is_sold'] === 1;
         if (!$wasSold) {
             if ($buyerId) notifyLotWon($buyerId, $auctionId, $lot['item_name'], $price);
             notifyWatchersSold($auctionId, $buyerId);
         }
         logAdminAction($admin, $wasSold ? 'edit_sale' : 'mark_sold', $auctionId, array_filter([
-            'final_price'     => $price,
-            'previous_price'  => $wasSold ? (float)$lot['final_price'] : null,
+            'final_price'     => $price > 0 ? $price : null,
+            'previous_price'  => $wasSold && $lot['final_price'] !== null ? (float)$lot['final_price'] : null,
             'sold_date'       => substr($soldDate, 0, 10),
+            'previous_date'   => $wasSold && $lot['sold_date'] ? substr($lot['sold_date'], 0, 10) : null,
             'buyer'           => $buyerName ?: null,
             'buyer_user_id'   => $buyerId,
         ], fn($v) => $v !== null));
 
-        ok(['message' => ($wasSold ? 'Sale updated: ' : 'Marked sold: ') . $lot['item_name'] . ' for ' . formatRand($price) . '.']);
+        ok(['message' => ($wasSold ? 'Sale updated: ' : 'Marked sold: ') . $lot['item_name']
+            . ($price > 0 ? ' for ' . formatRand($price) : '') . '.']);
+    }
+
+    // Sold lots that all share one bulk-marked date (e.g. 86 lots "sold" on
+    // 21 Oct) get varied dates instead: each a random weekday, 09:00–16:00,
+    // between when the lot was listed (or N years ago, if later) and that day.
+    // Every change goes in the change log with its old date, so undo_spread_dates
+    // can put them back. Lots listed too close to the bulk day keep their date.
+    case 'spread_sold_dates': {
+        $admin = adminOnly();
+        $day   = trim($_POST['day'] ?? '');
+        $years = min(5, max(1, (int)($_POST['years'] ?? 2)));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) fail('Pick the bulk sold date to spread.');
+
+        $st = $pdo->prepare("SELECT id, sold_date, created_at, start_time FROM auctions
+                             WHERE is_sold = 1 AND DATE(sold_date) = ? ORDER BY id");
+        $st->execute([$day]);
+        $lots = $st->fetchAll();
+        if (count($lots) < 5) fail('Only dates shared by 5 or more sold lots (a bulk mark) can be spread.');
+
+        $batch = date('YmdHis');
+        $floor = strtotime("-$years years");
+        $upd   = $pdo->prepare("UPDATE auctions SET sold_date = ? WHERE id = ?");
+        $moved = 0; $kept = 0; $min = null; $max = null;
+        $pdo->beginTransaction();
+        try {
+            foreach ($lots as $l) {
+                $hi = strtotime($l['sold_date']);
+                $lo = max($floor, strtotime($l['created_at'] ?: $l['start_time'] ?: '') ?: $floor);
+                if ($lo >= $hi - 86400) { $kept++; continue; }
+                $t = random_int($lo, $hi);
+                while ((int)date('N', $t) >= 6) $t -= 86400;            // Sat/Sun → Friday
+                if ($t < $lo) { $kept++; continue; }
+                $new = date('Y-m-d', $t) . sprintf(' %02d:%02d:00', random_int(9, 15), random_int(0, 59));
+                logAdminAction($admin, 'spread_date', (int)$l['id'],
+                    ['batch' => $batch, 'previous_date' => $l['sold_date'], 'sold_date' => $new], true);
+                $upd->execute([$new, $l['id']]);
+                $moved++;
+                $min = $min === null || $new < $min ? $new : $min;
+                $max = $max === null || $new > $max ? $new : $max;
+            }
+            $pdo->commit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            fail('Could not spread the dates: ' . $e->getMessage());
+        }
+        ok([
+            'batch'   => $batch,
+            'message' => "$moved lot(s) now dated between " . safeDate('d M Y', $min) . ' and ' . safeDate('d M Y', $max)
+                       . ($kept ? "; $kept kept their date (listed too recently)." : '.'),
+        ]);
+    }
+
+    case 'undo_spread_dates': {
+        $admin = adminOnly();
+        $batch = preg_replace('/\D/', '', $_POST['batch'] ?? '');
+        if ($batch === '') fail('Missing batch.');
+        $st = $pdo->prepare("SELECT auction_id, details FROM admin_activity_log
+                             WHERE action = 'spread_date' AND details LIKE ? ORDER BY id");
+        $st->execute(['%"batch":"' . $batch . '"%']);
+        $rows = $st->fetchAll();
+        if (!$rows) fail('Nothing to undo for that batch.');
+        $upd = $pdo->prepare("UPDATE auctions SET sold_date = ? WHERE id = ? AND is_sold = 1");
+        $n = 0;
+        foreach ($rows as $r) {
+            $d = json_decode($r['details'], true) ?: [];
+            if (empty($d['previous_date'])) continue;
+            $upd->execute([$d['previous_date'], $r['auction_id']]);
+            $n += $upd->rowCount();
+        }
+        logAdminAction($admin, 'undo_spread', null, ['batch' => $batch, 'restored' => $n]);
+        ok(['message' => "$n sold date(s) restored."]);
     }
 
     // One lot: take the sale back off (lot stays closed)
@@ -3580,7 +3776,7 @@ switch ($action) {
         } catch (PDOException $e) {
             $pdo->rollBack();
             if (str_contains($e->getMessage(), 'admin_activity_log')) {
-                fail('Relist needs the change-log table first: run ahg_admin_activity_log.sql in phpMyAdmin.');
+                fail('Relist needs the change-log table first: run sql/ahg_admin_activity_log.sql in phpMyAdmin.');
             }
             fail('Relist failed: ' . $e->getMessage());
         }

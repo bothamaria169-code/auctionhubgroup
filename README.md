@@ -1,8 +1,24 @@
-﻿# Auction Hub Group — README
+# Auction Hub Group — README
 
 **Version:** 1.0.0  
 **Stack:** PHP 8.1+ · MySQL 8.0+ · PHPMailer · JWT (custom) · Vanilla JS  
 **Hosting:** cPanel shared hosting (tested on LiteSpeed / Apache)
+
+---
+
+## Repository layout & deploying (Oct 2026)
+
+| Path | What |
+|---|---|
+| site root | The PHP site itself (deployed to `public_html`) |
+| `sql/` | Database migrations. Deployed but locked (careers code reads one); the newest tables create themselves via `db_schema.php` |
+| `docs/` | Internal guides (Google Ads, article automation, old checklists). **Not** deployed |
+| `tools/` | One-off command-line scripts (Cloudinary → ImageKit migration). **Not** deployed |
+| `private/` | Your local dumps, invoices, dev scripts. Git-ignored; never deployed |
+| `config.secrets.php` | All passwords and keys. Git-ignored; lives on the server one folder above `public_html` |
+
+**Deploy with git, never by uploading this folder.** See [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md) and the
+open items in [TODO.md](TODO.md).
 
 ---
 
@@ -101,7 +117,7 @@ auctionhubgroup.co.za/          ← web root (public_html on cPanel)
 
 ### Step 1 — Upload files
 
-Upload everything in this folder to your `public_html` directory on cPanel. The structure inside `public_html` should match the folder structure shown above exactly.
+Don't upload this folder by hand: it holds files that must never be public. Connect cPanel → Git Version Control to the GitHub repo and deploy as described in [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md).
 
 ### Step 2 — Create the database
 
@@ -128,7 +144,7 @@ If Composer is not available on your host, download PHPMailer manually:
 
 ### Step 4 — Edit config.php
 
-Open `config.php` and update every placeholder value. See [Configuration Checklist](#configuration-checklist).
+Passwords and API keys are not in `config.php` any more. Copy `config.secrets.example.php` to `config.secrets.php`, fill it in, and put it one folder above `public_html`. Other settings are in `config.php`; see [Configuration Checklist](#configuration-checklist). The xAI (Grok) key for AI Photos is pasted in Admin → AI Photos instead.
 
 ### Step 5 — Set folder permissions
 

@@ -51,3 +51,6 @@ prompt*.txt
 .idea/
 Thumbs.db
 .DS_Store
+
+# ── Private local files (dumps, invoices, dev scripts) — whole folder ──
+private/

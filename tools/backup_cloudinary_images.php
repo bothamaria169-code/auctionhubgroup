@@ -19,7 +19,7 @@
 // ============================================================
 
 ob_start();
-require_once __DIR__ . '/config.php';
+require_once dirname(__DIR__) . '/config.php';
 ob_end_clean();
 
 $isCli = (php_sapi_name() === 'cli');
@@ -32,7 +32,7 @@ if (!$isCli && (($_GET['key'] ?? '') !== AHG_CRON_KEY)) {
 if (!$isCli) header('Content-Type: text/plain; charset=utf-8');
 
 $limit   = $isCli ? PHP_INT_MAX : max(1, min(2000, (int)($_GET['limit'] ?? 250)));
-$destDir = __DIR__ . '/uploads/vehicle_backup/';
+$destDir = dirname(__DIR__) . '/uploads/vehicle_backup/';
 
 function out(string $line): void {
     echo $line, "\n";

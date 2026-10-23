@@ -7,6 +7,8 @@ No more uploading files one by one.
 What the deploy does by itself:
 - **Copies the code into `public_html`.** It never deletes anything, so `uploads/`, `vendor/` and live-only files are safe.
 - **Skips `.htaccess`, docs, SQL files and dev files.**
+- **Removes private files an old upload left behind** (database dumps, invoices, dev scripts) and lists each one it removed.
+- **Locks down the live `.htaccess` once.** It adds a marked block that turns off folder listings and blocks `.sql`, `.md`, the secrets file and similar. The original is backed up first; your existing lines aren't touched.
 - **Refuses to run if the passwords file is missing**, so it can't break the site.
 - **New database tables create themselves.** There's no SQL to run.
 - **Turns off public PHP error messages** (via `.user.ini`).
@@ -70,5 +72,5 @@ cPanel → **Cron Jobs** → *Once Per Five Minutes* → command:
 - Stop file listings: add the line `Options -Indexes` near the top of the live `.htaccess`.
 
 **Optional data clean-up.**
-- `ahg_switch_images_to_imagekit.sql` (phpMyAdmin) permanently rewrites old Cloudinary photo links.
+- `sql/ahg_switch_images_to_imagekit.sql` (phpMyAdmin) permanently rewrites old Cloudinary photo links.
   Photos already work without it.

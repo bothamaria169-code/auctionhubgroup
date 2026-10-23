@@ -29,14 +29,14 @@ if (php_sapi_name() !== 'cli') {
 
 $_SERVER['HTTP_HOST'] = $_SERVER['HTTP_HOST'] ?? 'localhost';
 ob_start();
-require_once __DIR__ . '/config.php';
+require_once dirname(__DIR__) . '/config.php';
 ob_end_clean();
 
 @set_time_limit(0);
 
 $opts = getopt('', ['dest::']);
 $dest = rtrim($opts['dest'] ?? (getenv('USERPROFILE') ?: __DIR__ . '/..') . DIRECTORY_SEPARATOR . 'AHG_Cloudinary_Export', '\\/');
-$vehicleBackup = __DIR__ . '/uploads/vehicle_backup/';
+$vehicleBackup = dirname(__DIR__) . '/uploads/vehicle_backup/';
 
 if (!is_dir($dest)) mkdir($dest, 0755, true);
 
