@@ -52,78 +52,7 @@ function fail(string $message, int $code = 200): void {
     exit;
 }
 
-/**
- * Close an auction: mark as sold, create purchase request, notify winner.
- * Safe to call multiple times — idempotent on already-closed auctions.
- */
-function closeAuction(int $auctionId): void {
-    global $pdo;
-
-    // Get auction + winning bid in one query
-    $stmt = $pdo->prepare("
-        SELECT a.id, a.item_name, a.status, a.is_sold,
-               a.current_price, a.reserve_price, a.start_price,
-               b.user_id AS winner_id,
-               COALESCE(b.bid_amount, b.amount) AS winning_amount,
-               b.bidder_name AS winner_name, b.bidder_number AS winner_bidder_number
-        FROM auctions a
-        LEFT JOIN bids b ON b.auction_id = a.id AND b.is_winning = 1
-        WHERE a.id = ?
-        LIMIT 1
-    ");
-    $stmt->execute([$auctionId]);
-    $auction = $stmt->fetch();
-
-    if (!$auction || $auction['status'] === 'closed') return; // Already closed
-
-    $winnerId     = $auction['winner_id'] ? (int)$auction['winner_id'] : null;
-    $winningAmt   = $auction['winning_amount'] ? (float)$auction['winning_amount'] : null;
-    $reserveMet   = $winningAmt && $winningAmt >= (float)$auction['reserve_price'];
-
-    // Close the auction
-    $pdo->prepare("
-        UPDATE auctions SET
-            status      = 'closed',
-            is_sold     = ?,
-            sold_to     = ?,
-            sold_to_user_id = ?,
-            final_price = ?,
-            sold_date   = NOW()
-        WHERE id = ?
-    ")->execute([
-        ($winnerId && $reserveMet) ? 1 : 0,
-        $auction['winner_name'],
-        $winnerId,
-        $winningAmt,
-        $auctionId,
-    ]);
-
-    // Create purchase request for winner if reserve was met
-    if ($winnerId && $reserveMet) {
-        // Avoid duplicate purchase requests
-        $exists = $pdo->prepare("SELECT id FROM purchase_requests WHERE auction_id = ? AND user_id = ?");
-        $exists->execute([$auctionId, $winnerId]);
-        if (!$exists->fetch()) {
-            $pdo->prepare("
-                INSERT INTO purchase_requests (auction_id, user_id, amount, status)
-                VALUES (?, ?, ?, 'pending')
-            ")->execute([$auctionId, $winnerId, $winningAmt]);
-        }
-
-        // Send winner email (non-fatal)
-        try {
-            require_once __DIR__ . '/email_helper.php';
-            $winnerUser = $pdo->prepare("SELECT id, full_name, email FROM users WHERE id = ?");
-            $winnerUser->execute([$winnerId]);
-            $winnerRow = $winnerUser->fetch();
-            if ($winnerRow) {
-                sendAuctionWinnerEmail($winnerRow, $auction, (float)$winningAmt);
-            }
-        } catch (Exception $e) {
-            error_log('Winner email error: ' . $e->getMessage());
-        }
-    }
-}
+require_once __DIR__ . '/auction_close.php';
 
 function adminOnly(): array {
     global $pdo;
@@ -483,7 +412,14 @@ switch ($action) {
                 $outbidUser = $prevBid->fetch(PDO::FETCH_ASSOC);
 
                 if ($outbidUser) {
+                    notifyUser((int)$outbidUser['user_id'], 'outbid', $auctionId,
+                        'Outbid: ' . ($auctionData['item_name'] ?? $vehicleName),
+                        'New highest bid ' . formatRand($amount) . ' (yours was ' . formatRand((float)$outbidUser['bid_amount']) . ').',
+                        'auction.php?id=' . $auctionId);
+                }
+                if ($outbidUser && wantsEmail((int)$outbidUser['user_id'], 'outbid')) {
                     sendOutbidAlertEmail([
+                        'user_id'          => (int)$outbidUser['user_id'],
                         'email'            => $outbidUser['email'],
                         'name'             => $outbidUser['full_name'],
                         'vehicle_name'     => $vehicleName,
@@ -1791,7 +1727,14 @@ switch ($action) {
                 $outbidUser = $prevBid->fetch(PDO::FETCH_ASSOC);
 
                 if ($outbidUser) {
+                    notifyUser((int)$outbidUser['user_id'], 'outbid', $auctionId,
+                        'Outbid: ' . ($auctionData['item_name'] ?? $vehicleName),
+                        'New highest bid ' . formatRand($amount) . ' (yours was ' . formatRand((float)$outbidUser['bid_amount']) . ').',
+                        'auction.php?id=' . $auctionId);
+                }
+                if ($outbidUser && wantsEmail((int)$outbidUser['user_id'], 'outbid')) {
                     sendOutbidAlertEmail([
+                        'user_id'          => (int)$outbidUser['user_id'],
                         'email'            => $outbidUser['email'],
                         'name'             => $outbidUser['full_name'],
                         'vehicle_name'     => $vehicleName,
@@ -2607,6 +2550,8 @@ switch ($action) {
         $pdo->prepare("UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1, sold_to_user_id = ?, sold_to = ?, final_price = ? WHERE id = ?")
             ->execute([$userId, $winner['full_name'], $finalPrice, $auctionId]);
         logAdminAction($admin, 'mark_sold', $auctionId, ['final_price' => $finalPrice, 'buyer' => $winner['full_name'], 'buyer_user_id' => $userId, 'via' => 'assign_winner']);
+        notifyLotWon($userId, $auctionId, $auction['item_name'], $finalPrice);
+        notifyWatchersSold($auctionId, $userId);
 
         ok(['message' => "Winner assigned: {$winner['full_name']} for {$auction['item_name']} at R" . number_format($finalPrice, 2) . "."]);
     }
@@ -3375,6 +3320,101 @@ switch ($action) {
     }
 
 // ════════════════════════════════════════════════════════════
+// BIDDER FEATURES — watchlist, alerts, email settings, saved searches
+// (any logged-in user; tables from ahg_user_features.sql)
+// ════════════════════════════════════════════════════════════
+
+    case 'toggle_watch': {
+        $user = requireAuth();
+        if (!ufReady()) fail('The watchlist is not set up yet. Please try again later.');
+        $auctionId = (int)($_POST['auction_id'] ?? 0);
+        $exists = $pdo->prepare("SELECT 1 FROM auctions WHERE id = ?");
+        $exists->execute([$auctionId]);
+        if (!$exists->fetchColumn()) fail('Vehicle not found.');
+
+        $del = $pdo->prepare("DELETE FROM watchlist WHERE user_id = ? AND auction_id = ?");
+        $del->execute([$user['sub'], $auctionId]);
+        $watching = false;
+        if ($del->rowCount() === 0) {
+            $cnt = $pdo->prepare("SELECT COUNT(*) FROM watchlist WHERE user_id = ?");
+            $cnt->execute([$user['sub']]);
+            if ((int)$cnt->fetchColumn() >= 200) fail('Your watchlist is full (200 vehicles). Remove some first.');
+            $pdo->prepare("INSERT IGNORE INTO watchlist (user_id, auction_id) VALUES (?, ?)")->execute([$user['sub'], $auctionId]);
+            $watching = true;
+        }
+        ok(['watching' => $watching, 'message' => $watching ? 'Added to your watchlist.' : 'Removed from your watchlist.']);
+    }
+
+    // Bell dropdown: latest alerts + unread count
+    case 'get_alerts': {
+        $user = requireAuth();
+        if (!ufReady()) ok(['unread' => 0, 'alerts' => []]);
+        $st = $pdo->prepare("
+            SELECT id, type, title, message, link, is_read, created_at
+            FROM user_notifications WHERE user_id = ? ORDER BY id DESC LIMIT 10
+        ");
+        $st->execute([$user['sub']]);
+        $rows = array_map(fn($r) => $r + ['ago' => timeAgoShort($r['created_at'])], $st->fetchAll());
+        ok(['unread' => unreadAlertCount((int)$user['sub']), 'alerts' => $rows]);
+    }
+
+    // Mark one alert (id) or all alerts read
+    case 'mark_alerts_read': {
+        $user = requireAuth();
+        if (!ufReady()) ok(['unread' => 0]);
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id) {
+            $pdo->prepare("UPDATE user_notifications SET is_read = 1 WHERE id = ? AND user_id = ?")->execute([$id, $user['sub']]);
+        } else {
+            $pdo->prepare("UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0")->execute([$user['sub']]);
+        }
+        ok(['unread' => unreadAlertCount((int)$user['sub'])]);
+    }
+
+    case 'save_email_prefs': {
+        $user = requireAuth();
+        if (!ufReady()) fail('Email settings are not set up yet. Please try again later.');
+        emailPrefs((int)$user['sub']); // creates the row on first use
+        $vals = [];
+        foreach (UF_PREF_COLUMNS as $kind => $col) $vals[] = !empty($_POST[$kind]) ? 1 : 0;
+        $vals[] = $user['sub'];
+        $pdo->prepare("UPDATE user_email_prefs SET outbid_emails = ?, watch_emails = ?, saved_search_emails = ? WHERE user_id = ?")
+            ->execute($vals);
+        ok(['message' => 'Email settings saved.']);
+    }
+
+    // "Alert me" on auctions.php — filters arrive as the page's own query fields
+    case 'save_search': {
+        $user = requireAuth();
+        if (!ufReady()) fail('Saved searches are not set up yet. Please try again later.');
+        $filters = cleanSearchFilters($_POST);
+        if (!$filters) fail('Choose at least one filter (make, year, price, fuel, gearbox or a search word) first.');
+        $json = json_encode($filters, JSON_UNESCAPED_UNICODE);
+
+        $mine = $pdo->prepare("SELECT id, filters FROM saved_searches WHERE user_id = ?");
+        $mine->execute([$user['sub']]);
+        $rows = $mine->fetchAll();
+        foreach ($rows as $r) {
+            if ($r['filters'] === $json) ok(['message' => 'You already have this alert. We\'ll email you when new matches are listed.']);
+        }
+        if (count($rows) >= 10) fail('You can keep up to 10 alerts. Delete one in your dashboard first.');
+
+        $label = savedSearchLabel($filters);
+        // last_sent_at = now: the first digest lists lots added from today on, not the whole stock
+        $pdo->prepare("INSERT INTO saved_searches (user_id, label, filters, last_sent_at) VALUES (?, ?, ?, NOW())")
+            ->execute([$user['sub'], mb_substr($label, 0, 150), $json]);
+        ok(['message' => 'Alert saved: ' . $label . '. We\'ll email you once a day when new matches are listed.']);
+    }
+
+    case 'delete_saved_search': {
+        $user = requireAuth();
+        if (!ufReady()) fail('Saved searches are not set up yet.');
+        $pdo->prepare("DELETE FROM saved_searches WHERE id = ? AND user_id = ?")
+            ->execute([(int)($_POST['id'] ?? 0), $user['sub']]);
+        ok(['message' => 'Alert deleted.']);
+    }
+
+// ════════════════════════════════════════════════════════════
 // SALES — mark sold / undo / bulk / relist / delete / export (admin)
 // ════════════════════════════════════════════════════════════
 
@@ -3418,6 +3458,10 @@ switch ($action) {
         ")->execute([$price, $soldDate, $buyerName !== '' ? $buyerName : null, $buyerId, $auctionId]);
 
         $wasSold = (int)$lot['is_sold'] === 1;
+        if (!$wasSold) {
+            if ($buyerId) notifyLotWon($buyerId, $auctionId, $lot['item_name'], $price);
+            notifyWatchersSold($auctionId, $buyerId);
+        }
         logAdminAction($admin, $wasSold ? 'edit_sale' : 'mark_sold', $auctionId, array_filter([
             'final_price'     => $price,
             'previous_price'  => $wasSold ? (float)$lot['final_price'] : null,
@@ -3486,6 +3530,7 @@ switch ($action) {
             $pdo->rollBack();
             fail('Could not save the sales: ' . $e->getMessage());
         }
+        foreach (array_keys($clean) as $id) notifyWatchersSold($id);
         $n = count($clean);
         ok(['message' => "$n lot(s) marked sold, total " . formatRand(array_sum($clean)) . '.']);
     }

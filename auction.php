@@ -39,13 +39,20 @@ if (!$auction) {
     redirect('auctions.php', 'Auction not found.', 'error');
 }
 
-// Auto-close expired active auctions
+// Auto-close expired active auctions. closeAuction() decides the winner,
+// records the sale and notifies the buyer; a bare status flip here used to
+// leave those lots closed with no winner processed.
 if ($auction['status'] === 'active' && !empty($auction['end_time'])
     && strtotime($auction['end_time']) < time()) {
     try {
-        $pdo->prepare("UPDATE auctions SET status='closed' WHERE id=?")->execute([$auctionId]);
+        require_once __DIR__ . '/auction_close.php';
+        closeAuction($auctionId);
+        $stmt->execute([$auctionId]);           // reload: is_sold / final_price may have changed
+        $auction = $stmt->fetch() ?: $auction;
         $auction['status'] = 'closed';
-    } catch (Exception $e) {}
+    } catch (Exception $e) {
+        error_log('[AHG] auto-close #' . $auctionId . ': ' . $e->getMessage());
+    }
 }
 
 // Auto-open upcoming auctions whose start_time has passed
@@ -1082,6 +1089,11 @@ $breadcrumbLd = [
                     Browse More Auctions
                 </a>
             </div>
+            <?php endif; ?>
+
+            <?php if (!$isClosed): ?>
+                <?= watchButton($auctionId, isset(watchedAuctionIds(isset($currentUser['sub']) ? (int)$currentUser['sub'] : null)[$auctionId]), 'panel') ?>
+                <p class="watch-hint">We'll alert you when it goes live and an hour before it ends.</p>
             <?php endif; ?>
             <!-- END BID PANEL MAIN CONTENT -->
 

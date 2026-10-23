@@ -433,8 +433,38 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
             </a>
         <?php endforeach; ?>
     </div>
+    <?php $alertFilters = cleanSearchFilters($_GET); if ($alertFilters): ?>
+    <button type="button" class="btn btn-sm save-search-btn" id="saveSearchBtn"
+            data-filters="<?= e(json_encode($alertFilters)) ?>"
+            data-logged-in="<?= $currentUser ? '1' : '0' ?>">
+        <i class="fas fa-bell" aria-hidden="true"></i> Alert me about new matches
+    </button>
+    <?php endif; ?>
     <a href="auctions.php" class="active-filters-clear">Clear all</a>
 </div>
+<script>
+(function () {
+    var btn = document.getElementById('saveSearchBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        if (btn.dataset.loggedIn !== '1') { window.location.href = 'login.php?tab=register'; return; }
+        var filters = JSON.parse(btn.dataset.filters || '{}');
+        var fd = new FormData();
+        fd.append('action', 'save_search');
+        Object.keys(filters).forEach(function (k) { fd.append(k, filters[k]); });
+        btn.disabled = true;
+        fetch('api.php', {method: 'POST', body: fd, credentials: 'same-origin'})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (typeof showToast === 'function') showToast(d.message, d.success ? 'success' : 'error');
+                else alert(d.message);
+                if (d.success) btn.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Alert saved';
+                else btn.disabled = false;
+            })
+            .catch(function () { btn.disabled = false; });
+    });
+})();
+</script>
 <?php endif; ?>
 
 
@@ -494,6 +524,7 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                 $bidCount   = (int)$a['bid_count'];
                 $imgSrc     = !empty($a['image_url']) ? e(cldImg($a['image_url'], CLD_CARD)) : 'assets/no-image.jpg';
                 $title      = e(lotTitle($a));   // item_name often already carries year + make
+                $watchedIds ??= watchedAuctionIds(isset($currentUser['sub']) ? (int)$currentUser['sub'] : null);
                 $isSold     = !empty($a['is_sold']);
                 $isClosed   = $a['status'] === 'closed' || $isSold;
             ?>
@@ -501,6 +532,7 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                      role="listitem"
                      aria-label="<?= $title ?>">
 
+                <div class="watch-media">
                 <a href="auction.php?id=<?= $a['id'] ?>" class="auction-card-img-link" tabindex="-1" aria-hidden="true">
                     <div class="auction-card-img-wrap">
                         <img src="<?= $imgSrc ?>" alt="<?= $title ?>" class="auction-card-img"
@@ -536,6 +568,10 @@ if ($filterSort !== 'ending_soon') $activeFilters[] = ['Sort: ' . str_replace('_
                         <?php endif; ?>
                     </div>
                 </a>
+                <?php if (!$isClosed): ?>
+                    <?= watchButton((int)$a['id'], isset($watchedIds[(int)$a['id']])) ?>
+                <?php endif; ?>
+                </div>
 
                 <div class="auction-card-body">
                     <div class="auction-card-specs" aria-label="Vehicle specs">

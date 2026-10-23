@@ -155,6 +155,9 @@ function bidderStatusDot(string $status): string {
     <!-- End Google Tag Manager -->
     <?php endif; ?>
     <meta name="description" content="<?= $pageDescription ?>">
+    <?php if (!empty($noIndex)): // set $noIndex = true before including header.php ?>
+    <meta name="robots" content="noindex,nofollow">
+    <?php endif; ?>
     <meta name="theme-color" content="#005BA1">
 
     <!-- Canonical -->
@@ -811,6 +814,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <?php endif; ?>
         </div>
 
+        <?php if ($currentUser && ufReady()): $bellUnread = unreadAlertCount((int)$currentUser['sub']); ?>
+        <!-- Alerts bell (outside .navbar-right so it also shows on phones) -->
+        <div class="nav-bell" id="navBell">
+            <button type="button" class="nav-bell-btn" id="navBellBtn"
+                    aria-haspopup="true" aria-expanded="false" aria-controls="navBellDropdown"
+                    aria-label="Alerts<?= $bellUnread ? " ($bellUnread unread)" : '' ?>">
+                <i class="fas fa-bell" aria-hidden="true"></i>
+                <span class="nav-bell-count" id="navBellCount"<?= $bellUnread ? '' : ' hidden' ?>><?= $bellUnread > 99 ? '99+' : $bellUnread ?></span>
+            </button>
+            <div class="nav-bell-dropdown" id="navBellDropdown" role="menu" aria-label="Alerts">
+                <div class="nav-bell-head">
+                    <strong>Alerts</strong>
+                    <button type="button" class="nav-bell-markall" id="navBellMarkAll">Mark all read</button>
+                </div>
+                <div class="nav-bell-list" id="navBellList"><div class="nav-bell-empty">Loading…</div></div>
+                <a class="nav-bell-foot" href="<?= APP_URL ?>/user_dashboard.php?tab=alerts">See all alerts</a>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Hamburger (mobile) -->
         <button class="navbar-hamburger" id="navHamburger"
                 aria-label="Toggle navigation menu"
@@ -1000,6 +1023,113 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
         });
     }
+
+    // ── Alerts bell ───────────────────────────────────────────────
+    var bell = document.getElementById('navBell');
+    if (bell) {
+        var bellBtn   = document.getElementById('navBellBtn');
+        var bellList  = document.getElementById('navBellList');
+        var bellCount = document.getElementById('navBellCount');
+        var bellApi   = '<?= APP_URL ?>/api.php';
+        var bellIcons = {outbid: 'fa-arrow-trend-down', watch_live: 'fa-bolt', watch_ending: 'fa-hourglass-half',
+                         won: 'fa-trophy', watch_sold: 'fa-tag', saved_search: 'fa-magnifying-glass'};
+        var esc = function (s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+            });
+        };
+        var setCount = function (n) {
+            bellCount.textContent = n > 99 ? '99+' : n;
+            bellCount.hidden = !n;
+            bellBtn.setAttribute('aria-label', 'Alerts' + (n ? ' (' + n + ' unread)' : ''));
+        };
+        var post = function (fields) {
+            var fd = new FormData();
+            Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+            return fetch(bellApi, {method: 'POST', body: fd, credentials: 'same-origin'}).then(function (r) { return r.json(); });
+        };
+        var loadBell = function () {
+            fetch(bellApi + '?action=get_alerts', {credentials: 'same-origin'})
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d.success) return;
+                    setCount(d.unread);
+                    bellList.innerHTML = d.alerts.length ? d.alerts.map(function (a) {
+                        var href = a.link ? '<?= APP_URL ?>/' + a.link.replace(/^\//, '') : '<?= APP_URL ?>/user_dashboard.php?tab=alerts';
+                        return '<a class="nav-bell-item' + (a.is_read == 1 ? '' : ' unread') + '" href="' + esc(href) + '" data-id="' + a.id + '">'
+                             + '<i class="fas ' + (bellIcons[a.type] || 'fa-bell') + '" aria-hidden="true"></i>'
+                             + '<span><strong>' + esc(a.title) + '</strong>'
+                             + (a.message ? '<small>' + esc(a.message) + '</small>' : '')
+                             + '<em>' + esc(a.ago) + '</em></span></a>';
+                    }).join('') : '<div class="nav-bell-empty">No alerts yet. Watch a vehicle or place a bid and updates appear here.</div>';
+                })
+                .catch(function () { bellList.innerHTML = '<div class="nav-bell-empty">Could not load alerts.</div>'; });
+        };
+        bellBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = bell.classList.toggle('open');
+            bellBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) loadBell();
+        });
+        bellList.addEventListener('click', function (e) {
+            var item = e.target.closest('.nav-bell-item');
+            if (item && item.classList.contains('unread')) post({action: 'mark_alerts_read', id: item.dataset.id});
+        });
+        document.getElementById('navBellMarkAll').addEventListener('click', function (e) {
+            e.stopPropagation();
+            post({action: 'mark_alerts_read'}).then(function (d) {
+                setCount(d.unread || 0);
+                bellList.querySelectorAll('.unread').forEach(function (el) { el.classList.remove('unread'); });
+            });
+        });
+        document.addEventListener('click', function (e) {
+            if (!bell.contains(e.target)) { bell.classList.remove('open'); bellBtn.setAttribute('aria-expanded', 'false'); }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && bell.classList.contains('open')) {
+                bell.classList.remove('open'); bellBtn.setAttribute('aria-expanded', 'false'); bellBtn.focus();
+            }
+        });
+    }
+
+    // ── ♥ Watch buttons (any page; markup from watchButton()) ─────
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-watch]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        <?php if (!$currentUser): ?>
+        window.location.href = '<?= APP_URL ?>/login.php?tab=register';
+        return;
+        <?php else: ?>
+        if (btn.disabled) return;
+        var id = btn.dataset.watch;
+        btn.disabled = true;
+        var fd = new FormData();
+        fd.append('action', 'toggle_watch');
+        fd.append('auction_id', id);
+        fetch('<?= APP_URL ?>/api.php', {method: 'POST', body: fd, credentials: 'same-origin'})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (typeof showToast === 'function') showToast(d.message, d.success ? 'success' : 'error');
+                if (!d.success) return;
+                document.querySelectorAll('[data-watch="' + id + '"]').forEach(function (b) {
+                    b.classList.toggle('is-watching', d.watching);
+                    b.setAttribute('aria-pressed', d.watching ? 'true' : 'false');
+                    var label = d.watching ? 'Remove from watchlist' : 'Add to watchlist';
+                    b.title = label;
+                    b.setAttribute('aria-label', label);
+                    var icon = b.querySelector('i');
+                    if (icon) icon.className = (d.watching ? 'fas' : 'far') + ' fa-heart';
+                    var text = b.querySelector('.watch-btn-text');
+                    if (text) text.textContent = d.watching ? 'Watching' : 'Watch';
+                });
+                document.dispatchEvent(new CustomEvent('ahg:watch', {detail: {id: id, watching: d.watching}}));
+            })
+            .catch(function () { if (typeof showToast === 'function') showToast('Could not update your watchlist.', 'error'); })
+            .finally(function () { btn.disabled = false; });
+        <?php endif; ?>
+    });
 
     // ── User account dropdown (Dashboard / Admin / Log Out) ───────
     var navUserMenu = document.getElementById('navUserMenu');

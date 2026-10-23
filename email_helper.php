@@ -387,12 +387,89 @@ function sendOutbidAlertEmail(array $data): bool {
 
     <a href="' . APP_URL . '/auction.php?id=' . (int)($data['auction_id'] ?? 0) . '" class="cta-btn">Bid Again Now</a>';
 
+    if (!empty($data['user_id']) && function_exists('unsubscribeFooterHtml')) {
+        $body .= unsubscribeFooterHtml((int)$data['user_id'], 'outbid', 'you bid on this vehicle');
+    }
+
     $mail->Body    = _emailTemplate('You\'ve Been Outbid', $body);
     $mail->AltBody = "You've been outbid on {$data['vehicle_name']}. New highest bid: " . formatRand($data['new_high_bid']) . ". Bid at " . APP_URL . "/auction.php?id=" . ($data['auction_id'] ?? '');
 
     return _sendMail($mail, 'outbid_alert');
 }
 
+
+// ============================================================
+// 6b. WATCHLIST — a watched lot ends within the hour
+// ============================================================
+function sendWatchEndingEmail(array $r): bool {
+    // $r keys: user_id, email, full_name, id, item_name, end_time, price
+    $mail = _buildMailer();
+    $mail->addAddress($r['email'], $r['full_name']);
+    $mail->Subject = '⏰ Ending within the hour — ' . $r['item_name'];
+    $link = CANONICAL_URL . '/auction.php?id=' . (int)$r['id'];
+
+    $body = '
+    <h2 style="color:#005BA1;">⏰ A vehicle you\'re watching ends soon</h2>
+    <p>Dear ' . e($r['full_name']) . ',</p>
+    <p>Bidding on a vehicle on your watchlist closes within the hour.</p>
+    <div class="highlight-box">
+      <p><strong>Vehicle:</strong> ' . e($r['item_name']) . '</p>
+      <p><strong>Current Price:</strong> ' . formatRand((float)$r['price']) . '</p>
+      <p><strong>Ends:</strong> ' . safeDate('d M Y H:i', $r['end_time'] ?? null, 'soon') . '</p>
+    </div>
+    <a href="' . $link . '" class="cta-btn">View &amp; Bid</a>'
+    . (function_exists('unsubscribeFooterHtml')
+        ? unsubscribeFooterHtml((int)$r['user_id'], 'watch', 'this vehicle is on your watchlist') : '');
+
+    $mail->Body    = _emailTemplate('Ending Soon', $body);
+    $mail->AltBody = "{$r['item_name']} ends " . safeDate('d M Y H:i', $r['end_time'] ?? null, 'soon')
+                   . '. Current price ' . formatRand((float)$r['price']) . ". Bid at $link";
+    return _sendMail($mail, 'watch_ending');
+}
+
+// ============================================================
+// 6c. SAVED SEARCH — daily digest of new matching lots
+// ============================================================
+function sendSavedSearchDigestEmail(array $search, array $filters, array $lots): bool {
+    // $search: saved_searches row + email, full_name. $lots: id, item_name, year,
+    // mileage, image_url, status, start_time, end_time, price
+    $mail = _buildMailer();
+    $mail->addAddress($search['email'], $search['full_name']);
+    $n = count($lots);
+    $mail->Subject = "🚗 $n new vehicle" . ($n === 1 ? '' : 's') . ' for "' . $search['label'] . '"';
+
+    $rows = '';
+    foreach ($lots as $l) {
+        $img  = $l['image_url'] ? cldImg($l['image_url'], CLD_THUMB) : '';
+        $link = CANONICAL_URL . '/auction.php?id=' . (int)$l['id'];
+        $when = $l['status'] === 'active'
+            ? 'Live · ends ' . safeDate('d M H:i', $l['end_time'])
+            : 'Opens ' . safeDate('d M H:i', $l['start_time'], 'soon');
+        $rows .= '<tr>'
+            . '<td style="padding:10px 10px 10px 0;width:120px;vertical-align:top;">'
+            . ($img ? '<a href="' . $link . '"><img src="' . e($img) . '" width="120" alt="" style="border-radius:6px;display:block;"></a>' : '')
+            . '</td><td style="padding:10px 0;vertical-align:top;font-size:14px;">'
+            . '<a href="' . $link . '" style="color:#005BA1;font-weight:700;text-decoration:none;">' . e($l['item_name']) . '</a><br>'
+            . ($l['mileage'] ? number_format((int)$l['mileage']) . ' km · ' : '')
+            . '<strong>' . formatRand((float)$l['price']) . '</strong><br>'
+            . '<span style="color:#888;font-size:12px;">' . e($when) . '</span></td></tr>';
+    }
+
+    $all = CANONICAL_URL . '/' . (function_exists('savedSearchUrl') ? savedSearchUrl($filters) : 'auctions.php');
+    $body = '
+    <h2 style="color:#005BA1;">New vehicles matching your search</h2>
+    <p>Dear ' . e($search['full_name']) . ',</p>
+    <p>' . $n . ' new lot' . ($n === 1 ? '' : 's') . ' matching <strong>' . e($search['label']) . '</strong> '
+      . ($n === 1 ? 'has' : 'have') . ' been listed since our last email.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">' . $rows . '</table>
+    <a href="' . e($all) . '" class="cta-btn">See All Matches</a>'
+    . (function_exists('unsubscribeFooterHtml')
+        ? unsubscribeFooterHtml((int)$search['user_id'], 'saved_search', 'you saved this search') : '');
+
+    $mail->Body    = _emailTemplate('New Matches', $body);
+    $mail->AltBody = "$n new vehicle(s) for \"{$search['label']}\": $all";
+    return _sendMail($mail, 'saved_search_digest');
+}
 
 // ============================================================
 // 7. AUCTION WON — winner notification

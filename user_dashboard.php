@@ -2,7 +2,8 @@
 // ============================================================
 // AUCTION HUB GROUP — user_dashboard.php
 // Logged-in user's personal hub
-// Tabs: Overview · My Bids · Register to Bid · My Profile
+// Tabs: Overview · My Bids · Watchlist · Alerts · My Wins ·
+//       Register to Bid · My Profile · Refunds
 // ============================================================
 
 require_once 'config.php';
@@ -99,14 +100,82 @@ $stmt = $pdo->prepare("
 $stmt->execute([$user['id']]);
 $currentlyWinning = $stmt->fetchColumn();
 
+// Won = sold to this user. (closeAuction also fills sold_to_user_id on lots
+// that closed below reserve, so is_sold must be checked too.)
 $stmt = $pdo->prepare("
-    SELECT COUNT(DISTINCT b.auction_id)
-    FROM bids b
-    JOIN auctions a ON a.id = b.auction_id
-    WHERE b.user_id = ? AND b.is_winning = 1 AND a.status = 'closed'
+    SELECT a.id, a.item_name, a.image_url, a.final_price, a.sold_date, a.year, a.mileage,
+           (SELECT COUNT(*) FROM bids b WHERE b.auction_id = a.id) AS bid_count
+    FROM auctions a
+    WHERE a.is_sold = 1 AND a.sold_to_user_id = ?
+    ORDER BY a.sold_date DESC
 ");
 $stmt->execute([$user['id']]);
-$auctionsWon = $stmt->fetchColumn();
+$myWins = $stmt->fetchAll();
+$auctionsWon = count($myWins);
+
+// Pre-auction invoices for won lots (matched on lot + buyer email)
+$winInvoices = [];
+if ($myWins) {
+    try {
+        $ids = array_column($myWins, 'id');
+        $st = $pdo->prepare("
+            SELECT auction_id, invoice_number, status, upload_token, outstanding_amount, expires_at
+            FROM preauction_invoices
+            WHERE auction_id IN (" . implode(',', array_fill(0, count($ids), '?')) . ") AND buyer_email = ?
+            ORDER BY id DESC
+        ");
+        $st->execute(array_merge($ids, [$user['email']]));
+        foreach ($st->fetchAll() as $inv) $winInvoices[(int)$inv['auction_id']] ??= $inv;
+    } catch (PDOException $e) { /* invoices table missing on this server */ }
+}
+
+// Live lots this user has bid on, one row per lot, with who leads
+$stmt = $pdo->prepare("
+    SELECT a.id, a.item_name, a.image_url, a.end_time,
+           MAX(COALESCE(b.bid_amount, b.amount)) AS my_top,
+           (SELECT MAX(COALESCE(bx.bid_amount, bx.amount)) FROM bids bx WHERE bx.auction_id = a.id) AS top_bid,
+           (SELECT by2.user_id FROM bids by2 WHERE by2.auction_id = a.id
+             ORDER BY COALESCE(by2.bid_amount, by2.amount) DESC, by2.id DESC LIMIT 1) AS leader_id
+    FROM bids b
+    JOIN auctions a ON a.id = b.auction_id
+    WHERE b.user_id = ? AND a.status = 'active' AND a.is_sold = 0
+    GROUP BY a.id
+    ORDER BY a.end_time ASC
+");
+$stmt->execute([$user['id']]);
+$liveBidLots  = $stmt->fetchAll();
+$winningLots  = array_values(array_filter($liveBidLots, fn($l) => (int)$l['leader_id'] === (int)$user['id']));
+$outbidLots   = array_values(array_filter($liveBidLots, fn($l) => (int)$l['leader_id'] !== (int)$user['id']));
+$currentlyWinning = count($winningLots);
+
+// Watchlist (lots still listed first, then by end time)
+$myWatchlist = [];
+if (ufReady()) {
+    $stmt = $pdo->prepare("
+        SELECT a.id, a.item_name, a.image_url, a.status, a.is_sold, a.start_time, a.end_time,
+               a.final_price, a.year, a.mileage, w.created_at AS watched_at,
+               GREATEST(COALESCE(a.current_price, 0), a.start_price) AS price,
+               (SELECT COUNT(*) FROM bids b WHERE b.auction_id = a.id) AS bid_count
+        FROM watchlist w JOIN auctions a ON a.id = w.auction_id
+        WHERE w.user_id = ?
+        ORDER BY (a.status = 'closed' OR a.is_sold = 1), FIELD(a.status, 'active', 'upcoming', 'closed'), a.end_time ASC
+    ");
+    $stmt->execute([$user['id']]);
+    $myWatchlist = $stmt->fetchAll();
+}
+
+// Ending within 24 hours: lots bid on or watched, still for sale
+$endingSoon = [];
+foreach (array_merge($liveBidLots, $myWatchlist) as $l) {
+    if (isset($endingSoon[$l['id']]) || empty($l['end_time'])) continue;
+    if (isset($l['status']) && ($l['status'] !== 'active' || $l['is_sold'])) continue;
+    $left = strtotime($l['end_time']) - time();
+    if ($left > 0 && $left <= 86400) $endingSoon[$l['id']] = $l;
+}
+uasort($endingSoon, fn($x, $y) => strcmp($x['end_time'], $y['end_time']));
+$endingSoon = array_values($endingSoon);
+
+$unreadAlerts = unreadAlertCount((int)$user['id']);
 
 // ── EFT reference for this user ───────────────────────────────
 $eftRef = eftReference($user['id']); // AHG-{id}-REG
@@ -126,8 +195,23 @@ $statusStep = getStatusStep($user['bidder_status']);
 
 // ── Active tab from URL ───────────────────────────────────────
 $activeTab = $_GET['tab'] ?? 'overview';
-$validTabs = ['overview', 'bids', 'register', 'profile', 'refunds'];
+$validTabs = ['overview', 'bids', 'watchlist', 'alerts', 'wins', 'register', 'profile', 'refunds'];
 if (!in_array($activeTab, $validTabs)) $activeTab = 'overview';
+
+// ── Alerts + saved searches (Alerts tab) / email settings (Profile tab) ──
+$myAlerts = [];
+$mySearches = [];
+if ($activeTab === 'alerts' && ufReady()) {
+    $stmt = $pdo->prepare("SELECT * FROM user_notifications WHERE user_id = ? ORDER BY id DESC LIMIT 100");
+    $stmt->execute([$user['id']]);
+    $myAlerts = $stmt->fetchAll();
+    $stmt = $pdo->prepare("SELECT * FROM saved_searches WHERE user_id = ? ORDER BY id DESC");
+    $stmt->execute([$user['id']]);
+    $mySearches = $stmt->fetchAll();
+    // Opening the tab reads them; this page still highlights what was new
+    $pdo->prepare("UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0")->execute([$user['id']]);
+}
+$myPrefs = $activeTab === 'profile' ? emailPrefs((int)$user['id']) : null;
 
 // ── Fetch user refund requests (only when needed) ─────────────
 $myRefunds = [];
@@ -177,6 +261,24 @@ require_once 'header.php';
         <i class="fas fa-gavel"></i> My Bids
         <?php if ($totalBids > 0): ?>
           <span class="sidebar-badge"><?= $totalBids ?></span>
+        <?php endif; ?>
+      </a>
+      <a href="?tab=watchlist" class="sidebar-link <?= $activeTab === 'watchlist' ? 'active' : '' ?>">
+        <i class="fas fa-heart"></i> Watchlist
+        <?php if ($myWatchlist): ?>
+          <span class="sidebar-badge"><?= count($myWatchlist) ?></span>
+        <?php endif; ?>
+      </a>
+      <a href="?tab=alerts" class="sidebar-link <?= $activeTab === 'alerts' ? 'active' : '' ?>">
+        <i class="fas fa-bell"></i> Alerts
+        <?php if ($unreadAlerts && $activeTab !== 'alerts'): ?>
+          <span class="sidebar-badge sidebar-badge-red"><?= $unreadAlerts ?></span>
+        <?php endif; ?>
+      </a>
+      <a href="?tab=wins" class="sidebar-link <?= $activeTab === 'wins' ? 'active' : '' ?>">
+        <i class="fas fa-trophy"></i> My Wins
+        <?php if ($auctionsWon): ?>
+          <span class="sidebar-badge sidebar-badge-green"><?= $auctionsWon ?></span>
         <?php endif; ?>
       </a>
       <?php if ($user['bidder_status'] !== 'verified_bidder'): ?>
@@ -260,37 +362,60 @@ require_once 'header.php';
     </div>
     <?php endif; ?>
 
-    <!-- Stat Cards -->
-    <div class="grid-4 dashboard-stats">
-      <div class="stat-card">
-        <div class="stat-icon" style="background:var(--blue-light);color:var(--blue-primary)">
-          <i class="fas fa-gavel"></i>
+    <!-- Action cards: where to act right now -->
+    <?php
+    $overviewCards = [
+        ['Winning now',   'fa-star',             '#2e7d32', '#e8f5e9', $winningLots, '?tab=bids',      'You lead on these lots.',            'Nothing yet. Place a bid to take the lead.'],
+        ['Outbid now',    'fa-arrow-trend-down', '#c8102e', '#fdecef', $outbidLots,  '?tab=bids',      'Someone bid higher. Bid again to lead.', 'You are not outbid anywhere.'],
+        ['Watching',      'fa-heart',            '#c8102e', '#fff0f3', $myWatchlist, '?tab=watchlist', 'Lots on your watchlist.',            'Tap ♥ on any vehicle to watch it.'],
+        ['Ending in 24h', 'fa-hourglass-half',   '#f57c00', '#fff3e0', $endingSoon,  '?tab=watchlist', 'Your bids and watched lots closing soon.', 'Nothing you follow ends today.'],
+    ];
+    ?>
+    <div class="dash-action-grid">
+      <?php foreach ($overviewCards as [$label, $icon, $fg, $bg, $lots, $more, $hint, $empty]): ?>
+      <div class="dash-action-card">
+        <div class="dash-action-head">
+          <span class="dash-action-icon" style="background:<?= $bg ?>;color:<?= $fg ?>"><i class="fas <?= $icon ?>"></i></span>
+          <div>
+            <div class="dash-action-count"><?= count($lots) ?></div>
+            <div class="dash-action-label"><?= $label ?></div>
+          </div>
         </div>
-        <div class="stat-value"><?= $totalBids ?></div>
-        <div class="stat-label">Total Bids Placed</div>
+        <?php if ($lots): ?>
+          <ul class="dash-action-list">
+            <?php foreach (array_slice($lots, 0, 3) as $l):
+                $isOutbidRow = $label === 'Outbid now'; ?>
+            <li>
+              <a href="auction.php?id=<?= (int)$l['id'] ?>">
+                <span class="dash-action-name"><?= e($l['item_name']) ?></span>
+                <span class="dash-action-meta">
+                  <?php if (isset($l['top_bid'])): ?>
+                    <?= $isOutbidRow ? 'Top ' . formatRand((float)$l['top_bid']) . ' · yours ' . formatRand((float)$l['my_top']) : 'Your bid ' . formatRand((float)$l['my_top']) ?>
+                  <?php else: ?>
+                    <?= formatRand((float)$l['price']) ?>
+                  <?php endif; ?>
+                  <?php if (!empty($l['end_time']) && strtotime($l['end_time']) > time()
+                            && (!isset($l['status']) || ($l['status'] === 'active' && !$l['is_sold']))): ?>
+                    · <span data-countdown="<?= e($l['end_time']) ?>"><span>…</span></span>
+                  <?php endif; ?>
+                </span>
+              </a>
+              <?php if ($isOutbidRow): ?><a href="auction.php?id=<?= (int)$l['id'] ?>#bid-panel" class="dash-action-cta">Bid again</a><?php endif; ?>
+            </li>
+            <?php endforeach; ?>
+          </ul>
+          <?php if (count($lots) > 3): ?><a href="<?= $more ?>" class="dash-action-more">See all <?= count($lots) ?> →</a><?php endif; ?>
+        <?php else: ?>
+          <p class="dash-action-empty"><?= $empty ?></p>
+        <?php endif; ?>
       </div>
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#fff3e0;color:#f57c00">
-          <i class="fas fa-fire"></i>
-        </div>
-        <div class="stat-value"><?= $activeAuctions ?></div>
-        <div class="stat-label">Active Auctions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#e8f5e9;color:#388e3c">
-          <i class="fas fa-trophy"></i>
-        </div>
-        <div class="stat-value"><?= $currentlyWinning ?></div>
-        <div class="stat-label">Currently Winning</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" style="background:#e3f2fd;color:#1565c0">
-          <i class="fas fa-star"></i>
-        </div>
-        <div class="stat-value"><?= $auctionsWon ?></div>
-        <div class="stat-label">Auctions Won</div>
-      </div>
+      <?php endforeach; ?>
     </div>
+    <p class="text-muted" style="font-size:.82rem;margin:-.5rem 0 1.5rem;">
+      <i class="fas fa-gavel"></i> <?= $totalBids ?> bid<?= $totalBids != 1 ? 's' : '' ?> placed ·
+      <i class="fas fa-trophy"></i> <?= $auctionsWon ?> vehicle<?= $auctionsWon != 1 ? 's' : '' ?> won
+      <?php if ($auctionsWon): ?>· <a href="?tab=wins">My Wins</a><?php endif; ?>
+    </p>
 
     <!-- Recent Bids Preview -->
     <?php if (!empty($myBids)): ?>
@@ -654,6 +779,226 @@ require_once 'header.php';
 
 
     <!-- ═══════════════════════════════════════════════════════
+         TAB: WATCHLIST
+    ═══════════════════════════════════════════════════════════ -->
+    <?php elseif ($activeTab === 'watchlist'): ?>
+
+    <div class="dashboard-header">
+      <div>
+        <h1><i class="fas fa-heart" style="color:#c8102e"></i> My Watchlist</h1>
+        <p class="text-muted">We alert you when a watched vehicle goes live and an hour before it ends.</p>
+      </div>
+      <a href="auctions.php" class="btn btn-primary"><i class="fas fa-search"></i> Find Vehicles</a>
+    </div>
+
+    <?php if (!ufReady()): ?>
+      <div class="alert alert-info">The watchlist is being set up. Please check back soon.</div>
+    <?php elseif (!$myWatchlist): ?>
+      <div class="card empty-state">
+        <i class="far fa-heart fa-3x text-muted"></i>
+        <h3>Your watchlist is empty</h3>
+        <p class="text-muted">Tap the ♥ on any vehicle to keep an eye on it. You don't need to be a registered bidder to watch.</p>
+        <a href="auctions.php" class="btn btn-primary">Browse Auctions</a>
+      </div>
+    <?php else: ?>
+      <div class="watch-grid">
+        <?php foreach ($myWatchlist as $w):
+            $wSold   = (int)$w['is_sold'] === 1;
+            $wClosed = $w['status'] === 'closed' || $wSold; ?>
+        <div class="watch-card <?= $wClosed ? 'watch-card-done' : '' ?>" data-watch-card="<?= (int)$w['id'] ?>">
+          <a href="auction.php?id=<?= (int)$w['id'] ?>" class="watch-card-img">
+            <?php if ($w['image_url']): ?>
+              <img src="<?= e(cldImg($w['image_url'], CLD_CARD)) ?>" alt="<?= e($w['item_name']) ?>" loading="lazy">
+            <?php else: ?>
+              <span class="mini-auction-placeholder"><i class="fas fa-car"></i></span>
+            <?php endif; ?>
+            <?php if ($wSold): ?><div class="sold-stamp"><span>Sold</span></div><?php endif; ?>
+          </a>
+          <div class="watch-card-body">
+            <a href="auction.php?id=<?= (int)$w['id'] ?>" class="watch-card-title"><?= e($w['item_name']) ?></a>
+            <div class="watch-card-row">
+              <?php if ($wSold): ?>
+                <span class="badge badge-sold">Sold</span>
+                <strong><?= (float)$w['final_price'] > 0 ? formatRand((float)$w['final_price']) : '' ?></strong>
+              <?php elseif ($w['status'] === 'active'): ?>
+                <span class="badge badge-active"><span class="live-dot live-dot-sm"></span> Live</span>
+                <strong><?= formatRand((float)$w['price']) ?></strong>
+              <?php elseif ($w['status'] === 'upcoming'): ?>
+                <span class="badge badge-upcoming"><i class="fas fa-clock"></i> Upcoming</span>
+                <strong><?= formatRand((float)$w['price']) ?></strong>
+              <?php else: ?>
+                <span class="badge badge-closed">Closed</span>
+              <?php endif; ?>
+            </div>
+            <div class="watch-card-time">
+              <?php if (!$wClosed && $w['status'] === 'active' && $w['end_time']): ?>
+                <i class="fas fa-clock"></i> Ends in <span data-countdown="<?= e($w['end_time']) ?>"><span>…</span></span>
+              <?php elseif (!$wClosed && $w['start_time']): ?>
+                <i class="fas fa-calendar"></i> Opens <?= safeDate('d M Y H:i', $w['start_time']) ?>
+              <?php else: ?>
+                <i class="fas fa-flag-checkered"></i> Ended <?= safeDate('d M Y', $w['end_time']) ?>
+              <?php endif; ?>
+              · <?= (int)$w['bid_count'] ?> bid<?= (int)$w['bid_count'] !== 1 ? 's' : '' ?>
+            </div>
+            <div class="watch-card-actions">
+              <a href="auction.php?id=<?= (int)$w['id'] ?>" class="btn btn-primary btn-sm"><?= $wClosed ? 'View' : ($w['status'] === 'active' ? 'Bid Now' : 'View Details') ?></a>
+              <button type="button" class="btn btn-outline btn-sm" data-watch="<?= (int)$w['id'] ?>" aria-pressed="true">
+                <i class="fas fa-heart"></i> Remove
+              </button>
+            </div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: ALERTS (+ saved searches)
+    ═══════════════════════════════════════════════════════════ -->
+    <?php elseif ($activeTab === 'alerts'): ?>
+
+    <div class="dashboard-header">
+      <div>
+        <h1><i class="fas fa-bell"></i> Alerts</h1>
+        <p class="text-muted">Outbids, wins and updates on vehicles you watch. Email settings are in <a href="?tab=profile#email-prefs">My Profile</a>.</p>
+      </div>
+    </div>
+
+    <?php if (!ufReady()): ?>
+      <div class="alert alert-info">Alerts are being set up. Please check back soon.</div>
+    <?php else: ?>
+    <div class="card">
+      <div class="card-header flex-between">
+        <h3 style="margin:0"><i class="fas fa-magnifying-glass"></i> Saved Searches</h3>
+        <a href="auctions.php" class="btn btn-outline btn-sm"><i class="fas fa-plus"></i> New search</a>
+      </div>
+      <?php if (!$mySearches): ?>
+        <p class="text-muted" style="margin:0;">
+          Filter the <a href="auctions.php">auctions page</a> (make, year, price…) and press
+          <strong>Alert me about new matches</strong>. We'll email you once a day when new vehicles match.
+        </p>
+      <?php else: ?>
+        <ul class="saved-search-list">
+          <?php foreach ($mySearches as $s): $sf = json_decode($s['filters'], true) ?: []; ?>
+          <li id="saved-search-<?= (int)$s['id'] ?>">
+            <div>
+              <a href="<?= e(savedSearchUrl($sf)) ?>"><strong><?= e($s['label']) ?></strong></a>
+              <small class="text-muted">Saved <?= safeDate('d M Y', $s['created_at']) ?><?= $s['last_sent_at'] ? ' · checked ' . e(timeAgoShort($s['last_sent_at'])) : '' ?></small>
+            </div>
+            <div style="display:flex;gap:.4rem;">
+              <a href="<?= e(savedSearchUrl($sf)) ?>" class="btn btn-outline btn-sm">View matches</a>
+              <button type="button" class="btn btn-outline btn-sm" style="color:#c62828;border-color:#c62828" onclick="deleteSavedSearch(<?= (int)$s['id'] ?>)"><i class="fas fa-trash"></i></button>
+            </div>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3 style="margin:0"><i class="fas fa-clock-rotate-left"></i> Recent Alerts</h3></div>
+      <?php if (!$myAlerts): ?>
+        <p class="text-muted" style="margin:0;">No alerts yet. Watch a vehicle or place a bid and updates appear here.</p>
+      <?php else: ?>
+        <?php $alertIcons = ['outbid' => 'fa-arrow-trend-down', 'watch_live' => 'fa-bolt', 'watch_ending' => 'fa-hourglass-half',
+                             'won' => 'fa-trophy', 'watch_sold' => 'fa-tag', 'saved_search' => 'fa-magnifying-glass']; ?>
+        <ul class="alert-list">
+          <?php foreach ($myAlerts as $al): ?>
+          <li class="<?= (int)$al['is_read'] ? '' : 'unread' ?> alert-type-<?= e($al['type']) ?>">
+            <i class="fas <?= $alertIcons[$al['type']] ?? 'fa-bell' ?>"></i>
+            <div>
+              <?php if ($al['link']): ?><a href="<?= e($al['link']) ?>"><strong><?= e($al['title']) ?></strong></a>
+              <?php else: ?><strong><?= e($al['title']) ?></strong><?php endif; ?>
+              <?php if ($al['message']): ?><p><?= e($al['message']) ?></p><?php endif; ?>
+              <small><?= e(timeAgoShort($al['created_at'])) ?></small>
+            </div>
+            <?php if ($al['type'] === 'outbid' && $al['link']): ?>
+              <a href="<?= e($al['link']) ?>#bid-panel" class="btn btn-primary btn-sm">Bid again</a>
+            <?php endif; ?>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: MY WINS
+    ═══════════════════════════════════════════════════════════ -->
+    <?php elseif ($activeTab === 'wins'): ?>
+
+    <div class="dashboard-header">
+      <div>
+        <h1><i class="fas fa-trophy" style="color:#f9a825"></i> My Wins</h1>
+        <p class="text-muted">Vehicles you bought, with what to do next.</p>
+      </div>
+    </div>
+
+    <?php if (!$myWins): ?>
+      <div class="card empty-state">
+        <i class="fas fa-trophy fa-3x text-muted"></i>
+        <h3>No wins yet</h3>
+        <p class="text-muted">When a vehicle is sold to you it appears here with payment and collection steps.</p>
+        <a href="auctions.php" class="btn btn-primary">Browse Auctions</a>
+      </div>
+    <?php else: ?>
+      <div class="card win-steps">
+        <h3 style="margin-top:0"><i class="fas fa-list-check"></i> After you win</h3>
+        <ol>
+          <li><strong>Pay by EFT</strong> within the time on your invoice, using the reference shown on the invoice.</li>
+          <li><strong>Upload your proof of payment</strong> using the invoice link below, or email it to
+              <a href="mailto:finance@auctionhubgroup.co.za">finance@auctionhubgroup.co.za</a>.</li>
+          <li><strong>Collect your vehicle</strong> from our premises once full payment has been received and cleared.
+              Contact us to arrange a collection time, and please collect promptly
+              (<a href="faq.php">see the FAQ</a> for collection terms).</li>
+        </ol>
+        <p class="text-muted" style="margin:0;font-size:.85rem;">
+          Questions? <a href="tel:<?= str_replace(' ', '', COMPANY_PHONE) ?>"><?= COMPANY_PHONE ?></a> ·
+          <a href="https://wa.me/<?= COMPANY_WHATSAPP_INTL ?>" target="_blank" rel="noopener">WhatsApp <?= COMPANY_WHATSAPP ?></a> ·
+          <a href="mailto:<?= COMPANY_EMAIL ?>"><?= COMPANY_EMAIL ?></a>
+        </p>
+      </div>
+
+      <div class="watch-grid">
+        <?php foreach ($myWins as $wn): $inv = $winInvoices[(int)$wn['id']] ?? null; ?>
+        <div class="watch-card">
+          <a href="auction.php?id=<?= (int)$wn['id'] ?>" class="watch-card-img">
+            <?php if ($wn['image_url']): ?>
+              <img src="<?= e(cldImg($wn['image_url'], CLD_CARD)) ?>" alt="<?= e($wn['item_name']) ?>" loading="lazy">
+            <?php else: ?>
+              <span class="mini-auction-placeholder"><i class="fas fa-car"></i></span>
+            <?php endif; ?>
+            <div class="sold-stamp"><span>Won</span></div>
+          </a>
+          <div class="watch-card-body">
+            <a href="auction.php?id=<?= (int)$wn['id'] ?>" class="watch-card-title"><?= e($wn['item_name']) ?></a>
+            <div class="watch-card-row">
+              <span class="text-muted">Final price</span>
+              <strong style="color:#c8102e"><?= (float)$wn['final_price'] > 0 ? formatRand((float)$wn['final_price']) : 'TBC' ?></strong>
+            </div>
+            <div class="watch-card-time"><i class="fas fa-calendar-check"></i> Won <?= safeDate('d M Y', $wn['sold_date']) ?></div>
+            <?php if ($inv): ?>
+              <div class="watch-card-row" style="font-size:.82rem;">
+                <span>Invoice <?= e($inv['invoice_number']) ?></span>
+                <span class="badge badge-<?= in_array($inv['status'], ['paid', 'completed', 'approved'], true) ? 'success' : 'upcoming' ?>"><?= e(ucwords(str_replace('_', ' ', $inv['status']))) ?></span>
+              </div>
+              <?php if (in_array($inv['status'], ['pending', 'pop_uploaded'], true) && $inv['upload_token']): ?>
+              <div class="watch-card-actions">
+                <a href="invoice_pop_upload.php?num=<?= urlencode($inv['invoice_number']) ?>&amp;token=<?= urlencode($inv['upload_token']) ?>" class="btn btn-primary btn-sm">
+                  <i class="fas fa-upload"></i> <?= $inv['status'] === 'pop_uploaded' ? 'Update proof of payment' : 'Upload proof of payment' ?>
+                </a>
+              </div>
+              <?php endif; ?>
+            <?php else: ?>
+              <p class="text-muted" style="font-size:.8rem;margin:0;">Your invoice will be emailed to you. Contact us if it hasn't arrived within one business day.</p>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
+    <!-- ═══════════════════════════════════════════════════════
          TAB: MY PROFILE
     ═══════════════════════════════════════════════════════════ -->
     <?php elseif ($activeTab === 'profile'): ?>
@@ -714,6 +1059,24 @@ require_once 'header.php';
         </div>
       </div>
     </div>
+
+        <?php if ($myPrefs && ufReady()): ?>
+        <div class="card" style="margin-top:1.5rem;max-width:720px" id="email-prefs">
+          <h3>Email Settings</h3>
+          <p class="text-muted" style="font-size:.86rem;margin-top:0;">Choose which alert emails you get. Alerts always show in the 🔔 on the site. Account emails (registration, invoices, wins) are always sent.</p>
+          <div id="prefsResult"></div>
+          <form id="prefsForm">
+            <input type="hidden" name="action" value="save_email_prefs">
+            <label class="pref-row"><input type="checkbox" name="outbid" value="1" <?= $myPrefs['outbid_emails'] ? 'checked' : '' ?>>
+              <span><strong>Outbid alerts</strong><small>When someone bids higher than you.</small></span></label>
+            <label class="pref-row"><input type="checkbox" name="watch" value="1" <?= $myPrefs['watch_emails'] ? 'checked' : '' ?>>
+              <span><strong>Watchlist reminders</strong><small>An hour before a watched vehicle closes.</small></span></label>
+            <label class="pref-row"><input type="checkbox" name="saved_search" value="1" <?= $myPrefs['saved_search_emails'] ? 'checked' : '' ?>>
+              <span><strong>Saved-search matches</strong><small>One daily email when new vehicles match your searches.</small></span></label>
+            <button type="submit" class="btn btn-primary" id="savePrefsBtn" style="margin-top:.5rem"><i class="fas fa-save"></i> Save Email Settings</button>
+          </form>
+        </div>
+        <?php endif; ?>
 
     <!-- ═══════════════════════════════════════════════════════
          TAB: REFUND REQUESTS
@@ -1065,6 +1428,37 @@ if(rfForm){rfForm.addEventListener('submit',async function(e){
     }catch{res.innerHTML='<div class="alert alert-error">Submission failed. Please try again.</div>';}
     finally{btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane"></i> Submit Refund Request';}
 });}
+
+// Email settings
+const prefsForm = document.getElementById('prefsForm');
+if (prefsForm) prefsForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = document.getElementById('savePrefsBtn'), res = document.getElementById('prefsResult');
+    btn.disabled = true;
+    try {
+        const d = await (await fetch('api.php', {method: 'POST', body: new FormData(prefsForm)})).json();
+        res.innerHTML = `<div class="alert alert-${d.success ? 'success' : 'error'}" style="margin-bottom:1rem">${d.message}</div>`;
+    } catch { res.innerHTML = '<div class="alert alert-error">Could not save. Please try again.</div>'; }
+    finally { btn.disabled = false; }
+});
+
+// Saved searches
+async function deleteSavedSearch(id) {
+    if (!confirm('Delete this saved search? You will stop getting emails for it.')) return;
+    const fd = new FormData();
+    fd.append('action', 'delete_saved_search');
+    fd.append('id', id);
+    const d = await (await fetch('api.php', {method: 'POST', body: fd})).json();
+    if (typeof showToast === 'function') showToast(d.message, d.success ? 'success' : 'error');
+    if (d.success) document.getElementById('saved-search-' + id)?.remove();
+}
+
+// Watchlist tab: removing ♥ fades the card out
+document.addEventListener('ahg:watch', e => {
+    if (e.detail.watching) return;
+    const card = document.querySelector('[data-watch-card="' + e.detail.id + '"]');
+    if (card) { card.style.transition = 'opacity .3s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 300); }
+});
 
 // Mini timers
 document.querySelectorAll('[data-countdown]').forEach(el=>{

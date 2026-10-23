@@ -16,7 +16,13 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ── Environment detection ────────────────────────────────────
-$_isLocalDev = str_contains($_SERVER['HTTP_HOST'] ?? 'localhost', 'localhost');
+// Web requests: by host name. Command-line runs (cPanel cron) have no host,
+// so they go by where the code lives — only the dev PC runs from xampp.
+if (PHP_SAPI === 'cli') {
+    $_isLocalDev = stripos(strtr(__DIR__, '\\', '/'), '/xampp/') !== false;
+} else {
+    $_isLocalDev = str_contains($_SERVER['HTTP_HOST'] ?? 'localhost', 'localhost');
+}
 
 // ── Secrets ──────────────────────────────────────────────────
 // Passwords and API keys live in config.secrets.php (git-ignored, never
@@ -85,7 +91,9 @@ define('CAREER_MAIL_PASS',  $_secrets['CAREER_MAIL_PASS']);
 
 // Set to false when SMTP is unavailable (e.g. local development).
 // All email functions will return true silently without sending.
-define('EMAIL_ENABLED', true);
+// Setting the AHG_EMAIL_OFF environment variable (any value) turns sending
+// off for one run, e.g. when testing a cron script against real data.
+define('EMAIL_ENABLED', getenv('AHG_EMAIL_OFF') === false);
 
 // ── JWT ──────────────────────────────────────────────────────
 // Generate a strong random secret: php -r "echo bin2hex(random_bytes(32));"
@@ -95,10 +103,11 @@ define('JWT_EXPIRY',  86400 * 7);  // 7 days in seconds
 // ── Application ──────────────────────────────────────────────
 define('APP_NAME',    'Auction Hub Group');
 // Auto-detect local vs production URL and protocol
-if (strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false) {
+if ($_isLocalDev) {
     define('APP_URL', 'http://localhost/auctionhubgroup');
 } else {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    // Cron runs have no request to read the scheme from; the live site is https
+    $protocol = (PHP_SAPI === 'cli' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')) ? 'https' : 'http';
     define('APP_URL', $protocol . '://auctionhubgroup.co.za');
 }    // No trailing slash
 
@@ -275,6 +284,9 @@ define('AHG_IMAGE_ENABLED', true);
 define('PEXELS_API_KEY', $_secrets['PEXELS_API_KEY']);
 
 // ── Helper Functions ──────────────────────────────────────────
+
+// Watchlist, alerts, email preferences, saved searches (functions only)
+require_once __DIR__ . '/user_features.php';
 
 /**
  * Point a stored photo URL at the host that actually serves it.

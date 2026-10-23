@@ -441,10 +441,12 @@ function displayPrice(array $auction): string {
                         $reservePrice= (float)$auction['reserve_price'];
                         $reserveMet  = $currentBid > 0 && $currentBid >= $reservePrice;
                         $timeTarget  = $isActive ? $auction['end_time'] : $auction['start_time'];
+                        $watchedIds ??= watchedAuctionIds(isset($currentUser['sub']) ? (int)$currentUser['sub'] : null);
                     ?>
                     <article class="auction-card <?= $isActive ? 'auction-card-live' : '' ?>" role="listitem">
 
                         <!-- Image -->
+                        <div class="watch-media">
                         <a href="auction.php?id=<?= $auction['id'] ?>" class="auction-card-img-wrap"
                            aria-label="View <?= e($auction['item_name']) ?>">
                             <img src="<?= e($displayImg) ?>"
@@ -468,6 +470,8 @@ function displayPrice(array $auction): string {
                                 </span>
                             <?php endif; ?>
                         </a>
+                        <?= watchButton((int)$auction['id'], isset($watchedIds[(int)$auction['id']])) ?>
+                        </div>
 
                         <!-- Content -->
                         <div class="auction-card-body">

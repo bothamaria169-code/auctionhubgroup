@@ -1,13 +1,16 @@
 <?php
 /**
- * CRON JOB — Automatic Auction Close
+ * CRON JOB — Automatic Auction Close + bidder reminders
  *
- * Finds all active auctions whose end_time has passed and closes them.
- * Triggers winner notification emails and creates purchase requests.
+ * 1. Finds all active auctions whose end_time has passed and closes them.
+ *    Triggers winner notification emails and creates purchase requests.
+ * 2. Watchlist reminders: watched lot went live / ends within the hour.
+ * 3. Saved-search digests: one email per search per day with new matches.
  *
  * SETUP (cPanel Cron Jobs):
  *   Command:  /usr/local/bin/php /home/YOUR_CPANEL_USER/public_html/cron_close_auctions.php
- *   Schedule: Every 5 minutes  ( */5 * * * * )
+ *   Schedule: Every 5 minutes (cPanel "Once Per Five Minutes" — minute field: star-slash-5)
+ *   (Never write the cron expression literally here: its star-slash ends this comment.)
  *
  * Can also be called via browser for testing (admin-only):
  *   https://auctionhubgroup.co.za/cron_close_auctions.php?key=YOUR_CRON_KEY
@@ -31,8 +34,7 @@ if (php_sapi_name() !== 'cli') {
     }
 }
 
-// Load the closeAuction function from api.php without executing the router
-// We re-implement it here to avoid loading the full api.php
+// closeAuction() lives in auction_close.php (shared with api.php and auction.php)
 require_once __DIR__ . '/email_helper.php';
 
 $log = function(string $msg) {
@@ -55,84 +57,28 @@ try {
 
     if (empty($expired)) {
         $log('No expired auctions to close.');
-        exit(0);
+    } else {
+        $log(count($expired) . ' expired auction(s) found.');
     }
 
-    $log(count($expired) . ' expired auction(s) found.');
-
+    require_once __DIR__ . '/auction_close.php';
     foreach ($expired as $auction) {
         $auctionId = (int)$auction['id'];
-
-        // Get winning bid
-        $wStmt = $pdo->prepare("
-            SELECT a.id, a.item_name, a.status, a.is_sold,
-                   a.current_price, a.reserve_price, a.start_price,
-                   b.user_id AS winner_id,
-                   COALESCE(b.bid_amount, b.amount) AS winning_amount,
-                   b.bidder_name AS winner_name, b.bidder_number AS winner_bidder_number
-            FROM auctions a
-            LEFT JOIN bids b ON b.auction_id = a.id AND b.is_winning = 1
-            WHERE a.id = ?
-            LIMIT 1
-        ");
-        $wStmt->execute([$auctionId]);
-        $aData = $wStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$aData || $aData['status'] === 'closed') {
-            $log("  Auction #{$auctionId} already closed, skipping.");
-            continue;
-        }
-
-        $winnerId   = $aData['winner_id'] ? (int)$aData['winner_id'] : null;
-        $winningAmt = $aData['winning_amount'] ? (float)$aData['winning_amount'] : null;
-        $reserveMet = $winningAmt && $winningAmt >= (float)$aData['reserve_price'];
-
-        // Close the auction
-        $pdo->prepare("
-            UPDATE auctions SET
-                status      = 'closed',
-                is_sold     = ?,
-                sold_to     = ?,
-                sold_to_user_id = ?,
-                final_price = ?,
-                sold_date   = NOW()
-            WHERE id = ?
-        ")->execute([
-            ($winnerId && $reserveMet) ? 1 : 0,
-            $aData['winner_name'],
-            $winnerId,
-            $winningAmt,
-            $auctionId,
-        ]);
-
-        $log("  Closed auction #{$auctionId}: \"{$auction['item_name']}\"");
-
-        // Create purchase request + notify winner if reserve met
-        if ($winnerId && $reserveMet) {
-            $exists = $pdo->prepare("SELECT id FROM purchase_requests WHERE auction_id = ? AND user_id = ?");
-            $exists->execute([$auctionId, $winnerId]);
-            if (!$exists->fetch()) {
-                $pdo->prepare("
-                    INSERT INTO purchase_requests (auction_id, user_id, amount, status)
-                    VALUES (?, ?, ?, 'pending')
-                ")->execute([$auctionId, $winnerId, $winningAmt]);
-            }
-
-            try {
-                $winnerUser = $pdo->prepare("SELECT id, full_name, email FROM users WHERE id = ?");
-                $winnerUser->execute([$winnerId]);
-                $winnerRow = $winnerUser->fetch(PDO::FETCH_ASSOC);
-                if ($winnerRow) {
-                    sendAuctionWinnerEmail($winnerRow, $aData, $winningAmt);
-                    $log("    Winner notified: {$winnerRow['full_name']} ({$winnerRow['email']})");
-                }
-            } catch (Exception $e) {
-                $log("    Winner email failed: " . $e->getMessage());
-            }
-        } else {
-            $log("    No winner (no bids or reserve not met).");
+        try {
+            closeAuction($auctionId);   // same routine the site uses: winner, sale, emails, alerts
+            $r = $pdo->prepare("SELECT is_sold, sold_to, final_price FROM auctions WHERE id = ?");
+            $r->execute([$auctionId]);
+            $r = $r->fetch(PDO::FETCH_ASSOC);
+            $log("  Closed auction #{$auctionId}: \"{$auction['item_name']}\" — "
+                . (!empty($r['is_sold']) ? "sold to {$r['sold_to']} for " . formatRand((float)$r['final_price']) : 'not sold (no bids or reserve not met)'));
+        } catch (Throwable $e) {
+            $log("  Auction #{$auctionId} close failed: " . $e->getMessage());
         }
     }
+
+    // Reminders run every time, even when nothing closed
+    try { runWatchReminders($log); }     catch (Throwable $e) { $log('Watch reminders error: ' . $e->getMessage()); }
+    try { runSavedSearchDigests($log); } catch (Throwable $e) { $log('Saved searches error: ' . $e->getMessage()); }
 
     $log('Cron complete.');
 
