@@ -68,9 +68,10 @@ $flash = getFlash();
 $stats = [];
 
 $stats['total_auctions']    = $pdo->query("SELECT COUNT(*) FROM auctions")->fetchColumn();
-$stats['active_auctions']   = $pdo->query("SELECT COUNT(*) FROM auctions WHERE status='active'")->fetchColumn();
-$stats['upcoming_auctions'] = $pdo->query("SELECT COUNT(*) FROM auctions WHERE status='upcoming'")->fetchColumn();
-$stats['closed_auctions']   = $pdo->query("SELECT COUNT(*) FROM auctions WHERE status='closed'")->fetchColumn();
+$stats['active_auctions']   = $pdo->query("SELECT COUNT(*) FROM auctions WHERE status='active' AND is_sold=0")->fetchColumn();
+$stats['upcoming_auctions'] = $pdo->query("SELECT COUNT(*) FROM auctions WHERE status='upcoming' AND is_sold=0")->fetchColumn();
+$stats['closed_auctions']   = $pdo->query("SELECT COUNT(*) FROM auctions WHERE status='closed' AND is_sold=0")->fetchColumn();
+$stats['sold_auctions']     = $pdo->query("SELECT COUNT(*) FROM auctions WHERE is_sold=1")->fetchColumn();
 
 $stats['total_users']       = $pdo->query("SELECT COUNT(*) FROM users WHERE role='user'")->fetchColumn();
 $stats['verified_bidders']  = $pdo->query("SELECT COUNT(*) FROM users WHERE bidder_status='verified_bidder'")->fetchColumn();
@@ -78,9 +79,81 @@ $stats['pending_pops']      = $pdo->query("SELECT COUNT(*) FROM users WHERE bidd
 $stats['suspended_users']   = $pdo->query("SELECT COUNT(*) FROM users WHERE status='suspended'")->fetchColumn();
 
 $stats['total_bids']        = $pdo->query("SELECT COUNT(*) FROM bids")->fetchColumn();
-$stats['revenue']           = $pdo->query("SELECT COALESCE(SUM(final_price),0) FROM auctions WHERE status='closed' AND final_price > 0")->fetchColumn();
+$stats['revenue']           = $pdo->query("SELECT COALESCE(SUM(final_price),0) FROM auctions WHERE is_sold=1 AND final_price > 0")->fetchColumn();
 $stats['pending_refunds']   = 0;
 try { $stats['pending_refunds'] = $pdo->query("SELECT COUNT(*) FROM refund_requests WHERE status IN ('pending','under_review')")->fetchColumn(); } catch(Exception $e) {}
+
+// Sales summary + change log (Overview tab only)
+$sales = null;
+$activityRows = [];
+$activityMissing = false;
+$activityLimit = ($_GET['log'] ?? '') === '200' ? 200 : 15;
+if ($activeTab === 'overview') {
+    $salesQ = $pdo->prepare("
+        SELECT COUNT(*) AS n, COALESCE(SUM(final_price), 0) AS total
+        FROM auctions WHERE is_sold = 1 AND final_price > 0 AND sold_date >= ? AND sold_date < ?
+    ");
+    $mStart = date('Y-m-01');
+    $mNext  = date('Y-m-01', strtotime('first day of next month'));
+    $mPrev  = date('Y-m-01', strtotime('first day of last month'));
+    $salesQ->execute([$mStart, $mNext]);  $thisMonth = $salesQ->fetch();
+    $salesQ->execute([$mPrev,  $mStart]); $lastMonth = $salesQ->fetch();
+    $ratio = $pdo->query("
+        SELECT AVG(final_price / start_price) AS r, AVG(final_price) AS avg_price, COUNT(*) AS n
+        FROM auctions
+        WHERE is_sold = 1 AND final_price > 0 AND start_price > 0
+          AND sold_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+    ")->fetch();
+    $attention = (int)$pdo->query("
+        SELECT COUNT(*) FROM auctions a
+        WHERE (a.is_sold = 0 AND a.status = 'closed' AND EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id))
+           OR (a.is_sold = 1 AND (a.final_price IS NULL OR a.final_price <= 0))
+    ")->fetchColumn();
+    $sales = [
+        'month_n'     => (int)$thisMonth['n'],
+        'month_total' => (float)$thisMonth['total'],
+        'last_n'      => (int)$lastMonth['n'],
+        'last_total'  => (float)$lastMonth['total'],
+        'ratio'       => $ratio['r'] !== null ? (float)$ratio['r'] : null,
+        'avg_price'   => (float)$ratio['avg_price'],
+        'ratio_n'     => (int)$ratio['n'],
+        'attention'   => $attention,
+        'month_from'  => $mStart,
+        'month_label' => date('F Y'),
+    ];
+    try {
+        $activityRows = $pdo->query("
+            SELECT admin_name, action, auction_id, item_name, details, created_at
+            FROM admin_activity_log ORDER BY id DESC LIMIT " . $activityLimit . "
+        ")->fetchAll();
+    } catch (PDOException $e) {
+        $activityMissing = true;
+    }
+}
+
+/** One-line description of a change-log row (shared by the Overview list and its JS loader) */
+function describeAdminActivity(string $action, ?string $detailsJson): string {
+    $d = $detailsJson ? (json_decode($detailsJson, true) ?: []) : [];
+    $money = fn($v) => 'R' . number_format((float)$v, 0, '.', ',');
+    switch ($action) {
+        case 'mark_sold':
+            return 'Marked sold for ' . $money($d['final_price'] ?? 0)
+                 . (!empty($d['buyer']) ? ' to ' . $d['buyer'] : '') . (!empty($d['bulk']) ? ' (bulk)' : '');
+        case 'edit_sale':
+            return 'Changed sale price ' . $money($d['previous_price'] ?? 0) . ' → ' . $money($d['final_price'] ?? 0);
+        case 'undo_sold':
+            return 'Removed sale (was ' . $money($d['previous_price'] ?? 0) . ')';
+        case 'relist':
+            $n = count($d['cleared_bids'] ?? []);
+            return 'Relisted, ' . safeDate('d M H:i', $d['start'] ?? null) . ' – ' . safeDate('d M H:i', $d['end'] ?? null)
+                 . ($n ? " ($n old bid" . ($n === 1 ? '' : 's') . ' cleared)' : '');
+        case 'delete':
+            return 'Deleted lot' . (!empty($d['bids']) ? ' with ' . $d['bids'] . ' bid(s)' : '') . (!empty($d['bulk']) ? ' (bulk)' : '');
+        case 'status':
+            return 'Status set to ' . ($d['status'] ?? '?') . (!empty($d['bulk']) ? ' (bulk)' : '');
+    }
+    return ucfirst(str_replace('_', ' ', $action));
+}
 
 // Refund requests list (loaded only when tab is active)
 $refundRequests = [];
@@ -150,34 +223,55 @@ if ($lastBidder && preg_match('/AHG-\d{4}-(\d+)/', $lastBidder, $m)) {
 $auctionSearch = trim($_GET['asearch'] ?? '');
 $auctionStatus = $_GET['astatus'] ?? '';
 $auctionPage   = max(1, (int)($_GET['apage'] ?? 1));
-$auctionPer    = 500;
+$auctionPer    = 48;
+
+// Status tabs. "attention" = lots an admin still has to decide on:
+// closed with bids but not sold (reserve not met → sell or relist),
+// or marked sold without a final price.
+$auctionTabSql = [
+    'active'    => "a.status = 'active'   AND a.is_sold = 0",
+    'upcoming'  => "a.status = 'upcoming' AND a.is_sold = 0",
+    'closed'    => "a.status = 'closed'   AND a.is_sold = 0",
+    'sold'      => "a.is_sold = 1",
+    'attention' => "((a.is_sold = 0 AND a.status = 'closed' AND EXISTS (SELECT 1 FROM bids bx WHERE bx.auction_id = a.id))
+                     OR (a.is_sold = 1 AND (a.final_price IS NULL OR a.final_price <= 0)))",
+];
+if (!isset($auctionTabSql[$auctionStatus])) $auctionStatus = '';
 
 $aWhere = [];
 $aParams = [];
 if ($auctionSearch) {
-    $aWhere[] = "(a.item_name LIKE ? OR m.name LIKE ?)";
-    $aParams[] = "%$auctionSearch%";
-    $aParams[] = "%$auctionSearch%";
+    $aWhere[] = "(a.item_name LIKE ? OR m.name LIKE ? OR a.vin_number LIKE ? OR a.id = ?)";
+    array_push($aParams, "%$auctionSearch%", "%$auctionSearch%", "%$auctionSearch%", (int)$auctionSearch);
 }
-if (in_array($auctionStatus, ['active','upcoming','closed'])) {
-    $aWhere[] = "a.status = ?";
-    $aParams[] = $auctionStatus;
+// Counts per tab honour the search box, so the tabs read "Sold (3)" for "toyota"
+$aTabCounts = ['' => 0];
+$aBaseWhere = $aWhere ? implode(' AND ', $aWhere) : '1=1';
+$cnt = $pdo->prepare("SELECT COUNT(*) FROM auctions a LEFT JOIN makes m ON m.id = a.make_id WHERE $aBaseWhere");
+$cnt->execute($aParams);
+$aTabCounts[''] = (int)$cnt->fetchColumn();
+foreach ($auctionTabSql as $k => $cond) {
+    $cnt = $pdo->prepare("SELECT COUNT(*) FROM auctions a LEFT JOIN makes m ON m.id = a.make_id WHERE $aBaseWhere AND $cond");
+    $cnt->execute($aParams);
+    $aTabCounts[$k] = (int)$cnt->fetchColumn();
 }
+if ($auctionStatus) $aWhere[] = $auctionTabSql[$auctionStatus];
 $aWhereSQL = $aWhere ? 'WHERE ' . implode(' AND ', $aWhere) : '';
 
 $aTotal = $pdo->prepare("SELECT COUNT(*) FROM auctions a LEFT JOIN makes m ON m.id = a.make_id $aWhereSQL");
 $aTotal->execute($aParams);
 $aTotal = (int)$aTotal->fetchColumn();
-$aPages = max(1, ceil($aTotal / $auctionPer));
+$aPages = max(1, (int)ceil($aTotal / $auctionPer));
+$auctionPage = min($auctionPage, $aPages);
 $aOffset = ($auctionPage - 1) * $auctionPer;
 
 $aStmt = $pdo->prepare("
     SELECT a.id, a.item_name, a.year, a.status, a.current_price,
-           a.reserve_price, a.start_time, a.end_time,
-           a.image_url, a.is_sold, a.final_price,
+           a.reserve_price, a.start_time, a.end_time, a.start_price,
+           a.image_url, a.is_sold, a.final_price, a.sold_date, a.sold_to,
            m.name AS make_name,
            COUNT(b.id) AS bid_count,
-           MAX(b.bid_amount) AS top_bid
+           MAX(COALESCE(b.bid_amount, b.amount)) AS top_bid
     FROM auctions a
     LEFT JOIN makes m ON m.id = a.make_id
     LEFT JOIN bids b ON b.auction_id = a.id
@@ -672,6 +766,121 @@ require_once 'header.php';
       </div>
     </div>
 
+    <!-- Sales summary -->
+    <?php if ($sales): ?>
+    <div class="admin-stats-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;">
+        <h3 class="admin-section-label" style="margin:0;">Sales</h3>
+        <form method="get" action="api.php" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;font-size:.82rem;">
+          <input type="hidden" name="action" value="export_auctions_csv">
+          <input type="hidden" name="filter" value="sold">
+          <label for="salesFrom" class="text-muted">Sales report</label>
+          <input type="date" id="salesFrom" name="from" value="<?= e($sales['month_from']) ?>" class="form-control" style="width:auto;padding:.3rem .5rem;font-size:.82rem;">
+          <span class="text-muted">to</span>
+          <input type="date" name="to" value="<?= date('Y-m-d') ?>" class="form-control" style="width:auto;padding:.3rem .5rem;font-size:.82rem;">
+          <button type="submit" class="btn btn-outline btn-sm"><i class="fas fa-file-csv"></i> Download CSV</button>
+        </form>
+      </div>
+      <div class="grid-4" style="margin-top:.75rem;">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fde8e8;color:#c8102e"><i class="fas fa-tag"></i></div>
+          <div class="sales-stat-text">
+            <div class="stat-value"><?= $sales['month_n'] ?></div>
+            <div class="stat-label">Sold in <?= e($sales['month_label']) ?></div>
+            <small class="text-muted"><?= $sales['last_n'] ?> last month</small>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e8f5e9;color:#2e7d32"><i class="fas fa-sack-dollar"></i></div>
+          <div class="sales-stat-text">
+            <div class="stat-value" style="font-size:1.35rem;"><?= formatRand($sales['month_total']) ?></div>
+            <div class="stat-label">Sales value this month</div>
+            <?php if ($sales['last_total'] > 0):
+                $chg = ($sales['month_total'] - $sales['last_total']) / $sales['last_total'] * 100; ?>
+              <small style="color:<?= $chg >= 0 ? '#2e7d32' : '#c62828' ?>">
+                <i class="fas fa-arrow-<?= $chg >= 0 ? 'up' : 'down' ?>"></i> <?= number_format(abs($chg), 0) ?>% vs <?= formatRand($sales['last_total']) ?> last month
+              </small>
+            <?php else: ?>
+              <small class="text-muted">No sales recorded last month</small>
+            <?php endif; ?>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--blue-light);color:var(--blue-primary)"><i class="fas fa-scale-balanced"></i></div>
+          <div class="sales-stat-text">
+            <?php if ($sales['ratio'] !== null): ?>
+              <div class="stat-value"><?= number_format($sales['ratio'] * 100, 0) ?>%</div>
+              <div class="stat-label">Sold price vs starting price</div>
+              <small class="text-muted">Avg <?= formatRand($sales['avg_price']) ?> · <?= $sales['ratio_n'] ?> sale<?= $sales['ratio_n'] === 1 ? '' : 's' ?>, last 90 days</small>
+            <?php else: ?>
+              <div class="stat-value">—</div>
+              <div class="stat-label">Sold price vs starting price</div>
+              <small class="text-muted">No priced sales in the last 90 days</small>
+            <?php endif; ?>
+          </div>
+        </div>
+        <div class="stat-card" style="<?= $sales['attention'] > 0 ? 'border-left:3px solid var(--warning)' : '' ?>">
+          <div class="stat-icon" style="background:#fff8e1;color:#f57c00"><i class="fas fa-triangle-exclamation"></i></div>
+          <div class="sales-stat-text">
+            <div class="stat-value"><?= $sales['attention'] ?></div>
+            <div class="stat-label">Lots needing a decision</div>
+            <?php if ($sales['attention'] > 0): ?>
+              <a href="?tab=auctions&amp;astatus=attention" class="stat-card-link">Sell or relist →</a>
+            <?php else: ?>
+              <small class="text-muted">Closed lots with bids are all handled</small>
+            <?php endif; ?>
+          </div>
+        </div>
+        <style>
+          .sales-stat-text { display:flex; flex-direction:column; gap:.15rem; min-width:0; }
+          .sales-stat-text small { font-size:.74rem; line-height:1.3; }
+        </style>
+      </div>
+    </div>
+
+    <!-- Change log -->
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem;">
+        <h3 style="margin:0;"><i class="fas fa-clock-rotate-left" style="color:#1565c0;"></i> Change Log</h3>
+        <?php if (!$activityMissing && $activityLimit === 15 && count($activityRows) >= 15): ?>
+          <a href="?tab=overview&amp;log=200#activityTable" class="btn btn-outline btn-sm">Show last 200</a>
+        <?php endif; ?>
+      </div>
+      <?php if ($activityMissing): ?>
+        <div class="alert alert-error" style="margin:0;">
+          <i class="fas fa-database"></i> The change log isn't set up on this server yet. Run <code>ahg_admin_activity_log.sql</code> in phpMyAdmin.
+          Until then nothing is logged, and Relist is disabled.
+        </div>
+      <?php elseif (!$activityRows): ?>
+        <p class="text-muted" style="margin:0;">No changes logged yet. Sales, relists, status changes and deletes will appear here.</p>
+      <?php else: ?>
+        <div style="overflow-x:auto;">
+          <table class="admin-table" id="activityTable">
+            <thead><tr><th>When</th><th>Admin</th><th>Lot</th><th>Change</th></tr></thead>
+            <tbody>
+              <?php foreach ($activityRows as $r): ?>
+              <tr>
+                <td style="white-space:nowrap;"><?= safeDate('d M Y H:i', $r['created_at']) ?></td>
+                <td><?= e($r['admin_name'] ?: '—') ?></td>
+                <td>
+                  <?php if ($r['auction_id'] && $r['action'] === 'delete'): ?>
+                    #<?= (int)$r['auction_id'] ?>
+                    <small class="text-muted"><?= e($r['item_name']) ?></small>
+                  <?php elseif ($r['auction_id']): ?>
+                    <a href="auction.php?id=<?= (int)$r['auction_id'] ?>" target="_blank">#<?= (int)$r['auction_id'] ?></a>
+                    <small class="text-muted"><?= e($r['item_name']) ?></small>
+                  <?php else: ?>—<?php endif; ?>
+                </td>
+                <td><?= e(describeAdminActivity($r['action'], $r['details'])) ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <!-- Stats Row 2: Users -->
     <div class="admin-stats-section">
       <h3 class="admin-section-label">Users</h3>
@@ -1063,6 +1272,67 @@ require_once 'header.php';
       <button type="button" class="btn btn-outline btn-sm" onclick="toggleAuctionBulkPanel('event')" style="border-color:#6a1b9a;color:#6a1b9a;">
         <i class="fas fa-calendar-plus"></i> Add to Event
       </button>
+      <button type="button" class="btn btn-sold btn-sm" onclick="toggleAuctionBulkPanel('sold')">
+        <i class="fas fa-tag"></i> Mark Sold
+      </button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="toggleAuctionBulkPanel('relist')" style="border-color:#2e7d32;color:#2e7d32;">
+        <i class="fas fa-rotate-right"></i> Relist
+      </button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="exportSelectedAuctions()">
+        <i class="fas fa-file-csv"></i> Export CSV
+      </button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="bulkDeleteAuctions()">
+        <i class="fas fa-trash"></i> Delete
+      </button>
+    </div>
+
+    <!-- Inline Bulk Mark Sold Panel -->
+    <div id="auctionBulkSoldPanel" class="card" style="display:none;margin-bottom:1rem;border:2px solid #ef9a9a;">
+      <h3 style="margin:0 0 .5rem;"><i class="fas fa-tag" style="color:#c8102e;"></i> Mark Selected Lots as Sold</h3>
+      <p class="text-muted" style="margin:0 0 .75rem;font-size:.86rem;">
+        Each price starts at the lot's top bid. Change any that sold for a different amount. Lots already sold are left out.
+      </p>
+      <div id="bulkSoldResult"></div>
+      <div style="overflow-x:auto;">
+        <table class="admin-table" style="min-width:420px;">
+          <thead><tr><th>Lot</th><th>Vehicle</th><th style="width:170px;">Final price (R)</th></tr></thead>
+          <tbody id="bulkSoldRows"></tbody>
+        </table>
+      </div>
+      <p style="margin:.75rem 0 0;font-weight:700;color:#003f73;">Total: <span id="bulkSoldTotal">R0.00</span></p>
+      <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+        <button type="button" class="btn btn-sold" onclick="submitBulkMarkSold()">
+          <i class="fas fa-check"></i> Save Sales
+        </button>
+        <button type="button" class="btn btn-outline" onclick="toggleAuctionBulkPanel('sold', true)">Close</button>
+      </div>
+    </div>
+
+    <!-- Inline Bulk Relist Panel -->
+    <div id="auctionBulkRelistPanel" class="card" style="display:none;margin-bottom:1rem;border:2px solid #a5d6a7;">
+      <h3 style="margin:0 0 .5rem;"><i class="fas fa-rotate-right" style="color:#2e7d32;"></i> Relist Unsold Lots</h3>
+      <p class="text-muted" style="margin:0 0 .75rem;font-size:.86rem;">
+        <span id="bulkRelistInfo"></span>
+        Each lot goes back up for auction at its <strong>starting price</strong>. Its old bids are cleared from the lot
+        (a copy is kept in the change log). Sold lots are skipped.
+      </p>
+      <div id="bulkRelistResult"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+        <div class="form-group" style="margin:0;">
+          <label>New Start Time</label>
+          <input type="datetime-local" id="bulkRelistStart" class="form-control" value="<?= date('Y-m-d\TH:i', strtotime('+1 day 09:00')) ?>">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>New End Time</label>
+          <input type="datetime-local" id="bulkRelistEnd" class="form-control" value="<?= date('Y-m-d\TH:i', strtotime('+8 days 18:00')) ?>">
+        </div>
+      </div>
+      <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" style="background:#2e7d32;border-color:#2e7d32;" onclick="submitBulkRelist()">
+          <i class="fas fa-rotate-right"></i> Relist Lots
+        </button>
+        <button type="button" class="btn btn-outline" onclick="toggleAuctionBulkPanel('relist', true)">Close</button>
+      </div>
     </div>
 
     <!-- Inline Bulk Times & Status Panel -->
@@ -1126,19 +1396,47 @@ require_once 'header.php';
     <!-- Search & Filter Bar -->
     <form class="admin-filter-bar" method="get">
       <input type="hidden" name="tab" value="auctions">
+      <input type="hidden" name="astatus" value="<?= e($auctionStatus) ?>">
       <input type="text" name="asearch" value="<?= e($auctionSearch) ?>"
-             placeholder="Search by vehicle or make..." class="form-control" style="flex:1">
-      <select name="astatus" class="form-control" style="width:160px">
-        <option value="">All Statuses</option>
-        <option value="active"   <?= $auctionStatus==='active'   ?'selected':'' ?>>Live</option>
-        <option value="upcoming" <?= $auctionStatus==='upcoming' ?'selected':'' ?>>Upcoming</option>
-        <option value="closed"   <?= $auctionStatus==='closed'   ?'selected':'' ?>>Closed</option>
-      </select>
+             placeholder="Search by vehicle, make, VIN or lot ID..." class="form-control" style="flex:1">
       <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
       <?php if ($auctionSearch || $auctionStatus): ?>
         <a href="?tab=auctions" class="btn btn-outline">Clear</a>
       <?php endif; ?>
     </form>
+
+    <!-- Status tabs (counts follow the search box) -->
+    <?php
+    $aTabLabels = [
+        ''          => ['All',             'fa-layer-group'],
+        'active'    => ['Live',            'fa-fire'],
+        'upcoming'  => ['Upcoming',        'fa-clock'],
+        'closed'    => ['Closed (unsold)', 'fa-lock'],
+        'sold'      => ['Sold',            'fa-circle-check'],
+        'attention' => ['Needs attention', 'fa-triangle-exclamation'],
+    ];
+    // Builds a link to this tab keeping search/status; pass null to drop a key
+    $aQs = function (array $over) use ($auctionSearch, $auctionStatus): string {
+        $q = array_merge(['tab' => 'auctions', 'asearch' => $auctionSearch, 'astatus' => $auctionStatus], $over);
+        $q = array_filter($q, fn($v) => $v !== '' && $v !== null && $v !== 1);
+        return '?' . http_build_query($q);
+    };
+    ?>
+    <nav class="av-tabs" aria-label="Filter lots by status">
+      <?php foreach ($aTabLabels as $k => [$label, $icon]): ?>
+        <a href="<?= e($aQs(['astatus' => $k, 'apage' => null])) ?>"
+           class="av-tab <?= $auctionStatus === $k ? 'active' : '' ?> <?= $k === 'attention' && $aTabCounts[$k] > 0 ? 'av-tab-warn' : '' ?>">
+          <i class="fas <?= $icon ?>"></i> <?= $label ?> <span class="av-tab-count"><?= $aTabCounts[$k] ?></span>
+        </a>
+      <?php endforeach; ?>
+    </nav>
+    <?php if ($auctionStatus === 'attention'): ?>
+    <div class="alert alert-info" style="margin-bottom:1rem;font-size:.86rem;">
+      <i class="fas fa-info-circle"></i>
+      These lots closed with bids but aren't marked sold (usually the reserve wasn't met). <strong>Mark Sold</strong> accepts a price,
+      or select them and <strong>Relist</strong>. Sold lots with no final price also show here.
+    </div>
+    <?php endif; ?>
 
     <style>
     /* ── Auction vehicle cards (mobile-first) ────────────────── */
@@ -1169,14 +1467,41 @@ require_once 'header.php';
     @media(max-width:480px) {
         .av-grid { grid-template-columns:1fr; }
     }
+    .av-tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin:0 0 1rem; }
+    .av-tab { display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .85rem; border-radius:20px; background:#fff; border:1.5px solid #d0dbe8; color:#003f73; font-size:.82rem; font-weight:600; text-decoration:none; }
+    .av-tab:hover { border-color:#1565c0; }
+    .av-tab.active { background:#1565c0; border-color:#1565c0; color:#fff; }
+    .av-tab-count { background:rgba(0,0,0,.08); border-radius:10px; padding:0 .45rem; font-size:.74rem; }
+    .av-tab.active .av-tab-count { background:rgba(255,255,255,.25); }
+    .av-tab-warn:not(.active) { border-color:#f9a825; color:#8a5a00; background:#fff8e1; }
+    .av-pagination { display:flex; justify-content:center; align-items:center; gap:.35rem; flex-wrap:wrap; padding:1.5rem 0; }
+    .av-page-btn { min-width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid #d0dbe8; background:#fff; color:#003f73; font-weight:700; font-size:.85rem; text-decoration:none; padding:0 .5rem; }
+    .av-page-btn.active, .av-page-btn:hover { background:#1565c0; border-color:#1565c0; color:#fff; }
+    .av-page-gap { color:#99a; padding:0 .2rem; }
+    .av-sold-row { background:#fde8e8; border-radius:8px; padding:.45rem .6rem; }
+    .av-sold-row .val { color:#7b1818; }
+    .av-sale-actions { display:flex; gap:.5rem; }
+    .av-sale-actions .btn { flex:1; justify-content:center; font-size:.82rem; }
+    .btn-sold { background:#c8102e; border-color:#c8102e; color:#fff; }
+    .btn-sold:hover { background:#a50d26; border-color:#a50d26; color:#fff; }
     </style>
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem;">
-      <p class="av-count" style="margin:0;"><?= $aTotal ?> vehicle<?= $aTotal!==1?'s':'' ?> total<?= ($auctionSearch||$auctionStatus) ? ' (filtered)' : '' ?></p>
-      <label style="display:flex;align-items:center;gap:.5rem;font-size:.84rem;font-weight:600;color:#445;cursor:pointer;user-select:none;">
-        <input type="checkbox" id="auctionSelectAll" onchange="toggleAuctionSelectAll(this)" style="width:16px;height:16px;accent-color:#1565c0;cursor:pointer;">
-        Select All
-      </label>
+      <p class="av-count" style="margin:0;">
+        <?= $aTotal ?> vehicle<?= $aTotal!==1?'s':'' ?><?= ($auctionSearch||$auctionStatus) ? ' (filtered)' : '' ?>
+        <?php if ($aPages > 1): ?> · showing <?= $aOffset + 1 ?>–<?= min($aOffset + $auctionPer, $aTotal) ?><?php endif; ?>
+      </p>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <?php if (!$auctionSearch && $auctionStatus !== 'attention'): ?>
+        <a href="api.php?action=export_auctions_csv&amp;filter=<?= e($auctionStatus ?: 'all') ?>" class="btn btn-outline btn-sm">
+          <i class="fas fa-file-csv"></i> Export this list
+        </a>
+        <?php endif; ?>
+        <label style="display:flex;align-items:center;gap:.5rem;font-size:.84rem;font-weight:600;color:#445;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="auctionSelectAll" onchange="toggleAuctionSelectAll(this)" style="width:16px;height:16px;accent-color:#1565c0;cursor:pointer;">
+          Select all on this page
+        </label>
+      </div>
     </div>
 
     <?php if (empty($adminAuctions)): ?>
@@ -1192,7 +1517,7 @@ require_once 'header.php';
         <!-- Image + status badge -->
         <div class="av-card-img">
           <?php if ($a['image_url']): ?>
-            <img src="<?= e(imgHost($a['image_url'])) ?>" alt="<?= e($a['item_name']) ?>" loading="lazy" onerror="this.parentElement.innerHTML='<div class=av-no-img><i class=\'fas fa-car\'></i></div>'">
+            <img src="<?= e(cldImg($a['image_url'], CLD_CARD)) ?>" alt="<?= e($a['item_name']) ?>" loading="lazy" onerror="this.parentElement.innerHTML='<div class=av-no-img><i class=\'fas fa-car\'></i></div>'">
           <?php else: ?>
             <div class="av-no-img"><i class="fas fa-car"></i></div>
           <?php endif; ?>
@@ -1200,7 +1525,10 @@ require_once 'header.php';
             <?= $a['is_sold'] ? 'Sold' : ($a['status'] === 'active' ? 'Live' : ucfirst($a['status'])) ?>
           </span>
           <div class="av-select-wrap">
-            <input type="checkbox" class="av-select-cb auction-select-cb" value="<?= $a['id'] ?>" title="Select vehicle">
+            <input type="checkbox" class="av-select-cb auction-select-cb" value="<?= $a['id'] ?>" title="Select vehicle"
+                   data-name="<?= e($a['item_name']) ?>"
+                   data-top="<?= (float)$a['top_bid'] ?>"
+                   data-sold="<?= (int)$a['is_sold'] ?>">
           </div>
           <?php if ($a['bid_count'] > 0): ?>
           <span style="position:absolute;top:.6rem;right:.6rem;background:rgba(0,0,0,.55);color:#fff;font-size:.65rem;padding:.2rem .5rem;border-radius:10px;">
@@ -1220,10 +1548,22 @@ require_once 'header.php';
             </div>
           </div>
 
-          <!-- Price / reserve -->
+          <!-- Sale / price / reserve -->
+          <?php if ($a['is_sold']): ?>
+          <div class="av-card-row av-sold-row">
+            <span class="lbl"><i class="fas fa-circle-check"></i> Sold<?= $a['sold_date'] ? ' ' . safeDate('d M Y', $a['sold_date']) : '' ?></span>
+            <span class="val"><?= (float)$a['final_price'] > 0 ? formatRand($a['final_price']) : '<span style="color:#b26a00">No price!</span>' ?></span>
+          </div>
+          <?php if ($a['sold_to']): ?>
           <div class="av-card-row">
-            <span class="lbl">Current Price</span>
-            <span class="val"><?= formatRand($a['current_price']) ?></span>
+            <span class="lbl">Buyer</span>
+            <span class="val" style="font-size:.8rem;"><?= e($a['sold_to']) ?></span>
+          </div>
+          <?php endif; ?>
+          <?php endif; ?>
+          <div class="av-card-row">
+            <span class="lbl"><?= (int)$a['bid_count'] > 0 ? 'Top Bid' : 'Current Price' ?></span>
+            <span class="val"><?= formatRand((int)$a['bid_count'] > 0 ? $a['top_bid'] : $a['current_price']) ?></span>
           </div>
           <div class="av-card-row">
             <span class="lbl">Reserve</span>
@@ -1245,12 +1585,37 @@ require_once 'header.php';
 
           <!-- Status dropdown -->
           <select class="av-status-select"
-                  onchange="updateAuctionStatus(<?= $a['id'] ?>, this.value, this)">
+                  data-prev="<?= $a['is_sold'] ? 'sold' : e($a['status']) ?>"
+                  onchange="onAuctionStatusChange(<?= $a['id'] ?>, this)">
             <option value="upcoming" <?= $a['status']==='upcoming'&&!$a['is_sold']?'selected':'' ?>>⏳ Upcoming</option>
             <option value="active"   <?= $a['status']==='active'  &&!$a['is_sold']?'selected':'' ?>>🟢 Live Now</option>
             <option value="closed"   <?= $a['status']==='closed'  &&!$a['is_sold']?'selected':'' ?>>🔒 Closed</option>
             <option value="sold"     <?= $a['is_sold'] ?'selected':'' ?>>🏷️ Sold</option>
           </select>
+
+          <!-- Sale actions -->
+          <?php $saleArgs = $a['id'] . ', ' . e(json_encode([
+              'name'  => $a['item_name'],
+              'top'   => (float)$a['top_bid'],
+              'price' => (float)$a['final_price'],
+              'date'  => $a['sold_date'] ? substr($a['sold_date'], 0, 10) : '',
+              'buyer' => $a['sold_to'] ?? '',
+          ], JSON_HEX_APOS | JSON_HEX_QUOT)); ?>
+          <div class="av-sale-actions">
+            <?php if ($a['is_sold']): ?>
+              <button type="button" class="btn btn-outline btn-sm" onclick="openMarkSoldModal(<?= $saleArgs ?>)">
+                <i class="fas fa-pen"></i> Edit Sale
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" style="border-color:#7b1818;color:#7b1818;"
+                      onclick="undoSold(<?= $a['id'] ?>, <?= e(json_encode($a['item_name'], JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)">
+                <i class="fas fa-rotate-left"></i> Undo Sold
+              </button>
+            <?php else: ?>
+              <button type="button" class="btn btn-sold btn-sm" onclick="openMarkSoldModal(<?= $saleArgs ?>)">
+                <i class="fas fa-tag"></i> Mark as Sold
+              </button>
+            <?php endif; ?>
+          </div>
 
           <!-- Primary actions -->
           <div class="av-card-actions">
@@ -1291,6 +1656,30 @@ require_once 'header.php';
       </div>
       <?php endforeach; ?>
     </div>
+
+    <?php if ($aPages > 1):
+      $pgFrom = max(1, $auctionPage - 2);
+      $pgTo   = min($aPages, $auctionPage + 2); ?>
+    <nav class="av-pagination" aria-label="Lot pages">
+      <?php if ($auctionPage > 1): ?>
+        <a href="<?= e($aQs(['apage' => $auctionPage - 1])) ?>" class="av-page-btn" aria-label="Previous page"><i class="fas fa-chevron-left"></i></a>
+      <?php endif; ?>
+      <?php if ($pgFrom > 1): ?>
+        <a href="<?= e($aQs(['apage' => 1])) ?>" class="av-page-btn">1</a>
+        <?php if ($pgFrom > 2): ?><span class="av-page-gap">…</span><?php endif; ?>
+      <?php endif; ?>
+      <?php for ($p = $pgFrom; $p <= $pgTo; $p++): ?>
+        <a href="<?= e($aQs(['apage' => $p])) ?>" class="av-page-btn <?= $p === $auctionPage ? 'active' : '' ?>"><?= $p ?></a>
+      <?php endfor; ?>
+      <?php if ($pgTo < $aPages): ?>
+        <?php if ($pgTo < $aPages - 1): ?><span class="av-page-gap">…</span><?php endif; ?>
+        <a href="<?= e($aQs(['apage' => $aPages])) ?>" class="av-page-btn"><?= $aPages ?></a>
+      <?php endif; ?>
+      <?php if ($auctionPage < $aPages): ?>
+        <a href="<?= e($aQs(['apage' => $auctionPage + 1])) ?>" class="av-page-btn" aria-label="Next page"><i class="fas fa-chevron-right"></i></a>
+      <?php endif; ?>
+    </nav>
+    <?php endif; ?>
     <?php endif; ?>
 
 
@@ -5564,6 +5953,42 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
 
 <!-- Bulk Auction / Assign Event modals removed — replaced by inline panels on Auctions tab -->
 
+<!-- Mark as Sold Modal -->
+<div id="markSoldModal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3><i class="fas fa-tag" style="color:#c8102e"></i> <span id="markSoldTitle">Mark as Sold</span></h3>
+      <button class="modal-close" onclick="closeModal('markSoldModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-top:0"><strong id="markSoldVehicleName"></strong></p>
+      <input type="hidden" id="markSoldAuctionId">
+      <div class="form-group">
+        <label>Final Price (R) <span style="color:#c8102e">*</span></label>
+        <input type="number" id="markSoldPrice" class="form-control" min="1" step="0.01" placeholder="e.g. 185000">
+        <small class="text-muted" id="markSoldTopHint"></small>
+      </div>
+      <div class="form-group">
+        <label>Sold Date</label>
+        <input type="date" id="markSoldDate" class="form-control" max="<?= date('Y-m-d') ?>">
+      </div>
+      <div class="form-group">
+        <label>Buyer <small class="text-muted">(optional)</small></label>
+        <input type="text" id="markSoldBuyerSearch" class="form-control" placeholder="Search registered bidders, or type a walk-in buyer's name" autocomplete="off">
+        <div id="markSoldBuyerDropdown" class="search-dropdown" style="display:none"></div>
+        <input type="hidden" id="markSoldBuyerId">
+        <small class="text-muted" id="markSoldBuyerHint">Not linked to a bidder account.</small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('markSoldModal')">Cancel</button>
+      <button class="btn btn-sold" id="markSoldSubmit" onclick="submitMarkSold()">
+        <i class="fas fa-check"></i> Save Sale
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Assign Winner Modal -->
 <div id="assignWinnerModal" class="modal-overlay" style="display:none">
   <div class="modal-box">
@@ -7765,26 +8190,40 @@ function updateAuctionSelectedCount() {
 }
 
 // Toggle inline bulk panels (mutually exclusive)
+const AUCTION_BULK_PANELS = {
+    times:  'auctionBulkTimesPanel',
+    event:  'auctionBulkEventPanel',
+    sold:   'auctionBulkSoldPanel',
+    relist: 'auctionBulkRelistPanel',
+};
 window.toggleAuctionBulkPanel = function(which, forceClose) {
-    const times = document.getElementById('auctionBulkTimesPanel');
-    const event = document.getElementById('auctionBulkEventPanel');
-    if (!times || !event) return;
-    const target = which === 'times' ? times : event;
-    const other  = which === 'times' ? event : times;
-    other.style.display = 'none';
+    const target = document.getElementById(AUCTION_BULK_PANELS[which]);
+    if (!target) return;
+    Object.values(AUCTION_BULK_PANELS).forEach(id => {
+        const p = document.getElementById(id);
+        if (p && p !== target) p.style.display = 'none';
+    });
     if (forceClose) { target.style.display = 'none'; return; }
     const opening = target.style.display === 'none';
     target.style.display = opening ? '' : 'none';
-    if (opening) {
-        const ids = [...document.querySelectorAll('.auction-select-cb:checked')].map(cb => parseInt(cb.value));
-        if (which === 'times') {
-            document.getElementById('bulkAuctionCount').textContent = ids.length;
-        } else {
-            document.getElementById('assignEventAuctionIds').value = JSON.stringify(ids);
-            document.getElementById('bulkAssignInfo').innerHTML = ids.length
-                ? 'Adding <strong>' + ids.length + ' vehicle(s)</strong> to an event.'
-                : 'No vehicles selected.';
-        }
+    if (!opening) return;
+    const boxes = selectedAuctionBoxes();
+    const ids   = boxes.map(cb => parseInt(cb.value));
+    if (which === 'times') {
+        document.getElementById('bulkAuctionCount').textContent = ids.length;
+    } else if (which === 'event') {
+        document.getElementById('assignEventAuctionIds').value = JSON.stringify(ids);
+        document.getElementById('bulkAssignInfo').innerHTML = ids.length
+            ? 'Adding <strong>' + ids.length + ' vehicle(s)</strong> to an event.'
+            : 'No vehicles selected.';
+    } else if (which === 'sold') {
+        fillBulkSoldRows(boxes);
+    } else if (which === 'relist') {
+        const sold = boxes.filter(cb => cb.dataset.sold === '1').length;
+        document.getElementById('bulkRelistResult').innerHTML = '';
+        document.getElementById('bulkRelistInfo').innerHTML =
+            '<strong>' + (ids.length - sold) + ' lot(s)</strong> will be relisted' +
+            (sold ? ' (' + sold + ' sold lot(s) skipped).' : '.');
     }
 };
 
@@ -7906,6 +8345,210 @@ async function submitAssignEvent() {
         if (data.success) setTimeout(() => location.reload(), 1200);
     } catch { setMsg(false, 'Error assigning to event.'); }
 }
+
+// ── Sales: mark sold / undo / bulk sold / relist / export / delete ──
+function selectedAuctionBoxes() {
+    return [...document.querySelectorAll('.auction-select-cb:checked')];
+}
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function randFmt(n) {
+    // Same shape as PHP formatRand(): R153,000.00
+    return 'R' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+async function postApi(fields) {
+    const fd = new FormData();
+    Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+    const res = await fetch('api.php', {method: 'POST', body: fd});
+    return res.json();
+}
+
+// Status dropdown: "Sold" opens the sale popup instead of saving with no price
+window.onAuctionStatusChange = function(id, sel) {
+    if (sel.value === 'sold') {
+        const card = document.getElementById('auction-row-' + id);
+        const cb   = card ? card.querySelector('.auction-select-cb') : null;
+        sel.value  = sel.dataset.prev || 'closed';
+        openMarkSoldModal(id, {name: cb ? cb.dataset.name : '', top: cb ? parseFloat(cb.dataset.top) : 0});
+        return;
+    }
+    if (sel.dataset.prev === 'sold' &&
+        !confirm('Changing the status removes the sale (final price, date and buyer). Continue?')) {
+        sel.value = 'sold';
+        return;
+    }
+    updateAuctionStatus(id, sel.value, sel);
+    sel.dataset.prev = sel.value;
+};
+
+window.openMarkSoldModal = function(id, info) {
+    info = info || {};
+    const editing = (info.price || 0) > 0;
+    document.getElementById('markSoldAuctionId').value = id;
+    document.getElementById('markSoldVehicleName').textContent = (info.name || '') + '  (Lot #' + id + ')';
+    document.getElementById('markSoldTitle').textContent = editing ? 'Edit Sale' : 'Mark as Sold';
+    document.getElementById('markSoldPrice').value = editing ? info.price : (info.top > 0 ? info.top : '');
+    document.getElementById('markSoldTopHint').textContent = info.top > 0
+        ? 'Top bid on this lot: ' + randFmt(info.top) : 'No bids on this lot. Enter the agreed price.';
+    document.getElementById('markSoldDate').value = info.date || new Date().toISOString().slice(0, 10);
+    document.getElementById('markSoldBuyerSearch').value = info.buyer || '';
+    document.getElementById('markSoldBuyerId').value = '';
+    document.getElementById('markSoldBuyerHint').textContent = 'Not linked to a bidder account.';
+    openModal('markSoldModal');
+    setTimeout(() => document.getElementById('markSoldPrice').focus(), 50);
+};
+
+// Buyer box: suggests registered bidders; anything typed counts as a walk-in name
+(function() {
+    const input = document.getElementById('markSoldBuyerSearch');
+    const drop  = document.getElementById('markSoldBuyerDropdown');
+    if (!input) return;
+    let timer;
+    input.addEventListener('input', function() {
+        document.getElementById('markSoldBuyerId').value = '';
+        document.getElementById('markSoldBuyerHint').textContent = 'Not linked to a bidder account.';
+        clearTimeout(timer);
+        const q = this.value.trim();
+        if (q.length < 2) { drop.style.display = 'none'; return; }
+        timer = setTimeout(() => {
+            fetch('api.php?action=search_bidders&q=' + encodeURIComponent(q))
+                .then(r => r.json()).then(d => {
+                    if (!d.success || !d.users || !d.users.length) { drop.style.display = 'none'; return; }
+                    drop.innerHTML = d.users.map(u =>
+                        `<div class="autocomplete-item" data-id="${u.id}" data-name="${escHtml(u.full_name)}" data-num="${escHtml(u.bidder_number || '')}">
+                            <strong>${escHtml(u.full_name)}</strong>
+                            <small class="text-muted">${u.bidder_number ? ' · ' + escHtml(u.bidder_number) : ''} · ${escHtml(u.email)}</small>
+                        </div>`).join('');
+                    drop.style.display = 'block';
+                });
+        }, 300);
+    });
+    drop.addEventListener('click', e => {
+        const item = e.target.closest('.autocomplete-item');
+        if (!item) return;
+        input.value = item.dataset.name;
+        document.getElementById('markSoldBuyerId').value = item.dataset.id;
+        document.getElementById('markSoldBuyerHint').textContent =
+            'Linked to bidder account' + (item.dataset.num ? ' ' + item.dataset.num : '') + '.';
+        drop.style.display = 'none';
+    });
+    document.addEventListener('click', e => {
+        if (!input.contains(e.target) && !drop.contains(e.target)) drop.style.display = 'none';
+    });
+})();
+
+window.submitMarkSold = async function() {
+    const id    = document.getElementById('markSoldAuctionId').value;
+    const price = parseFloat(document.getElementById('markSoldPrice').value);
+    if (!(price > 0)) { showToast('Enter the final selling price.', 'error'); return; }
+    const btn = document.getElementById('markSoldSubmit');
+    btn.disabled = true;
+    try {
+        const data = await postApi({
+            action: 'mark_sold', auction_id: id, final_price: price,
+            sold_date: document.getElementById('markSoldDate').value,
+            buyer_user_id: document.getElementById('markSoldBuyerId').value,
+            buyer_name: document.getElementById('markSoldBuyerSearch').value.trim(),
+        });
+        showToast(data.message, data.success ? 'success' : 'error');
+        if (data.success) { closeModal('markSoldModal'); setTimeout(() => location.reload(), 900); }
+    } catch { showToast('Error saving the sale.', 'error'); }
+    finally { btn.disabled = false; }
+};
+
+window.undoSold = async function(id, name) {
+    if (!confirm('Remove the sale for "' + name + '"?\n\nThe final price, sold date and buyer are cleared and the lot goes back to Closed (unsold).')) return;
+    try {
+        const data = await postApi({action: 'undo_sold', auction_id: id});
+        showToast(data.message, data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => location.reload(), 900);
+    } catch { showToast('Error removing the sale.', 'error'); }
+};
+
+function fillBulkSoldRows(boxes) {
+    const rows  = boxes.filter(cb => cb.dataset.sold !== '1');
+    const tbody = document.getElementById('bulkSoldRows');
+    document.getElementById('bulkSoldResult').innerHTML = rows.length < boxes.length
+        ? `<div class="alert alert-info" style="margin-bottom:.75rem;">${boxes.length - rows.length} lot(s) already sold, left out.</div>` : '';
+    tbody.innerHTML = rows.length ? rows.map(cb => {
+        const top = parseFloat(cb.dataset.top) || 0;
+        return `<tr>
+            <td>#${cb.value}</td>
+            <td>${escHtml(cb.dataset.name)}${top ? `<br><small class="text-muted">Top bid ${randFmt(top)}</small>` : '<br><small style="color:#b26a00">No bids</small>'}</td>
+            <td><input type="number" class="form-control bulk-sold-price" data-id="${cb.value}" min="1" step="0.01" value="${top > 0 ? top : ''}"></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="3" class="text-muted">No unsold lots selected.</td></tr>';
+    tbody.querySelectorAll('.bulk-sold-price').forEach(i => i.addEventListener('input', updateBulkSoldTotal));
+    updateBulkSoldTotal();
+}
+function updateBulkSoldTotal() {
+    const total = [...document.querySelectorAll('.bulk-sold-price')].reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+    document.getElementById('bulkSoldTotal').textContent = randFmt(total);
+}
+
+window.submitBulkMarkSold = async function() {
+    const inputs = [...document.querySelectorAll('.bulk-sold-price')];
+    const result = document.getElementById('bulkSoldResult');
+    if (!inputs.length) return;
+    const missing = inputs.filter(i => !(parseFloat(i.value) > 0));
+    if (missing.length) {
+        missing.forEach(i => i.style.borderColor = '#c8102e');
+        result.innerHTML = `<div class="alert alert-error" style="margin-bottom:.75rem;">Enter a price for every lot (${missing.length} missing).</div>`;
+        return;
+    }
+    const items = inputs.map(i => ({id: parseInt(i.dataset.id), price: parseFloat(i.value)}));
+    if (!confirm(`Mark ${items.length} lot(s) as sold for a total of ${document.getElementById('bulkSoldTotal').textContent}?`)) return;
+    try {
+        const data = await postApi({action: 'bulk_mark_sold', items: JSON.stringify(items)});
+        result.innerHTML = `<div class="alert alert-${data.success ? 'success' : 'error'}" style="margin-bottom:.75rem;">${escHtml(data.message)}</div>`;
+        if (data.success) setTimeout(() => location.reload(), 1200);
+    } catch { result.innerHTML = '<div class="alert alert-error">Error saving the sales.</div>'; }
+};
+
+window.submitBulkRelist = async function() {
+    const ids    = selectedAuctionBoxes().filter(cb => cb.dataset.sold !== '1').map(cb => parseInt(cb.value));
+    const result = document.getElementById('bulkRelistResult');
+    const start  = document.getElementById('bulkRelistStart').value;
+    const end    = document.getElementById('bulkRelistEnd').value;
+    const say = (ok, msg) => result.innerHTML = `<div class="alert alert-${ok ? 'success' : 'error'}" style="margin-bottom:.75rem;">${escHtml(msg)}</div>`;
+    if (!ids.length) { say(false, 'No unsold lots selected.'); return; }
+    if (!start || !end) { say(false, 'Set both a start and an end time.'); return; }
+    if (end <= start) { say(false, 'End time must be after start time.'); return; }
+    if (!confirm(`Relist ${ids.length} lot(s)?\n\nTheir old bids are cleared (a copy is kept in the change log) and prices reset to the starting price.`)) return;
+    try {
+        const data = await postApi({
+            action: 'bulk_relist', auction_ids: JSON.stringify(ids),
+            start_time: start.replace('T', ' ') + ':00', end_time: end.replace('T', ' ') + ':00',
+        });
+        say(!!data.success, data.message);
+        if (data.success) setTimeout(() => location.reload(), 1400);
+    } catch { say(false, 'Error relisting lots.'); }
+};
+
+window.exportSelectedAuctions = function() {
+    const ids = selectedAuctionBoxes().map(cb => cb.value);
+    if (!ids.length) { showToast('Select at least one lot.', 'error'); return; }
+    window.location.href = 'api.php?action=export_auctions_csv&ids=' + ids.join(',');
+};
+
+window.bulkDeleteAuctions = async function() {
+    const boxes = selectedAuctionBoxes();
+    if (!boxes.length) return;
+    const sold = boxes.filter(cb => cb.dataset.sold === '1').length;
+    let msg = `Permanently delete ${boxes.length} lot(s), with all their bids and photos?`;
+    if (sold) msg += `\n\n${sold} of them are SOLD — their sale records will be lost too.`;
+    if (!confirm(msg)) return;
+    if (prompt(`Type DELETE to confirm deleting ${boxes.length} lot(s):`) !== 'DELETE') {
+        showToast('Delete cancelled.', 'info');
+        return;
+    }
+    try {
+        const data = await postApi({action: 'bulk_delete_auctions', auction_ids: JSON.stringify(boxes.map(cb => parseInt(cb.value)))});
+        showToast(data.message, data.success ? 'success' : 'error');
+        if (data.success) setTimeout(() => location.reload(), 1000);
+    } catch { showToast('Error deleting lots.', 'error'); }
+};
 
 // ── Assign Winner ────────────────────────────────────────────
 window.openAssignWinnerModal = function(auctionId, name) {

@@ -163,6 +163,73 @@ function rateLimit(string $key, int $maxRequests, int $windowSec): void {
     file_put_contents($file, json_encode($data), LOCK_EX);
 }
 
+// ── Admin change log ──────────────────────────────────────────
+// Writes one row to admin_activity_log (ahg_admin_activity_log.sql).
+// Returns false instead of throwing when the table is missing, so
+// ordinary actions keep working on a server where the SQL hasn't run;
+// pass $required = true to make the caller fail instead.
+function logAdminAction(array $admin, string $action, ?int $auctionId, array $details = [], bool $required = false): bool {
+    global $pdo;
+    try {
+        $name = null;
+        if ($auctionId) {
+            $s = $pdo->prepare("SELECT item_name FROM auctions WHERE id = ?");
+            $s->execute([$auctionId]);
+            $name = $s->fetchColumn() ?: null;
+        }
+        $pdo->prepare("
+            INSERT INTO admin_activity_log (admin_id, admin_name, action, auction_id, item_name, details)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ")->execute([
+            $admin['sub'] ?? null, $admin['full_name'] ?? null, $action, $auctionId, $name,
+            $details ? json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+        ]);
+        return true;
+    } catch (PDOException $e) {
+        error_log('[AHG] logAdminAction: ' . $e->getMessage());
+        if ($required) throw $e;
+        return false;
+    }
+}
+
+// IDs posted as a JSON array → unique positive ints (max 500 per request)
+function postedIds(string $field = 'auction_ids'): array {
+    $ids = json_decode($_POST[$field] ?? '[]', true);
+    if (!is_array($ids)) return [];
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0)));
+    return array_slice($ids, 0, 500);
+}
+
+// Delete a lot with its bids, gallery rows and any local image files
+function deleteAuctionFully(int $auctionId): void {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT file_path FROM auction_gallery WHERE auction_id = ?");
+    $stmt->execute([$auctionId]);
+    $galleryFiles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $stmt = $pdo->prepare("SELECT image_url FROM auctions WHERE id = ?");
+    $stmt->execute([$auctionId]);
+    $primaryImage = $stmt->fetchColumn();
+
+    $pdo->prepare("DELETE FROM bids            WHERE auction_id = ?")->execute([$auctionId]);
+    $pdo->prepare("DELETE FROM auction_gallery WHERE auction_id = ?")->execute([$auctionId]);
+    $pdo->prepare("DELETE FROM auctions        WHERE id = ?")->execute([$auctionId]);
+
+    foreach (array_merge($galleryFiles, [$primaryImage]) as $path) {
+        if ($path && !preg_match('#^https?://#i', $path) && file_exists(__DIR__ . '/' . ltrim($path, '/'))) {
+            @unlink(__DIR__ . '/' . ltrim($path, '/'));
+        }
+    }
+}
+
+// Highest bid on a lot (old and new bid columns), 0 when none
+function topBidAmount(int $auctionId): float {
+    global $pdo;
+    $s = $pdo->prepare("SELECT COALESCE(MAX(COALESCE(bid_amount, amount)), 0) FROM bids WHERE auction_id = ?");
+    $s->execute([$auctionId]);
+    return (float)$s->fetchColumn();
+}
+
 // ── Route ─────────────────────────────────────────────────────
 
 switch ($action) {
@@ -731,27 +798,8 @@ switch ($action) {
         $auctionId = (int)($_POST['auction_id'] ?? 0);
         if (!$auctionId) fail('Missing auction ID.');
 
-        // Fetch gallery image paths to delete files
-        $stmt = $pdo->prepare("SELECT file_path FROM auction_gallery WHERE auction_id = ?");
-        $stmt->execute([$auctionId]);
-        $galleryFiles = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-        // Fetch primary image
-        $stmt = $pdo->prepare("SELECT image_url FROM auctions WHERE id = ?");
-        $stmt->execute([$auctionId]);
-        $primaryImage = $stmt->fetchColumn();
-
-        // Delete DB records
-        $pdo->prepare("DELETE FROM bids          WHERE auction_id = ?")->execute([$auctionId]);
-        $pdo->prepare("DELETE FROM auction_gallery WHERE auction_id = ?")->execute([$auctionId]);
-        $pdo->prepare("DELETE FROM auctions       WHERE id = ?")->execute([$auctionId]);
-
-        // Delete physical files
-        foreach (array_merge($galleryFiles, [$primaryImage]) as $path) {
-            if ($path && file_exists(__DIR__ . '/' . ltrim($path, '/'))) {
-                @unlink(__DIR__ . '/' . ltrim($path, '/'));
-            }
-        }
+        logAdminAction($user, 'delete', $auctionId, ['bids' => (int)$pdo->query("SELECT COUNT(*) FROM bids WHERE auction_id = $auctionId")->fetchColumn()]);
+        deleteAuctionFully($auctionId);
 
         ok(['message' => 'Auction and all associated data deleted successfully.']);
     }
@@ -770,12 +818,13 @@ switch ($action) {
         if ($status === 'closed') {
             closeAuction($auctionId);
         } elseif ($status === 'sold') {
-            $pdo->prepare("UPDATE auctions SET status = 'closed', is_sold = 1, sold_date = COALESCE(sold_date, NOW()) WHERE id = ?")
+            $pdo->prepare("UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1 WHERE id = ?")
                 ->execute([$auctionId]);
         } else {
             $pdo->prepare("UPDATE auctions SET status = ?, is_sold = 0, sold_date = NULL WHERE id = ?")
                 ->execute([$status, $auctionId]);
         }
+        logAdminAction($user, 'status', $auctionId, ['status' => $status]);
 
         ok(['message' => 'Auction status updated to "' . $status . '".']);
     }
@@ -1850,7 +1899,7 @@ switch ($action) {
             SELECT DATE_FORMAT(COALESCE(sold_date, updated_at), '%Y-%m') AS month,
                    SUM(COALESCE(final_price, current_price, 0)) AS revenue
             FROM auctions
-            WHERE status = 'closed'
+            WHERE is_sold = 1
               AND COALESCE(sold_date, updated_at) >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
             GROUP BY month ORDER BY month ASC
         ")->fetchAll();
@@ -2460,7 +2509,7 @@ switch ($action) {
     }
 
     case 'bulk_update_auction_status': {
-        adminOnly();
+        $admin = adminOnly();
         $idsJson = $_POST['auction_ids'] ?? '[]';
         $ids = json_decode($idsJson, true);
         if (empty($ids) || !is_array($ids)) fail('No auctions selected.');
@@ -2472,7 +2521,7 @@ switch ($action) {
 
         if ($status === 'sold') {
             $params = array_map('intval', $ids);
-            $pdo->prepare("UPDATE auctions SET status = 'closed', is_sold = 1, sold_date = COALESCE(sold_date, NOW()) WHERE id IN ($placeholders)")->execute($params);
+            $pdo->prepare("UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1 WHERE id IN ($placeholders)")->execute($params);
         } elseif ($status === 'closed') {
             $params = array_merge(['closed'], array_map('intval', $ids));
             $pdo->prepare("UPDATE auctions SET status = ? WHERE id IN ($placeholders)")->execute($params);
@@ -2485,6 +2534,7 @@ switch ($action) {
         }
 
         $count = count($ids);
+        foreach ($ids as $id) logAdminAction($admin, 'status', (int)$id, ['status' => $status, 'bulk' => true]);
         ok(['message' => "Status changed to '$status' for $count auction(s)."]);
     }
 
@@ -2533,7 +2583,7 @@ switch ($action) {
 // ════════════════════════════════════════════════════════════
 
     case 'assign_winner': {
-        adminOnly();
+        $admin = adminOnly();
         $auctionId  = (int)($_POST['auction_id'] ?? 0);
         $userId     = (int)($_POST['user_id'] ?? 0);
         $finalPrice = (float)($_POST['final_price'] ?? 0);
@@ -2554,8 +2604,9 @@ switch ($action) {
         if (!$winner) fail('User not found.');
 
         // Mark auction as sold
-        $pdo->prepare("UPDATE auctions SET status = 'closed', is_sold = 1, sold_to_user_id = ?, final_price = ? WHERE id = ?")
-            ->execute([$userId, $finalPrice, $auctionId]);
+        $pdo->prepare("UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1, sold_to_user_id = ?, sold_to = ?, final_price = ? WHERE id = ?")
+            ->execute([$userId, $winner['full_name'], $finalPrice, $auctionId]);
+        logAdminAction($admin, 'mark_sold', $auctionId, ['final_price' => $finalPrice, 'buyer' => $winner['full_name'], 'buyer_user_id' => $userId, 'via' => 'assign_winner']);
 
         ok(['message' => "Winner assigned: {$winner['full_name']} for {$auction['item_name']} at R" . number_format($finalPrice, 2) . "."]);
     }
@@ -3321,6 +3372,252 @@ switch ($action) {
         $pdo->prepare("DELETE FROM newsletter_subscribers WHERE id=?")->execute([$id]);
         ok('Subscriber removed.');
         break;
+    }
+
+// ════════════════════════════════════════════════════════════
+// SALES — mark sold / undo / bulk / relist / delete / export (admin)
+// ════════════════════════════════════════════════════════════
+
+    // One lot: record (or correct) the sale with its final price
+    case 'mark_sold': {
+        $admin     = adminOnly();
+        $auctionId = (int)($_POST['auction_id'] ?? 0);
+        $price     = round((float)($_POST['final_price'] ?? 0), 2);
+        $dateIn    = trim($_POST['sold_date'] ?? '');
+        $buyerId   = (int)($_POST['buyer_user_id'] ?? 0) ?: null;
+        $buyerName = mb_substr(trim(strip_tags($_POST['buyer_name'] ?? '')), 0, 255);
+
+        if (!$auctionId)  fail('Missing auction ID.');
+        if ($price <= 0)  fail('Enter the final selling price.');
+
+        $soldDate = date('Y-m-d H:i:s');
+        if ($dateIn !== '') {
+            $d = DateTime::createFromFormat('Y-m-d', $dateIn);
+            if (!$d || $d->format('Y-m-d') !== $dateIn) fail('Invalid sold date.');
+            if ($dateIn > date('Y-m-d')) fail('Sold date cannot be in the future.');
+            if ($dateIn !== date('Y-m-d')) $soldDate = $dateIn . ' 12:00:00';
+        }
+
+        $s = $pdo->prepare("SELECT id, item_name, is_sold, final_price, sold_to FROM auctions WHERE id = ?");
+        $s->execute([$auctionId]);
+        $lot = $s->fetch();
+        if (!$lot) fail('Auction not found.');
+
+        if ($buyerId) {
+            $u = $pdo->prepare("SELECT full_name FROM users WHERE id = ?");
+            $u->execute([$buyerId]);
+            $uName = $u->fetchColumn();
+            if ($uName === false) fail('Selected buyer not found.');
+            if ($buyerName === '') $buyerName = $uName;
+        }
+
+        $pdo->prepare("
+            UPDATE auctions SET status = 'closed', is_sold = 1, final_price = ?, sold_date = ?,
+                   sold_to = ?, sold_to_user_id = ?
+            WHERE id = ?
+        ")->execute([$price, $soldDate, $buyerName !== '' ? $buyerName : null, $buyerId, $auctionId]);
+
+        $wasSold = (int)$lot['is_sold'] === 1;
+        logAdminAction($admin, $wasSold ? 'edit_sale' : 'mark_sold', $auctionId, array_filter([
+            'final_price'     => $price,
+            'previous_price'  => $wasSold ? (float)$lot['final_price'] : null,
+            'sold_date'       => substr($soldDate, 0, 10),
+            'buyer'           => $buyerName ?: null,
+            'buyer_user_id'   => $buyerId,
+        ], fn($v) => $v !== null));
+
+        ok(['message' => ($wasSold ? 'Sale updated: ' : 'Marked sold: ') . $lot['item_name'] . ' for ' . formatRand($price) . '.']);
+    }
+
+    // One lot: take the sale back off (lot stays closed)
+    case 'undo_sold': {
+        $admin     = adminOnly();
+        $auctionId = (int)($_POST['auction_id'] ?? 0);
+        if (!$auctionId) fail('Missing auction ID.');
+
+        $s = $pdo->prepare("SELECT item_name, is_sold, final_price, sold_date, sold_to FROM auctions WHERE id = ?");
+        $s->execute([$auctionId]);
+        $lot = $s->fetch();
+        if (!$lot) fail('Auction not found.');
+        if (!(int)$lot['is_sold']) fail('This lot is not marked as sold.');
+
+        $pdo->prepare("
+            UPDATE auctions SET is_sold = 0, final_price = NULL, sold_date = NULL, sold_to = NULL, sold_to_user_id = NULL
+            WHERE id = ?
+        ")->execute([$auctionId]);
+        logAdminAction($admin, 'undo_sold', $auctionId, [
+            'previous_price' => (float)$lot['final_price'],
+            'previous_date'  => $lot['sold_date'],
+            'previous_buyer' => $lot['sold_to'],
+        ]);
+
+        ok(['message' => 'Sale removed: ' . $lot['item_name'] . ' is back to Closed (unsold).']);
+    }
+
+    // Many lots: [{id, price}, …] — every price is checked before anything is saved
+    case 'bulk_mark_sold': {
+        $admin = adminOnly();
+        $items = json_decode($_POST['items'] ?? '[]', true);
+        if (!is_array($items) || !$items) fail('No lots selected.');
+        if (count($items) > 500) fail('Too many lots in one go (max 500).');
+
+        $clean = [];
+        foreach ($items as $it) {
+            $id    = (int)($it['id'] ?? 0);
+            $price = round((float)($it['price'] ?? 0), 2);
+            if ($id <= 0) continue;
+            if ($price <= 0) fail('Every lot needs a final price above R0 (lot #' . $id . ').');
+            $clean[$id] = $price;
+        }
+        if (!$clean) fail('No lots selected.');
+
+        $upd = $pdo->prepare("
+            UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1, final_price = ?
+            WHERE id = ?
+        ");
+        $pdo->beginTransaction();
+        try {
+            foreach ($clean as $id => $price) {
+                $upd->execute([$price, $id]);
+                logAdminAction($admin, 'mark_sold', $id, ['final_price' => $price, 'bulk' => true]);
+            }
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            fail('Could not save the sales: ' . $e->getMessage());
+        }
+        $n = count($clean);
+        ok(['message' => "$n lot(s) marked sold, total " . formatRand(array_sum($clean)) . '.']);
+    }
+
+    // Many lots: put unsold lots back up for auction with new times.
+    // Old bids are copied into the change log, then cleared, so the lot
+    // starts fresh at its starting price. Refused if the log can't be written.
+    case 'bulk_relist': {
+        $admin = adminOnly();
+        $ids   = postedIds();
+        $start = trim($_POST['start_time'] ?? '');
+        $end   = trim($_POST['end_time'] ?? '');
+        if (!$ids) fail('No lots selected.');
+        if (!strtotime($start) || !strtotime($end)) fail('Set both a start and an end time.');
+        if (strtotime($end) <= strtotime($start)) fail('End time must be after start time.');
+        $start  = date('Y-m-d H:i:s', strtotime($start));
+        $end    = date('Y-m-d H:i:s', strtotime($end));
+        $status = strtotime($start) <= time() ? 'active' : 'upcoming';
+
+        $in  = implode(',', array_fill(0, count($ids), '?'));
+        $sel = $pdo->prepare("SELECT id FROM auctions WHERE id IN ($in) AND is_sold = 0");
+        $sel->execute($ids);
+        $unsold = array_map('intval', $sel->fetchAll(PDO::FETCH_COLUMN));
+        $skipped = count($ids) - count($unsold);
+        if (!$unsold) fail('All selected lots are sold — undo the sale first to relist them.');
+
+        $bidsQ = $pdo->prepare("
+            SELECT bidder_number, bidder_name, user_id, COALESCE(bid_amount, amount) AS amount,
+                   COALESCE(bid_time, created_at) AS at
+            FROM bids WHERE auction_id = ? ORDER BY id
+        ");
+        $pdo->beginTransaction();
+        try {
+            foreach ($unsold as $id) {
+                $bidsQ->execute([$id]);
+                $bids = $bidsQ->fetchAll();
+                logAdminAction($admin, 'relist', $id, ['start' => $start, 'end' => $end, 'cleared_bids' => $bids], true);
+                $pdo->prepare("DELETE FROM bids WHERE auction_id = ?")->execute([$id]);
+                $pdo->prepare("
+                    UPDATE auctions SET status = ?, start_time = ?, end_time = ?, current_price = start_price,
+                           is_sold = 0, final_price = NULL, sold_date = NULL, sold_to = NULL, sold_to_user_id = NULL
+                    WHERE id = ?
+                ")->execute([$status, $start, $end, $id]);
+            }
+            $pdo->commit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            if (str_contains($e->getMessage(), 'admin_activity_log')) {
+                fail('Relist needs the change-log table first: run ahg_admin_activity_log.sql in phpMyAdmin.');
+            }
+            fail('Relist failed: ' . $e->getMessage());
+        }
+        $msg = count($unsold) . ' lot(s) relisted as ' . ($status === 'active' ? 'Live' : 'Upcoming') . '.';
+        if ($skipped) $msg .= " $skipped sold lot(s) skipped.";
+        ok(['message' => $msg]);
+    }
+
+    case 'bulk_delete_auctions': {
+        $admin = adminOnly();
+        $ids   = postedIds();
+        if (!$ids) fail('No lots selected.');
+        foreach ($ids as $id) {
+            $bidCount = $pdo->prepare("SELECT COUNT(*) FROM bids WHERE auction_id = ?");
+            $bidCount->execute([$id]);
+            logAdminAction($admin, 'delete', $id, ['bids' => (int)$bidCount->fetchColumn(), 'bulk' => true]);
+            deleteAuctionFully($id);
+        }
+        ok(['message' => count($ids) . ' lot(s) deleted.']);
+    }
+
+    // CSV download. ids=1,2,3 for a selection, else filter=all|sold|… plus
+    // optional from/to (sold date, Y-m-d) for the sales report.
+    case 'export_auctions_csv': {
+        adminOnly();
+        $where  = [];
+        $params = [];
+        $ids = array_filter(array_map('intval', explode(',', $_GET['ids'] ?? '')));
+        if ($ids) {
+            $ids = array_slice(array_values(array_unique($ids)), 0, 2000);
+            $where[] = 'a.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';
+            $params  = $ids;
+        } else {
+            $filter = $_GET['filter'] ?? 'all';
+            if ($filter === 'sold') {
+                $where[] = 'a.is_sold = 1';
+                foreach (['from' => '>=', 'to' => '<='] as $k => $op) {
+                    $v = $_GET[$k] ?? '';
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+                        $where[]  = "DATE(a.sold_date) $op ?";
+                        $params[] = $v;
+                    }
+                }
+            } elseif (in_array($filter, ['active', 'upcoming'], true)) {
+                $where[] = 'a.status = ? AND a.is_sold = 0';
+                $params[] = $filter;
+            } elseif ($filter === 'closed') {
+                $where[] = "a.status = 'closed' AND a.is_sold = 0";
+            }
+        }
+        $sql = "
+            SELECT a.id, a.item_name, m.name AS make, a.year, a.mileage, a.vin_number,
+                   a.condition_grade, a.status, a.is_sold, a.start_price, a.reserve_price,
+                   a.current_price, a.final_price, a.sold_date, a.sold_to,
+                   a.start_time, a.end_time,
+                   (SELECT COUNT(*) FROM bids b WHERE b.auction_id = a.id) AS bid_count
+            FROM auctions a LEFT JOIN makes m ON m.id = a.make_id
+            " . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . "
+            ORDER BY a.id";
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+
+        ob_end_clean();
+        $fname = 'ahg-lots-' . (($_GET['filter'] ?? '') === 'sold' ? 'sales-' : '') . date('Y-m-d') . '.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $fname . '"');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF"); // Excel reads UTF-8 correctly with a BOM
+        fputcsv($out, ['Lot ID', 'Vehicle', 'Make', 'Year', 'Mileage', 'VIN', 'DEKRA Grade', 'Status',
+                       'Sold', 'Start Price', 'Reserve', 'Highest Bid', 'Final Price', 'Sold Date', 'Buyer',
+                       'Start Time', 'End Time', 'Bids', 'Link']);
+        while ($r = $st->fetch()) {
+            fputcsv($out, [
+                $r['id'], $r['item_name'], $r['make'], $r['year'], $r['mileage'], $r['vin_number'],
+                $r['condition_grade'], $r['status'], $r['is_sold'] ? 'Yes' : 'No',
+                $r['start_price'], $r['reserve_price'], $r['current_price'],
+                $r['is_sold'] ? $r['final_price'] : '', $r['is_sold'] ? $r['sold_date'] : '',
+                $r['is_sold'] ? $r['sold_to'] : '', $r['start_time'], $r['end_time'], $r['bid_count'],
+                CANONICAL_URL . '/auction.php?id=' . $r['id'],
+            ]);
+        }
+        fclose($out);
+        exit;
     }
 
 // ════════════════════════════════════════════════════════════
