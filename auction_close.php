@@ -7,6 +7,11 @@
 // Requires: config.php (already loaded before this file)
 // ============================================================
 
+// A lot whose end time passed longer ago than this is closed WITHOUT being
+// sold: no "you won" email weeks late. It shows under Admin → Auctions →
+// Needs attention, where staff sell or relist it by hand.
+const AHG_AUTO_SELL_MAX_DAYS = 3;
+
 /**
  * Close an auction: mark as sold, create purchase request, notify winner.
  * Safe to call multiple times — idempotent on already-closed auctions.
@@ -16,7 +21,7 @@ function closeAuction(int $auctionId): void {
 
     // Get auction + winning bid in one query
     $stmt = $pdo->prepare("
-        SELECT a.id, a.item_name, a.status, a.is_sold,
+        SELECT a.id, a.item_name, a.status, a.is_sold, a.end_time,
                a.current_price, a.reserve_price, a.start_price,
                b.user_id AS winner_id,
                COALESCE(b.bid_amount, b.amount) AS winning_amount,
@@ -34,6 +39,13 @@ function closeAuction(int $auctionId): void {
     $winnerId     = $auction['winner_id'] ? (int)$auction['winner_id'] : null;
     $winningAmt   = $auction['winning_amount'] ? (float)$auction['winning_amount'] : null;
     $reserveMet   = $winningAmt && $winningAmt >= (float)$auction['reserve_price'];
+    $isStale      = !empty($auction['end_time'])
+                    && strtotime($auction['end_time']) < time() - AHG_AUTO_SELL_MAX_DAYS * 86400;
+    if ($winnerId && $reserveMet && $isStale) {
+        error_log("[AHG] closeAuction #$auctionId: ended {$auction['end_time']}, over "
+            . AHG_AUTO_SELL_MAX_DAYS . " days ago — closed unsold for staff to review");
+        $reserveMet = false;   // close it, but don't sell or email
+    }
 
     // Close the auction
     $pdo->prepare("

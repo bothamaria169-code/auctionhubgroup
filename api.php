@@ -99,6 +99,7 @@ function rateLimit(string $key, int $maxRequests, int $windowSec): void {
 // pass $required = true to make the caller fail instead.
 function logAdminAction(array $admin, string $action, ?int $auctionId, array $details = [], bool $required = false): bool {
     global $pdo;
+    ahgSchemaReady(); // creates admin_activity_log on first use
     try {
         $name = null;
         if ($auctionId) {

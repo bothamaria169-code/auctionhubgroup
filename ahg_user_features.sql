@@ -1,8 +1,9 @@
 -- ============================================================
 -- AUCTION HUB GROUP — ahg_user_features.sql
 -- Watchlist, in-site alerts, email preferences, saved searches.
--- Safe to run more than once. Run in phpMyAdmin on production
--- BEFORE uploading the new PHP files.
+-- Safe to run more than once. NOT NEEDED ANY MORE: db_schema.php
+-- creates these tables on first use. Kept for reference / manual use;
+-- keep it in step with db_schema.php.
 -- ============================================================
 
 -- Lots a user is watching (♥ Watch)

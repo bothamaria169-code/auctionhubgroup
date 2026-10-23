@@ -2,26 +2,15 @@
 // ============================================================
 // AUCTION HUB GROUP — user_features.php
 // Watchlist, in-site alerts (bell), email preferences and saved
-// searches. Tables come from ahg_user_features.sql; every function
-// here is a no-op (or returns empty) until that SQL has been run,
-// so pages keep working on a server where it hasn't.
+// searches. Tables are created on first use by db_schema.php; if that
+// fails (no CREATE permission), every function here is a no-op, so
+// pages keep working.
 // Requires: config.php (already loaded before this file)
 // ============================================================
 
-/** True once ahg_user_features.sql has been run (checked once per request) */
+/** True once the feature tables exist (db_schema.php creates them on first use) */
 function ufReady(): bool {
-    global $pdo;
-    static $ready = null;
-    if ($ready === null) {
-        try {
-            $pdo->query("SELECT 1 FROM user_notifications LIMIT 0");
-            $pdo->query("SELECT 1 FROM watchlist LIMIT 0");
-            $ready = true;
-        } catch (PDOException $e) {
-            $ready = false;
-        }
-    }
-    return $ready;
+    return ahgSchemaReady();
 }
 
 // ── Alerts (bell) ─────────────────────────────────────────────

@@ -26,13 +26,20 @@ if (PHP_SAPI === 'cli') {
 
 // ── Secrets ──────────────────────────────────────────────────
 // Passwords and API keys live in config.secrets.php (git-ignored, never
-// committed). Copy config.secrets.example.php to create it.
-if (!is_file(__DIR__ . '/config.secrets.php')) {
+// committed). Copy config.secrets.example.php to create it. On the live
+// server keep it one folder ABOVE public_html: the web can't reach it and
+// a git deploy never touches it. Next to this file works too (local dev).
+$_secretsFile = null;
+foreach ([dirname(__DIR__) . '/config.secrets.php', __DIR__ . '/config.secrets.php'] as $_f) {
+    if (is_file($_f)) { $_secretsFile = $_f; break; }
+}
+if (!$_secretsFile) {
     die('<h2 style="font-family:sans-serif;color:#c00;padding:2rem">
-          Missing config.secrets.php. Copy config.secrets.example.php and fill it in.
+          Missing config.secrets.php. Put it in the folder above the website
+          (or next to config.php) — copy config.secrets.example.php and fill it in.
          </h2>');
 }
-$_secrets = require __DIR__ . '/config.secrets.php';
+$_secrets = require $_secretsFile;
 $_dbSecrets = $_secrets[$_isLocalDev ? 'local' : 'production'];
 
 // ── Database ─────────────────────────────────────────────────
@@ -285,7 +292,8 @@ define('PEXELS_API_KEY', $_secrets['PEXELS_API_KEY']);
 
 // ── Helper Functions ──────────────────────────────────────────
 
-// Watchlist, alerts, email preferences, saved searches (functions only)
+// Oct 2026 tables (create themselves on first use) + bidder features
+require_once __DIR__ . '/db_schema.php';
 require_once __DIR__ . '/user_features.php';
 
 /**

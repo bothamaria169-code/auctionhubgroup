@@ -2,10 +2,8 @@
 -- AUCTION HUB GROUP — ahg_admin_activity_log.sql
 -- Change log for admin actions (mark sold, undo sold, price
 -- changes, relist, delete). Safe to run more than once.
--- Run in phpMyAdmin on production BEFORE uploading the new
--- api.php / admin_dashboard.php. Without it, the dashboard still
--- works, but nothing is logged and "Relist" is refused (relist
--- stores the cleared bids here first).
+-- NOT NEEDED ANY MORE: db_schema.php creates this table on first use.
+-- Kept for reference / manual use; keep it in step with db_schema.php.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS admin_activity_log (

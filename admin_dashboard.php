@@ -121,6 +121,7 @@ if ($activeTab === 'overview') {
         'month_from'  => $mStart,
         'month_label' => date('F Y'),
     ];
+    ahgSchemaReady(); // creates admin_activity_log on first use
     try {
         $activityRows = $pdo->query("
             SELECT admin_name, action, auction_id, item_name, details, created_at
