@@ -66,6 +66,18 @@ const AHG_SCHEMA_TABLES = [
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 ];
 
+// Columns added to existing tables (table => [column => ALTER statement])
+const AHG_SCHEMA_COLUMNS = [
+    'auctions' => [
+        // How a sale happened: online / live / floor / pre_auction / private
+        'sale_channel' => "ALTER TABLE auctions ADD COLUMN sale_channel VARCHAR(20) NULL AFTER sold_date",
+    ],
+    'users' => [
+        // Bidders registered by staff for floor/live auctions: no login, no emails
+        'is_floor_bidder' => "ALTER TABLE users ADD COLUMN is_floor_bidder TINYINT(1) NOT NULL DEFAULT 0",
+    ],
+];
+
 /**
  * True when every table above exists, creating any that are missing.
  * Checked once per request; returns false (and logs why) if the database
@@ -86,6 +98,17 @@ function ahgSchemaReady(): bool {
         foreach ($missing as $table) {
             $pdo->exec(AHG_SCHEMA_TABLES[$table]);
             error_log("[AHG] db_schema: created table $table");
+        }
+        $cols = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
+                               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+        foreach (AHG_SCHEMA_COLUMNS as $table => $columns) {
+            foreach ($columns as $column => $alter) {
+                $cols->execute([$table, $column]);
+                if (!$cols->fetchColumn()) {
+                    $pdo->exec($alter);
+                    error_log("[AHG] db_schema: added column $table.$column");
+                }
+            }
         }
         $ready = true;
     } catch (PDOException $e) {

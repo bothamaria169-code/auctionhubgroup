@@ -64,6 +64,9 @@ $flash = getFlash();
 
 // ── DATA QUERIES ──────────────────────────────────────────────
 
+// New tables/columns (db_schema.php) exist before any query below uses them
+ahgSchemaReady();
+
 // --- Overview stats ---
 $stats = [];
 
@@ -170,6 +173,9 @@ function describeAdminActivity(string $action, ?string $detailsJson): string {
             return 'Saved AI-edited photo as ' . (($d['mode'] ?? '') === 'main' ? 'main photo' : 'gallery photo');
         case 'ai_settings':
             return 'xAI key ' . ($d['key'] ?? 'changed');
+        case 'floor_bidder':
+            return (!empty($d['created']) ? 'Added floor bidder ' : 'Edited floor bidder ') . ($d['name'] ?? '')
+                 . (!empty($d['bidder_number']) ? ' (' . $d['bidder_number'] . ')' : '');
     }
     return ucfirst(str_replace('_', ' ', $action));
 }
@@ -287,7 +293,7 @@ $aOffset = ($auctionPage - 1) * $auctionPer;
 $aStmt = $pdo->prepare("
     SELECT a.id, a.item_name, a.year, a.status, a.current_price,
            a.reserve_price, a.start_time, a.end_time, a.start_price,
-           a.image_url, a.is_sold, a.final_price, a.sold_date, a.sold_to,
+           a.image_url, a.is_sold, a.final_price, a.sold_date, a.sold_to, a.sale_channel,
            m.name AS make_name,
            COUNT(b.id) AS bid_count,
            MAX(COALESCE(b.bid_amount, b.amount)) AS top_bid
@@ -577,13 +583,52 @@ require_once 'header.php';
 </style>
 
 <?php
-  $tabLabels = [
-    'overview'=>'Overview','pop'=>'POP Approvals','auctions'=>'Auctions',
-    'events'=>'Events','users'=>'Users','email'=>'Email','import'=>'CSV Import',
-    'analytics'=>'Analytics','manual_bid'=>'Manual Bid','banking'=>'Banking Details',
-    'testimonials'=>'Testimonials','team'=>'Meet the Team','news'=>'News &amp; Reviews',
-    'newsletter'=>'Newsletter','notifications'=>'Notifications','refunds'=>'Refunds',
+  // Admin menu, grouped. Both the desktop sidebar and the phone menu are
+  // rendered from this one list. [tab or url, label, icon, badge count]
+  $adminNav = [
+    'Dashboard' => [
+      ['overview',   'Overview',   'fa-th-large',   0],
+      ['analytics',  'Analytics',  'fa-chart-line', 0],
+    ],
+    'Sales & Auctions' => [
+      ['auctions',   'Auctions',              'fa-car',                0],
+      ['events',     'Events',                'fa-calendar-alt',       0],
+      ['manual_bid', 'Manual Bids & Floor',   'fa-gavel',              0],
+      ['ai',         'AI Photos',             'fa-wand-magic-sparkles', 0],
+      ['import',     'CSV Import',            'fa-file-csv',           0],
+      ['url:manage_auction.php',                'Add Vehicle',  'fa-plus-circle', 0],
+      ['url:invoice_generator.php?tab=builder', 'Deal Builder', 'fa-magic',       0],
+    ],
+    'Bidders & Payments' => [
+      ['pop',        'POP Approvals',   'fa-file-invoice', (int)$stats['pending_pops']],
+      ['users',      'Users',           'fa-users',        0],
+      ['refunds',    'Refunds',         'fa-rotate-left',  (int)$stats['pending_refunds']],
+      ['banking',    'Banking Details', 'fa-university',   0],
+    ],
+    'Marketing & Content' => [
+      ['email',         'Email',             'fa-envelope',           0],
+      ['newsletter',    'Newsletter',        'fa-envelope-open-text', 0],
+      ['notifications', 'Notifications',     'fa-bell',               0],
+      ['news',          'News &amp; Reviews', 'fa-newspaper',         0],
+      ['testimonials',  'Testimonials',      'fa-star',               0],
+      ['team',          'Meet the Team',     'fa-users',              0],
+    ],
+    'People' => [
+      ['careers', 'Job Applications', 'fa-user-tie', 0],
+      ['workers', 'Workers',          'fa-id-badge', 0],
+    ],
   ];
+  $tabLabels = [];
+  foreach ($adminNav as $items) foreach ($items as [$t, $l]) if (strpos($t, 'url:') !== 0) $tabLabels[$t] = $l;
+  /** One admin menu link (sidebar or phone menu) */
+  $navLink = function (array $item, string $cls) use ($activeTab): string {
+      [$t, $label, $icon, $badge] = $item;
+      $isUrl = strpos($t, 'url:') === 0;
+      $href  = $isUrl ? substr($t, 4) : '?tab=' . $t;
+      $on    = !$isUrl && $activeTab === $t ? ' active' : '';
+      $b     = $badge > 0 ? ' <span class="sidebar-badge sidebar-badge-danger">' . $badge . '</span>' : '';
+      return '<a href="' . htmlspecialchars($href) . '" class="' . $cls . $on . '"><i class="fas ' . $icon . '"></i><span>' . $label . '</span>' . $b . '</a>';
+  };
 ?>
 
 <!-- ── Mobile admin nav (fixed, outside all wrappers, shown ≤900px) ── -->
@@ -600,27 +645,11 @@ require_once 'header.php';
     <i class="fas fa-chevron-down admin-mnav-arrow" aria-hidden="true"></i>
   </button>
   <nav class="admin-mnav-panel" id="adminNavPanel" hidden aria-label="Admin sections">
-    <a href="?tab=overview"      class="admin-mnav-link <?= $activeTab==='overview'      ?'active':'' ?>"><i class="fas fa-th-large"></i><span>Overview</span></a>
-    <a href="?tab=pop"           class="admin-mnav-link <?= $activeTab==='pop'           ?'active':'' ?>"><i class="fas fa-file-invoice"></i><span>POP Approvals<?= $stats['pending_pops']>0?' ('.$stats['pending_pops'].')':'' ?></span></a>
-    <a href="?tab=auctions"      class="admin-mnav-link <?= $activeTab==='auctions'      ?'active':'' ?>"><i class="fas fa-car"></i><span>Auctions</span></a>
-    <a href="?tab=events"        class="admin-mnav-link <?= $activeTab==='events'        ?'active':'' ?>"><i class="fas fa-calendar-alt"></i><span>Events</span></a>
-    <a href="?tab=users"         class="admin-mnav-link <?= $activeTab==='users'         ?'active':'' ?>"><i class="fas fa-users"></i><span>Users</span></a>
-    <a href="?tab=email"         class="admin-mnav-link <?= $activeTab==='email'         ?'active':'' ?>"><i class="fas fa-envelope"></i><span>Email</span></a>
-    <a href="?tab=import"        class="admin-mnav-link <?= $activeTab==='import'        ?'active':'' ?>"><i class="fas fa-file-csv"></i><span>CSV Import</span></a>
-    <a href="?tab=analytics"     class="admin-mnav-link <?= $activeTab==='analytics'     ?'active':'' ?>"><i class="fas fa-chart-line"></i><span>Analytics</span></a>
-    <a href="?tab=manual_bid"    class="admin-mnav-link <?= $activeTab==='manual_bid'    ?'active':'' ?>"><i class="fas fa-gavel"></i><span>Manual Bid</span></a>
-    <a href="?tab=banking"       class="admin-mnav-link <?= $activeTab==='banking'       ?'active':'' ?>"><i class="fas fa-university"></i><span>Banking Details</span></a>
-    <a href="?tab=testimonials"  class="admin-mnav-link <?= $activeTab==='testimonials'  ?'active':'' ?>"><i class="fas fa-star"></i><span>Testimonials</span></a>
-    <a href="?tab=team"          class="admin-mnav-link <?= $activeTab==='team'          ?'active':'' ?>"><i class="fas fa-users"></i><span>Meet the Team</span></a>
-    <a href="?tab=news"          class="admin-mnav-link <?= $activeTab==='news'          ?'active':'' ?>"><i class="fas fa-newspaper"></i><span>News &amp; Reviews</span></a>
-    <a href="?tab=newsletter"    class="admin-mnav-link <?= $activeTab==='newsletter'    ?'active':'' ?>"><i class="fas fa-envelope-open-text"></i><span>Newsletter</span></a>
-    <a href="?tab=notifications" class="admin-mnav-link <?= $activeTab==='notifications' ?'active':'' ?>"><i class="fas fa-bell"></i><span>Notifications</span></a>
-    <a href="?tab=careers"       class="admin-mnav-link <?= $activeTab==='careers'       ?'active':'' ?>"><i class="fas fa-user-tie"></i><span>Job Applications</span></a>
-    <a href="?tab=workers"       class="admin-mnav-link <?= $activeTab==='workers'       ?'active':'' ?>"><i class="fas fa-id-badge"></i><span>Workers</span></a>
-    <a href="?tab=refunds"       class="admin-mnav-link <?= $activeTab==='refunds'       ?'active':'' ?>"><i class="fas fa-rotate-left"></i><span>Refunds<?= $stats['pending_refunds']>0?' ('.$stats['pending_refunds'].')':'' ?></span></a>
-    <a href="?tab=ai"            class="admin-mnav-link <?= $activeTab==='ai'            ?'active':'' ?>"><i class="fas fa-wand-magic-sparkles"></i><span>AI Photos</span></a>
-    <a href="invoice_generator.php?tab=builder" class="admin-mnav-link"><i class="fas fa-magic"></i><span>Deal Builder</span></a>
-    <a href="manage_auction.php"  class="admin-mnav-link"><i class="fas fa-plus-circle"></i><span>Add Vehicle</span></a>
+    <?php foreach ($adminNav as $group => $items): ?>
+      <div class="admin-mnav-group"><?= e($group) ?></div>
+      <?php foreach ($items as $item) echo $navLink($item, 'admin-mnav-link'); ?>
+    <?php endforeach; ?>
+    <div class="admin-mnav-group">Site</div>
     <a href="sold_vehicles.php"   class="admin-mnav-link" target="_blank"><i class="fas fa-tag"></i><span>Sold Vehicles</span></a>
     <a href="index.php"           class="admin-mnav-link" target="_blank"><i class="fas fa-external-link-alt"></i><span>View Site</span></a>
     <a href="#" class="admin-mnav-link admin-mnav-logout" onclick="openModal('logoutModal');return false;"><i class="fas fa-sign-out-alt"></i><span>Log Out</span></a>
@@ -639,76 +668,12 @@ require_once 'header.php';
       <span>Admin Panel</span>
     </div>
     <nav class="sidebar-nav">
-      <a href="?tab=overview"  class="sidebar-link <?= $activeTab==='overview'  ? 'active':'' ?>">
-        <i class="fas fa-th-large"></i> Overview
-      </a>
-      <a href="?tab=pop"       class="sidebar-link <?= $activeTab==='pop'       ? 'active':'' ?>">
-        <i class="fas fa-file-invoice"></i> POP Approvals
-        <?php if ($stats['pending_pops'] > 0): ?>
-          <span class="sidebar-badge sidebar-badge-danger"><?= $stats['pending_pops'] ?></span>
-        <?php endif; ?>
-      </a>
-      <a href="?tab=auctions"  class="sidebar-link <?= $activeTab==='auctions'  ? 'active':'' ?>">
-        <i class="fas fa-car"></i> Auctions
-      </a>
-      <a href="?tab=events"    class="sidebar-link <?= $activeTab==='events'    ? 'active':'' ?>">
-        <i class="fas fa-calendar-alt"></i> Events
-      </a>
-      <a href="?tab=users"     class="sidebar-link <?= $activeTab==='users'     ? 'active':'' ?>">
-        <i class="fas fa-users"></i> Users
-      </a>
-      <a href="?tab=email"     class="sidebar-link <?= $activeTab==='email'     ? 'active':'' ?>">
-        <i class="fas fa-envelope"></i> Email
-      </a>
-      <a href="?tab=import"      class="sidebar-link <?= $activeTab==='import'      ? 'active':'' ?>">
-        <i class="fas fa-file-csv"></i> CSV Import
-      </a>
-      <a href="?tab=analytics"   class="sidebar-link <?= $activeTab==='analytics'   ? 'active':'' ?>">
-        <i class="fas fa-chart-line"></i> Analytics
-      </a>
-      <a href="?tab=manual_bid"  class="sidebar-link <?= $activeTab==='manual_bid'  ? 'active':'' ?>">
-        <i class="fas fa-gavel"></i> Manual Bid
-      </a>
-      <a href="?tab=banking"     class="sidebar-link <?= $activeTab==='banking'     ? 'active':'' ?>">
-        <i class="fas fa-university"></i> Banking Details
-      </a>
-      <a href="?tab=testimonials" class="sidebar-link <?= $activeTab==='testimonials' ? 'active':'' ?>">
-        <i class="fas fa-star"></i> Testimonials
-      </a>
-      <a href="?tab=team" class="sidebar-link <?= $activeTab==='team' ? 'active':'' ?>">
-        <i class="fas fa-users"></i> Meet the Team
-      </a>
-      <a href="?tab=news" class="sidebar-link <?= $activeTab==='news' ? 'active':'' ?>">
-        <i class="fas fa-newspaper"></i> News &amp; Reviews
-      </a>
-      <a href="?tab=newsletter" class="sidebar-link <?= $activeTab==='newsletter' ? 'active':'' ?>">
-        <i class="fas fa-envelope-open-text"></i> Newsletter
-      </a>
-      <a href="?tab=notifications" class="sidebar-link <?= $activeTab==='notifications' ? 'active':'' ?>">
-        <i class="fas fa-bell"></i> Notifications
-      </a>
-      <a href="?tab=careers" class="sidebar-link <?= $activeTab==='careers' ? 'active':'' ?>">
-        <i class="fas fa-user-tie"></i> Job Applications
-      </a>
-      <a href="?tab=workers" class="sidebar-link <?= $activeTab==='workers' ? 'active':'' ?>">
-        <i class="fas fa-id-badge"></i> Workers
-      </a>
-      <a href="?tab=refunds" class="sidebar-link <?= $activeTab==='refunds' ? 'active':'' ?>">
-        <i class="fas fa-rotate-left"></i> Refunds
-        <?php if ($stats['pending_refunds'] > 0): ?>
-          <span class="sidebar-badge sidebar-badge-danger"><?= $stats['pending_refunds'] ?></span>
-        <?php endif; ?>
-      </a>
-      <a href="?tab=ai" class="sidebar-link <?= $activeTab==='ai' ? 'active':'' ?>">
-        <i class="fas fa-wand-magic-sparkles"></i> AI Photos
-      </a>
-      <a href="invoice_generator.php?tab=builder" class="sidebar-link">
-        <i class="fas fa-magic"></i> Deal Builder
-      </a>
+      <?php foreach ($adminNav as $group => $items):
+          $groupOn = in_array($activeTab, array_column($items, 0), true); ?>
+        <div class="sidebar-group<?= $groupOn ? ' active' : '' ?>"><?= e($group) ?></div>
+        <?php foreach ($items as $item) echo $navLink($item, 'sidebar-link'); ?>
+      <?php endforeach; ?>
       <hr class="sidebar-divider">
-      <a href="manage_auction.php" class="sidebar-link">
-        <i class="fas fa-plus-circle"></i> Add Vehicle
-      </a>
       <a href="sold_vehicles.php" class="sidebar-link" target="_blank">
         <i class="fas fa-tag"></i> Sold Vehicles
       </a>
@@ -1323,6 +1288,13 @@ require_once 'header.php';
         </table>
       </div>
       <p style="margin:.75rem 0 0;font-weight:700;color:#003f73;">Total: <span id="bulkSoldTotal">R0.00</span></p>
+      <div class="form-group" style="margin:.75rem 0 0;max-width:280px;">
+        <label>Sold at</label>
+        <select id="bulkSoldChannel" class="form-control">
+          <option value="">— Leave as is —</option>
+          <?php foreach (SALE_CHANNELS as $k => $label): ?><option value="<?= e($k) ?>"><?= e($label) ?></option><?php endforeach; ?>
+        </select>
+      </div>
       <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
         <button type="button" class="btn btn-sold" onclick="submitBulkMarkSold()">
           <i class="fas fa-check"></i> Save Sales
@@ -1624,6 +1596,12 @@ require_once 'header.php';
             <span class="lbl"><i class="fas fa-circle-check"></i> Sold<?= $a['sold_date'] ? ' ' . safeDate('d M Y', $a['sold_date']) : '' ?></span>
             <span class="val"><?= (float)$a['final_price'] > 0 ? formatRand($a['final_price']) : '<span style="color:#b26a00">No price!</span>' ?></span>
           </div>
+          <?php if (!empty($a['sale_channel']) && isset(SALE_CHANNELS[$a['sale_channel']])): ?>
+          <div class="av-card-row">
+            <span class="lbl">Sold at</span>
+            <span class="val" style="font-size:.8rem;"><?= e(SALE_CHANNELS[$a['sale_channel']]) ?></span>
+          </div>
+          <?php endif; ?>
           <?php if ($a['sold_to']): ?>
           <div class="av-card-row">
             <span class="lbl">Buyer</span>
@@ -1671,6 +1649,7 @@ require_once 'header.php';
               'date'  => $a['sold_date'] ? substr($a['sold_date'], 0, 10) : '',
               'buyer' => $a['sold_to'] ?? '',
               'sold'  => (int)$a['is_sold'],
+              'channel' => $a['sale_channel'] ?? '',
           ], JSON_HEX_APOS | JSON_HEX_QUOT)); ?>
           <div class="av-sale-actions">
             <?php if ($a['is_sold']): ?>
@@ -2482,12 +2461,147 @@ require_once 'header.php';
 ═══════════════════════════════════════════════════════════════ -->
 <?php elseif ($activeTab === 'manual_bid'): ?>
 
+    <?php
+    // Floor / phone bidders: accounts staff run for people who bid at floor or live auctions
+    $fbSearch = trim($_GET['fbsearch'] ?? '');
+    $fbSql = "SELECT u.id, u.full_name, u.phone, u.email, u.id_number, u.bidder_number, u.created_at,
+                     (SELECT COUNT(*) FROM bids b WHERE b.user_id = u.id) AS bid_count,
+                     (SELECT COUNT(*) FROM auctions a WHERE a.is_sold = 1 AND a.sold_to_user_id = u.id) AS win_count
+              FROM users u WHERE u.is_floor_bidder = 1";
+    $fbParams = [];
+    if ($fbSearch !== '') {
+        $fbSql .= " AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.id_number LIKE ? OR u.bidder_number LIKE ?)";
+        $fbParams = array_fill(0, 5, "%$fbSearch%");
+    }
+    $fbStmt = $pdo->prepare($fbSql . " ORDER BY u.id DESC LIMIT 200");
+    $fbStmt->execute($fbParams);
+    $floorBidders = $fbStmt->fetchAll();
+    ?>
     <div class="dashboard-header">
       <div>
-        <h1><i class="fas fa-gavel"></i> Manual Bid Placement</h1>
-        <p class="text-muted">Place a bid on behalf of a verified bidder</p>
+        <h1><i class="fas fa-gavel"></i> Manual Bids &amp; Floor Bidders</h1>
+        <p class="text-muted">Bid for customers at floor or live auctions and over the phone. Floor bidders can't log in; only staff bid for them here.</p>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="openFloorBidder()">
+        <i class="fas fa-user-plus"></i> Add floor bidder
+      </button>
+    </div>
+
+    <!-- Floor / phone bidders -->
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-header flex-between" style="flex-wrap:wrap;gap:.75rem;">
+        <h3 style="margin:0"><i class="fas fa-people-group"></i> Floor &amp; phone bidders <span class="av-tab-count"><?= count($floorBidders) ?></span></h3>
+        <form method="get" style="display:flex;gap:.4rem;">
+          <input type="hidden" name="tab" value="manual_bid">
+          <input type="text" name="fbsearch" value="<?= e($fbSearch) ?>" class="form-control" placeholder="Name, cellphone, email, ID or bidder no." style="min-width:240px;">
+          <button class="btn btn-outline btn-sm" type="submit"><i class="fas fa-search"></i></button>
+          <?php if ($fbSearch !== ''): ?><a class="btn btn-outline btn-sm" href="?tab=manual_bid">Clear</a><?php endif; ?>
+        </form>
+      </div>
+      <?php if (!$floorBidders): ?>
+        <p class="text-muted" style="margin:0;">
+          <?= $fbSearch !== '' ? 'No floor bidders match that search.' : 'No floor bidders yet. Use <strong>Add floor bidder</strong> for each person who registers at a floor or live auction.' ?>
+        </p>
+      <?php else: ?>
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead><tr><th>Bidder no.</th><th>Name</th><th>Cellphone</th><th>Email</th><th>ID / passport</th><th>Bids</th><th>Wins</th><th></th></tr></thead>
+          <tbody>
+          <?php foreach ($floorBidders as $fb):
+              $fbData = ['id' => (int)$fb['id'], 'full_name' => $fb['full_name'], 'phone' => $fb['phone'] ?? '',
+                         'email' => displayEmail($fb['email']), 'id_number' => $fb['id_number'] ?? '', 'bidder_number' => $fb['bidder_number'] ?? '']; ?>
+            <tr>
+              <td><span class="badge badge-verified-bidder"><?= e($fb['bidder_number'] ?: '—') ?></span></td>
+              <td><strong><?= e($fb['full_name']) ?></strong></td>
+              <td><?= $fb['phone'] ? '<a href="tel:' . e(preg_replace('/[^\d+]/', '', $fb['phone'])) . '">' . e($fb['phone']) . '</a>' : '—' ?></td>
+              <td><?= displayEmail($fb['email']) !== '' ? e($fb['email']) : '<span class="text-muted">—</span>' ?></td>
+              <td><?= e($fb['id_number'] ?: '—') ?></td>
+              <td><?= (int)$fb['bid_count'] ?></td>
+              <td><?= (int)$fb['win_count'] ?></td>
+              <td style="white-space:nowrap;">
+                <button type="button" class="btn btn-outline btn-sm" onclick='openFloorBidder(<?= e(json_encode($fbData, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)'><i class="fas fa-pen"></i> Edit</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick='bidForFloorBidder(<?= e(json_encode($fbData, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)'><i class="fas fa-gavel"></i> Bid</button>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php endif; ?>
+    </div>
+
+    <!-- Add / edit floor bidder -->
+    <div id="floorBidderModal" class="modal-overlay" style="display:none">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3><i class="fas fa-user-plus"></i> <span id="fbTitle">Add floor bidder</span></h3>
+          <button class="modal-close" onclick="closeModal('floorBidderModal')">×</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="fbId">
+          <div class="form-group"><label>Full name <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="fbName" class="form-control" maxlength="100" autocomplete="off"></div>
+          <div class="grid-2" style="gap:.75rem;">
+            <div class="form-group"><label>Cellphone <span style="color:var(--danger)">*</span></label>
+              <input type="tel" id="fbPhone" class="form-control" placeholder="082 123 4567" autocomplete="off"></div>
+            <div class="form-group"><label>Email <small class="text-muted">(optional)</small></label>
+              <input type="email" id="fbEmail" class="form-control" autocomplete="off"></div>
+          </div>
+          <div class="grid-2" style="gap:.75rem;">
+            <div class="form-group"><label>SA ID / passport no. <small class="text-muted">(optional)</small></label>
+              <input type="text" id="fbIdNo" class="form-control" maxlength="20" autocomplete="off"></div>
+            <div class="form-group"><label>Bidder / paddle no.</label>
+              <input type="text" id="fbNumber" class="form-control" maxlength="20" placeholder="Auto: next AHG number" autocomplete="off"></div>
+          </div>
+          <small class="text-muted">Floor bidders are verified straight away, never get emails, and can't log in. Their bids are placed below by staff.</small>
+          <div id="fbError" class="alert alert-error" style="display:none;margin:.75rem 0 0;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeModal('floorBidderModal')">Cancel</button>
+          <button class="btn btn-primary" id="fbSave" onclick="saveFloorBidder()"><i class="fas fa-save"></i> Save</button>
+        </div>
       </div>
     </div>
+    <script>
+    window.openFloorBidder = function (fb) {
+        fb = fb || {};
+        document.getElementById('fbTitle').textContent = fb.id ? 'Edit floor bidder' : 'Add floor bidder';
+        document.getElementById('fbId').value     = fb.id || '';
+        document.getElementById('fbName').value   = fb.full_name || '';
+        document.getElementById('fbPhone').value  = fb.phone || '';
+        document.getElementById('fbEmail').value  = fb.email || '';
+        document.getElementById('fbIdNo').value   = fb.id_number || '';
+        document.getElementById('fbNumber').value = fb.bidder_number || '';
+        document.getElementById('fbError').style.display = 'none';
+        openModal('floorBidderModal');
+        setTimeout(() => document.getElementById('fbName').focus(), 50);
+    };
+    window.saveFloorBidder = async function () {
+        const err = document.getElementById('fbError'), btn = document.getElementById('fbSave');
+        const fd = new FormData();
+        fd.append('action', 'floor_bidder_save');
+        fd.append('id', document.getElementById('fbId').value);
+        fd.append('full_name', document.getElementById('fbName').value.trim());
+        fd.append('phone', document.getElementById('fbPhone').value.trim());
+        fd.append('email', document.getElementById('fbEmail').value.trim());
+        fd.append('id_number', document.getElementById('fbIdNo').value.trim());
+        fd.append('bidder_number', document.getElementById('fbNumber').value.trim());
+        btn.disabled = true; err.style.display = 'none';
+        try {
+            const d = await (await fetch('api.php', {method: 'POST', body: fd})).json();
+            if (!d.success) { err.textContent = d.message; err.style.display = ''; return; }
+            showToast(d.message, 'success');
+            setTimeout(() => location.reload(), 700);
+        } catch { err.textContent = 'Could not save. Please try again.'; err.style.display = ''; }
+        finally { btn.disabled = false; }
+    };
+    // "Bid" on a row: pick that bidder in the form below and jump to it
+    window.bidForFloorBidder = function (fb) {
+        selectBidder(fb.id, fb.full_name, fb.phone || '', fb.bidder_number || '');
+        document.getElementById('auctionSearch').scrollIntoView({behavior: 'smooth', block: 'center'});
+        setTimeout(() => document.getElementById('auctionSearch').focus(), 400);
+    };
+    </script>
 
     <div class="grid-2" style="align-items:start">
 
@@ -2532,7 +2646,7 @@ require_once 'header.php';
 
         <div class="alert alert-info" style="margin-bottom:1rem">
           <i class="fas fa-info-circle"></i>
-          This bid will be recorded under the selected bidder's account. The bidder will receive an email confirmation. All admin-placed bids are logged for audit purposes.
+          This bid will be recorded under the selected bidder's account. Online bidders get an email confirmation; floor bidders don't. All admin-placed bids are logged for audit purposes.
         </div>
 
         <button class="btn btn-primary" id="submitManualBidBtn" onclick="submitManualBid()">
@@ -6241,9 +6355,18 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
         <input type="number" id="markSoldPrice" class="form-control" min="1" step="0.01" placeholder="e.g. 185000">
         <small class="text-muted" id="markSoldTopHint"></small>
       </div>
-      <div class="form-group">
-        <label>Sold Date</label>
-        <input type="date" id="markSoldDate" class="form-control" max="<?= date('Y-m-d') ?>">
+      <div class="grid-2" style="gap:.75rem;">
+        <div class="form-group">
+          <label>Sold Date</label>
+          <input type="date" id="markSoldDate" class="form-control" max="<?= date('Y-m-d') ?>">
+        </div>
+        <div class="form-group">
+          <label>Sold at</label>
+          <select id="markSoldChannel" class="form-control">
+            <option value="">— Not recorded —</option>
+            <?php foreach (SALE_CHANNELS as $k => $label): ?><option value="<?= e($k) ?>"><?= e($label) ?></option><?php endforeach; ?>
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <label>Buyer <small class="text-muted">(optional)</small></label>
@@ -6252,6 +6375,7 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
         <input type="hidden" id="markSoldBuyerId">
         <small class="text-muted" id="markSoldBuyerHint">Not linked to a bidder account.</small>
       </div>
+      <div id="markSoldError" class="alert alert-error" style="display:none;margin:0;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('markSoldModal')">Cancel</button>
@@ -7592,10 +7716,15 @@ function updateBulkCount(group){
             fetch(`api.php?action=search_bidders&q=${encodeURIComponent(q)}`)
                 .then(r=>r.json()).then(d=>{
                     if(!d.success||!d.users.length){ bDrop.innerHTML='<div class="autocomplete-item text-muted">No verified bidders found.</div>'; bDrop.style.display='block'; return; }
-                    bDrop.innerHTML = d.users.map(u=>`<div class="autocomplete-item" onclick="selectBidder(${u.id},'${u.full_name.replace(/'/g,"\\'")}','${u.email}','${u.bidder_number||''}')">
-                        <strong>${u.full_name}</strong>
-                        <small class="text-muted"> ${u.bidder_number?'· '+u.bidder_number:''} · ${u.email}</small>
+                    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                    bDrop.innerHTML = d.users.map((u, i) => `<div class="autocomplete-item" data-i="${i}">
+                        <strong>${esc(u.full_name)}</strong>${u.floor == 1 ? ' <span class="floor-badge">Floor</span>' : ''}
+                        <small class="text-muted"> ${u.bidder_number ? '· ' + esc(u.bidder_number) : ''}${u.phone ? ' · ' + esc(u.phone) : ''}${u.email ? ' · ' + esc(u.email) : ''}</small>
                     </div>`).join('');
+                    bDrop.querySelectorAll('.autocomplete-item').forEach(el => el.addEventListener('click', () => {
+                        const u = d.users[el.dataset.i];
+                        selectBidder(u.id, u.full_name, u.email || u.phone || '', u.bidder_number || '');
+                    }));
                     bDrop.style.display='block';
                 });
         },300);
@@ -7606,7 +7735,8 @@ function updateBulkCount(group){
         document.getElementById('selectedBidderId').value = id;
         bInput.value = name;
         bDrop.style.display='none';
-        bPrev.innerHTML = `<span class="badge badge-verified-bidder">${num||'No #'}</span> <strong>${name}</strong> <small class="text-muted">${email}</small>`;
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        bPrev.innerHTML = `<span class="badge badge-verified-bidder">${esc(num||'No #')}</span> <strong>${esc(name)}</strong> <small class="text-muted">${esc(email)}</small>`;
         bPrev.style.display='block';
     };
 
@@ -8669,6 +8799,8 @@ window.openMarkSoldModal = function(id, info) {
     document.getElementById('markSoldBuyerSearch').value = info.buyer || '';
     document.getElementById('markSoldBuyerId').value = '';
     document.getElementById('markSoldBuyerHint').textContent = 'Not linked to a bidder account.';
+    document.getElementById('markSoldChannel').value = info.channel || '';
+    document.getElementById('markSoldError').style.display = 'none';
     openModal('markSoldModal');
     setTimeout(() => document.getElementById('markSoldPrice').focus(), 50);
 };
@@ -8691,8 +8823,8 @@ window.openMarkSoldModal = function(id, info) {
                     if (!d.success || !d.users || !d.users.length) { drop.style.display = 'none'; return; }
                     drop.innerHTML = d.users.map(u =>
                         `<div class="autocomplete-item" data-id="${u.id}" data-name="${escHtml(u.full_name)}" data-num="${escHtml(u.bidder_number || '')}">
-                            <strong>${escHtml(u.full_name)}</strong>
-                            <small class="text-muted">${u.bidder_number ? ' · ' + escHtml(u.bidder_number) : ''} · ${escHtml(u.email)}</small>
+                            <strong>${escHtml(u.full_name)}</strong>${u.floor == 1 ? ' <span class="floor-badge">Floor</span>' : ''}
+                            <small class="text-muted">${u.bidder_number ? ' · ' + escHtml(u.bidder_number) : ''}${u.phone ? ' · ' + escHtml(u.phone) : ''}${u.email ? ' · ' + escHtml(u.email) : ''}</small>
                         </div>`).join('');
                     drop.style.display = 'block';
                 });
@@ -8716,19 +8848,33 @@ window.submitMarkSold = async function() {
     const id    = document.getElementById('markSoldAuctionId').value;
     const price = parseFloat(document.getElementById('markSoldPrice').value);
     const editing = document.getElementById('markSoldModal').dataset.editing === '1';
-    if (!(price > 0) && !editing) { showToast('Enter the final selling price.', 'error'); return; }
+    const errBox = document.getElementById('markSoldError');
+    const showErr = msg => { errBox.textContent = msg; errBox.style.display = ''; };
+    errBox.style.display = 'none';
+    if (!(price > 0) && !editing) { showErr('Enter the final selling price.'); return; }
     const btn = document.getElementById('markSoldSubmit');
     btn.disabled = true;
     try {
-        const data = await postApi({
-            action: 'mark_sold', auction_id: id, final_price: price,
-            sold_date: document.getElementById('markSoldDate').value,
-            buyer_user_id: document.getElementById('markSoldBuyerId').value,
-            buyer_name: document.getElementById('markSoldBuyerSearch').value.trim(),
-        });
-        showToast(data.message, data.success ? 'success' : 'error');
-        if (data.success) { closeModal('markSoldModal'); setTimeout(() => location.reload(), 900); }
-    } catch { showToast('Error saving the sale.', 'error'); }
+        const res = await fetch('api.php', {method: 'POST', body: (() => {
+            const fd = new FormData();
+            Object.entries({
+                action: 'mark_sold', auction_id: id, final_price: price > 0 ? price : '',
+                sold_date: document.getElementById('markSoldDate').value,
+                sale_channel: document.getElementById('markSoldChannel').value,
+                buyer_user_id: document.getElementById('markSoldBuyerId').value,
+                buyer_name: document.getElementById('markSoldBuyerSearch').value.trim(),
+            }).forEach(([k, v]) => fd.append(k, v));
+            return fd;
+        })()});
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); }
+        catch { showErr('The server answered unexpectedly (HTTP ' + res.status + '). Please send a screenshot of this: ' + text.slice(0, 160)); return; }
+        if (!data.success) { showErr(data.message || 'Could not save the sale.'); return; }
+        showToast(data.message, 'success');
+        closeModal('markSoldModal');
+        setTimeout(() => location.reload(), 900);
+    } catch (e) { showErr('Could not reach the server: ' + e.message); }
     finally { btn.disabled = false; }
 };
 
@@ -8793,7 +8939,8 @@ window.submitBulkMarkSold = async function() {
     const items = inputs.map(i => ({id: parseInt(i.dataset.id), price: parseFloat(i.value)}));
     if (!confirm(`Mark ${items.length} lot(s) as sold for a total of ${document.getElementById('bulkSoldTotal').textContent}?`)) return;
     try {
-        const data = await postApi({action: 'bulk_mark_sold', items: JSON.stringify(items)});
+        const data = await postApi({action: 'bulk_mark_sold', items: JSON.stringify(items),
+                                    sale_channel: document.getElementById('bulkSoldChannel').value});
         result.innerHTML = `<div class="alert alert-${data.success ? 'success' : 'error'}" style="margin-bottom:.75rem;">${escHtml(data.message)}</div>`;
         if (data.success) setTimeout(() => location.reload(), 1200);
     } catch { result.innerHTML = '<div class="alert alert-error">Error saving the sales.</div>'; }

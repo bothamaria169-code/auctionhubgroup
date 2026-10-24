@@ -418,7 +418,8 @@ switch ($action) {
                         'New highest bid ' . formatRand($amount) . ' (yours was ' . formatRand((float)$outbidUser['bid_amount']) . ').',
                         'auction.php?id=' . $auctionId);
                 }
-                if ($outbidUser && wantsEmail((int)$outbidUser['user_id'], 'outbid')) {
+                if ($outbidUser && wantsEmail((int)$outbidUser['user_id'], 'outbid')
+                    && canEmailUser((int)$outbidUser['user_id'], $outbidUser['email'])) {
                     sendOutbidAlertEmail([
                         'user_id'          => (int)$outbidUser['user_id'],
                         'email'            => $outbidUser['email'],
@@ -1705,7 +1706,7 @@ switch ($action) {
                 $bidCount->execute([$auctionId]);
                 $totalBids = (int)$bidCount->fetchColumn();
 
-                sendBidConfirmationEmail([
+                if (canEmailUser((int)$targetUser['id'], $targetUser['email'])) sendBidConfirmationEmail([
                     'email'            => $targetUser['email'],
                     'name'             => $targetUser['full_name'],
                     'vehicle_name'     => $vehicleName,
@@ -1733,7 +1734,8 @@ switch ($action) {
                         'New highest bid ' . formatRand($amount) . ' (yours was ' . formatRand((float)$outbidUser['bid_amount']) . ').',
                         'auction.php?id=' . $auctionId);
                 }
-                if ($outbidUser && wantsEmail((int)$outbidUser['user_id'], 'outbid')) {
+                if ($outbidUser && wantsEmail((int)$outbidUser['user_id'], 'outbid')
+                    && canEmailUser((int)$outbidUser['user_id'], $outbidUser['email'])) {
                     sendOutbidAlertEmail([
                         'user_id'          => (int)$outbidUser['user_id'],
                         'email'            => $outbidUser['email'],
@@ -1870,17 +1872,19 @@ switch ($action) {
         $q = trim($_GET['q'] ?? '');
         if (strlen($q) < 2) ok(['users' => []]);
 
+        ahgSchemaReady();
         $stmt = $pdo->prepare("
-            SELECT id, full_name, email, bidder_number
+            SELECT id, full_name, email, phone, bidder_number, is_floor_bidder AS floor
             FROM users
-            WHERE bidder_status = 'verified_bidder'
-              AND (full_name LIKE ? OR email LIKE ? OR bidder_number LIKE ?)
+            WHERE bidder_status = 'verified_bidder' AND status = 'active'
+              AND (full_name LIKE ? OR email LIKE ? OR bidder_number LIKE ? OR phone LIKE ?)
             ORDER BY full_name ASC
             LIMIT 20
         ");
         $like = "%$q%";
-        $stmt->execute([$like, $like, $like]);
-        ok(['users' => $stmt->fetchAll()]);
+        $stmt->execute([$like, $like, $like, $like]);
+        $users = array_map(fn($u) => ['email' => displayEmail($u['email'])] + $u, $stmt->fetchAll());
+        ok(['users' => $users]);
     }
 
     // ── SEARCH ACTIVE/UPCOMING AUCTIONS (for manual bid auction picker) ──
@@ -3416,6 +3420,82 @@ switch ($action) {
     }
 
 // ════════════════════════════════════════════════════════════
+// FLOOR / PHONE BIDDERS (admin) — accounts staff create for people who bid
+// at floor or live auctions. Verified straight away, no login, no emails;
+// bids are placed for them from Admin → Manual Bid.
+// ════════════════════════════════════════════════════════════
+
+    case 'floor_bidder_save': {
+        $admin = adminOnly();
+        ahgSchemaReady();   // users.is_floor_bidder
+        $id     = (int)($_POST['id'] ?? 0);
+        $name   = mb_substr(trim(strip_tags($_POST['full_name'] ?? '')), 0, 100);
+        $phone  = preg_replace('/[^\d+ ]/', '', trim($_POST['phone'] ?? ''));
+        $email  = strtolower(trim($_POST['email'] ?? ''));
+        $idNo   = strtoupper(preg_replace('/\s+/', '', trim($_POST['id_number'] ?? '')));
+        $number = strtoupper(trim($_POST['bidder_number'] ?? ''));
+
+        if (mb_strlen($name) < 2)                      fail('Enter the bidder\'s full name.');
+        $digits = preg_replace('/\D/', '', $phone);
+        if (strlen($digits) < 9 || strlen($digits) > 15) fail('Enter a valid cellphone number (e.g. 082 123 4567).');
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email address isn\'t valid (or leave it blank).');
+        if ($idNo !== '' && !preg_match('/^[A-Z0-9]{6,20}$/', $idNo)) fail('ID / passport number: letters and digits only, 6–20 characters.');
+        if ($number !== '' && !preg_match('/^[A-Z0-9-]{3,20}$/', $number)) fail('Bidder number: letters, digits and dashes only.');
+
+        $existing = null;
+        if ($id) {
+            $st = $pdo->prepare("SELECT id, email, is_floor_bidder FROM users WHERE id = ?");
+            $st->execute([$id]);
+            $existing = $st->fetch();
+            if (!$existing) fail('Bidder not found.');
+            if (!(int)$existing['is_floor_bidder']) fail('Only floor bidders are edited here. Online customers manage their own details.');
+        }
+
+        // Email: keep a placeholder when none is given (users.email must be unique)
+        if ($email === '') {
+            $email = ($existing && str_ends_with($existing['email'], '.invalid'))
+                ? $existing['email'] : 'floor-' . bin2hex(random_bytes(5)) . '@' . FLOOR_EMAIL_DOMAIN;
+        }
+        $dup = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id <> ?");
+        $dup->execute([$email, $id]);
+        if ($dup->fetchColumn()) fail('Another account already uses that email address.');
+
+        // Bidder number: next free AHG-YYYY-NNN unless one was typed
+        if ($number === '' && !$id) {
+            $prefix = BIDDER_PREFIX;
+            $st = $pdo->prepare("SELECT bidder_number FROM users WHERE bidder_number LIKE ?");
+            $st->execute([$prefix . '%']);
+            $max = 0;
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $bn) $max = max($max, (int)substr($bn, strlen($prefix)));
+            $number = $prefix . str_pad((string)($max + 1), 3, '0', STR_PAD_LEFT);
+        }
+        if ($number !== '') {
+            $dup = $pdo->prepare("SELECT id FROM users WHERE bidder_number = ? AND id <> ?");
+            $dup->execute([$number, $id]);
+            if ($dup->fetchColumn()) fail("Bidder number $number is already in use.");
+        }
+
+        if ($id) {
+            $pdo->prepare("UPDATE users SET full_name = ?, phone = ?, email = ?, id_number = ?"
+                        . ($number !== '' ? ', bidder_number = ?' : '') . " WHERE id = ?")
+                ->execute(array_merge([$name, $phone, $email, $idNo ?: null], $number !== '' ? [$number] : [], [$id]));
+            // Keep names on their existing bids in step
+            $pdo->prepare("UPDATE bids SET bidder_name = ?" . ($number !== '' ? ', bidder_number = ?' : '') . " WHERE user_id = ?")
+                ->execute(array_merge([$name], $number !== '' ? [$number] : [], [$id]));
+            logAdminAction($admin, 'floor_bidder', null, ['edited' => $id, 'name' => $name]);
+            ok(['message' => "Saved: $name.", 'id' => $id]);
+        }
+
+        $pdo->prepare("
+            INSERT INTO users (full_name, email, phone, id_number, password, role, bidder_status, bidder_number, status, is_floor_bidder)
+            VALUES (?, ?, ?, ?, ?, 'user', 'verified_bidder', ?, 'active', 1)
+        ")->execute([$name, $email, $phone, $idNo ?: null, password_hash(bin2hex(random_bytes(24)), PASSWORD_BCRYPT), $number]);
+        $newId = (int)$pdo->lastInsertId();
+        logAdminAction($admin, 'floor_bidder', null, ['created' => $newId, 'name' => $name, 'bidder_number' => $number]);
+        ok(['message' => "Floor bidder added: $name ($number).", 'id' => $newId, 'bidder_number' => $number]);
+    }
+
+// ════════════════════════════════════════════════════════════
 // AI PHOTOS — Grok (xAI) image editing (admin). See ai_image_helper.php
 // ════════════════════════════════════════════════════════════
 
@@ -3547,10 +3627,12 @@ switch ($action) {
         $dateIn    = trim($_POST['sold_date'] ?? '');
         $buyerId   = (int)($_POST['buyer_user_id'] ?? 0) ?: null;
         $buyerName = mb_substr(trim(strip_tags($_POST['buyer_name'] ?? '')), 0, 255);
+        $channel   = array_key_exists($_POST['sale_channel'] ?? '', SALE_CHANNELS) ? $_POST['sale_channel'] : null;
 
         if (!$auctionId)  fail('Missing auction ID.');
+        ahgSchemaReady();   // sale_channel column
 
-        $s = $pdo->prepare("SELECT id, item_name, is_sold, final_price, sold_to, sold_date FROM auctions WHERE id = ?");
+        $s = $pdo->prepare("SELECT id, item_name, is_sold, final_price, sold_to, sold_date, sale_channel FROM auctions WHERE id = ?");
         $s->execute([$auctionId]);
         $lot = $s->fetch();
         if (!$lot) fail('Auction not found.');
@@ -3578,9 +3660,10 @@ switch ($action) {
 
         $pdo->prepare("
             UPDATE auctions SET status = 'closed', is_sold = 1, final_price = ?, sold_date = ?,
-                   sold_to = ?, sold_to_user_id = ?
+                   sold_to = ?, sold_to_user_id = ?, sale_channel = ?
             WHERE id = ?
-        ")->execute([$price > 0 ? $price : null, $soldDate, $buyerName !== '' ? $buyerName : null, $buyerId, $auctionId]);
+        ")->execute([$price > 0 ? $price : null, $soldDate, $buyerName !== '' ? $buyerName : null, $buyerId,
+                     $channel ?? $lot['sale_channel'], $auctionId]);
 
         if (!$wasSold) {
             if ($buyerId) notifyLotWon($buyerId, $auctionId, $lot['item_name'], $price);
@@ -3591,6 +3674,7 @@ switch ($action) {
             'previous_price'  => $wasSold && $lot['final_price'] !== null ? (float)$lot['final_price'] : null,
             'sold_date'       => substr($soldDate, 0, 10),
             'previous_date'   => $wasSold && $lot['sold_date'] ? substr($lot['sold_date'], 0, 10) : null,
+            'channel'         => $channel,
             'buyer'           => $buyerName ?: null,
             'buyer_user_id'   => $buyerId,
         ], fn($v) => $v !== null));
@@ -3712,15 +3796,18 @@ switch ($action) {
         }
         if (!$clean) fail('No lots selected.');
 
+        ahgSchemaReady();
+        $channel = array_key_exists($_POST['sale_channel'] ?? '', SALE_CHANNELS) ? $_POST['sale_channel'] : null;
         $upd = $pdo->prepare("
-            UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1, final_price = ?
+            UPDATE auctions SET sold_date = IF(is_sold = 1 AND sold_date IS NOT NULL, sold_date, NOW()), status = 'closed', is_sold = 1, final_price = ?,
+                   sale_channel = COALESCE(?, sale_channel)
             WHERE id = ?
         ");
         $pdo->beginTransaction();
         try {
             foreach ($clean as $id => $price) {
-                $upd->execute([$price, $id]);
-                logAdminAction($admin, 'mark_sold', $id, ['final_price' => $price, 'bulk' => true]);
+                $upd->execute([$price, $channel, $id]);
+                logAdminAction($admin, 'mark_sold', $id, ['final_price' => $price, 'bulk' => true, 'channel' => $channel]);
             }
             $pdo->commit();
         } catch (Exception $e) {

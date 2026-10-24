@@ -254,6 +254,7 @@ require_once 'header.php';
     <?php endif; ?>
 
     <nav class="sidebar-nav">
+      <div class="sidebar-group<?= in_array($activeTab, ['overview', 'bids', 'watchlist', 'wins'], true) ? ' active' : '' ?>">Bidding</div>
       <a href="?tab=overview"  class="sidebar-link <?= $activeTab === 'overview'  ? 'active' : '' ?>">
         <i class="fas fa-th-large"></i> Overview
       </a>
@@ -269,16 +270,17 @@ require_once 'header.php';
           <span class="sidebar-badge"><?= count($myWatchlist) ?></span>
         <?php endif; ?>
       </a>
-      <a href="?tab=alerts" class="sidebar-link <?= $activeTab === 'alerts' ? 'active' : '' ?>">
-        <i class="fas fa-bell"></i> Alerts
-        <?php if ($unreadAlerts && $activeTab !== 'alerts'): ?>
-          <span class="sidebar-badge sidebar-badge-red"><?= $unreadAlerts ?></span>
-        <?php endif; ?>
-      </a>
       <a href="?tab=wins" class="sidebar-link <?= $activeTab === 'wins' ? 'active' : '' ?>">
         <i class="fas fa-trophy"></i> My Wins
         <?php if ($auctionsWon): ?>
           <span class="sidebar-badge sidebar-badge-green"><?= $auctionsWon ?></span>
+        <?php endif; ?>
+      </a>
+      <div class="sidebar-group<?= in_array($activeTab, ['alerts', 'register', 'profile', 'refunds'], true) ? ' active' : '' ?>">My Account</div>
+      <a href="?tab=alerts" class="sidebar-link <?= $activeTab === 'alerts' ? 'active' : '' ?>">
+        <i class="fas fa-bell"></i> Alerts
+        <?php if ($unreadAlerts && $activeTab !== 'alerts'): ?>
+          <span class="sidebar-badge sidebar-badge-red"><?= $unreadAlerts ?></span>
         <?php endif; ?>
       </a>
       <?php if ($user['bidder_status'] !== 'verified_bidder'): ?>

@@ -13,6 +13,48 @@ function ufReady(): bool {
     return ahgSchemaReady();
 }
 
+// ── Sale channels & floor bidders ─────────────────────────────
+
+/** How a lot was sold (auctions.sale_channel) */
+const SALE_CHANNELS = [
+    'online'      => 'Online auction',
+    'live'        => 'Live auction',
+    'floor'       => 'Floor auction',
+    'pre_auction' => 'Pre-auction sale',
+    'private'     => 'Private sale',
+];
+
+/** Placeholder address given to floor bidders who have no email */
+const FLOOR_EMAIL_DOMAIN = 'floor-bidders.invalid';
+
+/** Staff-managed bidder (floor / phone): no login, no emails */
+function isFloorBidder(int $userId): bool {
+    global $pdo;
+    static $cache = [];
+    if ($userId <= 0) return false;
+    if (!array_key_exists($userId, $cache)) {
+        try {
+            $st = $pdo->prepare("SELECT is_floor_bidder FROM users WHERE id = ?");
+            $st->execute([$userId]);
+            $cache[$userId] = (bool)$st->fetchColumn();
+        } catch (PDOException $e) {
+            $cache[$userId] = false;   // column not created yet
+        }
+    }
+    return $cache[$userId];
+}
+
+/** False for floor bidders and placeholder addresses — never mail those */
+function canEmailUser(int $userId, ?string $email = null): bool {
+    if ($email !== null && str_ends_with(strtolower($email), '.invalid')) return false;
+    return !isFloorBidder($userId);
+}
+
+/** "Not given" instead of a floor bidder's placeholder address */
+function displayEmail(?string $email): string {
+    return $email && !str_ends_with(strtolower($email), '.invalid') ? $email : '';
+}
+
 // ── Alerts (bell) ─────────────────────────────────────────────
 
 /**

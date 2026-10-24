@@ -1,6 +1,6 @@
 # Auction Hub Group — to-do list
 
-Updated 23 Oct 2026. Ticked items are done in the code; "you" items need someone with cPanel/console access.
+Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone with cPanel/console access.
 
 ## 1. Do now (you, in cPanel)
 
@@ -20,8 +20,13 @@ Updated 23 Oct 2026. Ticked items are done in the code; "you" items need someone
       `/usr/local/bin/php /home/auctionhubgroupc/public_html/generate_sitemaps.php`). It also writes `feed.xml`,
       which is currently missing (404); `feed.php` works.
 - [ ] **Paste the xAI key** in Admin → AI Photos (from console.x.ai) to switch on photo editing.
-- [ ] **Sold dates:** Admin → Auctions → Sold → *Spread these dates*. Then add real prices with *Edit Sale*
-      where you know them.
+- [ ] **Deploy the 24 Oct update** (Update from Remote → Deploy HEAD Commit), then try *Edit Sale* again.
+      Any problem now shows as a red message inside the popup: send a screenshot of it.
+- [ ] **Real sale prices:** Admin → Auctions → **Sold** → *Edit Sale* on each lot: price, date, **Sold at**
+      (online / live / floor / pre-auction / private) and buyer. The 86 bulk-marked lots also show under *Needs attention*.
+- [ ] **Sold dates** you don't know: Sold tab → *Spread these dates* (undo available).
+- [ ] **Floor bidders:** Admin → **Manual Bids & Floor** → *Add floor bidder* for each person registered at a
+      floor/live auction (name, cellphone, optional email and ID). Then *Bid* next to them to enter their bids.
 
 ## 2. Done in this round
 
@@ -34,6 +39,12 @@ Updated 23 Oct 2026. Ticked items are done in the code; "you" items need someone
 - [x] Edit Sale works on lots without a price
 - [x] Grok (xAI) photo editing: Admin → AI Photos, key pasted in the admin
 - [x] Codebase tidy: docs → `docs/`, migrations → `sql/`, one-off tools → `tools/`, dead prototypes removed
+- [x] Edit Sale: *Sold at* channel (online/live/floor/pre-auction/private), buyer can be a floor bidder,
+      errors shown inside the popup; bulk Mark Sold sets the channel too
+- [x] Floor & phone bidders (Admin → Manual Bids & Floor): create/edit name, cellphone, email, ID, bidder no.;
+      verified at once; can't log in or reset a password; never emailed; one-click *Bid* for them
+- [x] Admin menu grouped (Dashboard · Sales & Auctions · Bidders & Payments · Marketing & Content · People),
+      same groups on phones; user menu grouped (Bidding · My Account)
 
 ## 3. Next features (borrowed from our other sites)
 
@@ -48,14 +59,31 @@ Social-media integration is left out on purpose. Ordered by value for effort.
 | 5 | **Continue with Google** | One-tap sign-up; more registrations from ads. | bidcotrucks `google-login.php` |
 | 6 | **Google reviews** | Star rating and latest reviews on the homepage, refreshed daily. | bidcotrucks `includes/google-reviews.php` |
 | 7 | **Install as an app (PWA)** | Home-screen icon, offline page; groundwork for push notifications of outbids. | bidandwin `manifest.webmanifest`, `sw.js` |
-| 8 | **Assisted bidders** | Staff register phone-in customers and enter their bids for them. | bidcotrucks `admin/assisted-bidders.php` |
+| 8 | ~~Assisted bidders~~ | Done 24 Oct as *Floor & phone bidders*. | bidcotrucks `admin/assisted-bidders.php` |
 | 9 | **Price check before publishing** | New stock waits as a draft until a market value and opening bid are set. | bidcotrucks `admin/price-check.php` |
 | 10 | **Duplicate finder** | Flags the same vehicle listed twice (same VIN or reg). | bidcotrucks `admin/duplicates.php` |
 | 11 | **Sell your vehicle** | Form for owners and dealers to consign stock, landing as an admin enquiry. | bidcotrucks `sell.php` |
 | 12 | **Ad catalogue feed** | Product feed for Google/Meta shopping and retargeting ads (ads, not social posting). | bidcotrucks `catalog-feed.php` |
 | 13 | **Manual photo editor** | Crop, rotate, brightness and plate blur in the browser, no AI cost. Complements AI Photos. | bidcotrucks `admin/photo-edit.php` |
 
-## 4. Housekeeping
+## 4. User dashboard: ideas to make bidding easier
+
+Ordered by how much they help a bidder, for the effort.
+
+| # | Idea | Why it helps |
+|---|---|---|
+| 1 | **Quick re-bid on Outbid cards** (+R500 / +R1,000 buttons with a confirm) | Bid again from the dashboard without opening the lot |
+| 2 | **Registration stepper** on Overview: account → deposit paid → POP uploaded → bidder number | New users always know the one next step to start bidding |
+| 3 | **Deposit & refund tracker** (R10,000 status: paid / approved / refund requested / refunded) | Cuts the "where is my deposit?" calls and emails |
+| 4 | **Collection tracker on My Wins** (invoiced → paid → cleared → ready → collected; staff tick it in admin) | Buyers see where their vehicle is without phoning |
+| 5 | **Documents** tab: invoices, POP uploads, signed contracts in one place | No digging through email |
+| 6 | **Max bid / auto-bid** (system bids for you up to your limit) | Wins lots while you're busy; standard on auction sites. Bigger build |
+| 7 | **"Add to calendar"** for watched lots and auction days (.ics) | Fewer missed endings |
+| 8 | **WhatsApp alerts (opt-in)** for outbid and ending soon | Faster than email; most SA bidders live on WhatsApp. Needs a WhatsApp Business API account |
+| 9 | **FICA uploads** (ID, proof of address) in My Profile | Compliance done once, before the first win |
+| 10 | **Phone bottom bar** (Bids · Watchlist · Alerts · Wins) | One-thumb navigation on mobile |
+
+## 5. Housekeeping
 
 - [ ] `sql/ahg_switch_images_to_imagekit.sql`: rewrite stored Cloudinary links for good (photos already work).
 - [ ] Some lot names contain a stray `\/` (e.g. `D\/C`) from an old import; clean with one UPDATE.

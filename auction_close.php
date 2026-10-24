@@ -92,7 +92,7 @@ function closeAuction(int $auctionId): void {
         // Send winner email (non-fatal)
         try {
             require_once __DIR__ . '/email_helper.php';
-            if ($winnerRow) {
+            if ($winnerRow && canEmailUser((int)$winnerRow['id'], $winnerRow['email'])) {
                 sendAuctionWinnerEmail($winnerRow, $auction, (float)$winningAmt);
             }
         } catch (Exception $e) {

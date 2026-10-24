@@ -390,6 +390,12 @@ switch ($action) {
             exit;
         }
 
+        // Floor/phone bidders are managed by staff and never log in themselves
+        if (!empty($user['is_floor_bidder'])) {
+            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'This bidder account is managed by Auction Hub Group staff. Please contact us to bid online.']);
+            exit;
+        }
+
         $token   = generateJWT($user);
         $payload = verifyJWT($token);
         setTokenCookie($token);
@@ -501,7 +507,8 @@ switch ($action) {
         $user = $stmt->fetch();
 
         // Always return success to prevent email enumeration
-        if (!$user || $user['status'] === 'suspended') {
+        // (floor bidders get no reset link: staff manage those accounts)
+        if (!$user || $user['status'] === 'suspended' || isFloorBidder((int)$user['id'])) {
             ob_end_clean(); echo json_encode(['success' => true, 'message' => 'If that email exists, a reset link has been sent.']);
             exit;
         }
