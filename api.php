@@ -3638,6 +3638,65 @@ switch ($action) {
         ok($r + ['file' => $name]);
     }
 
+    // Dealer / branch stock list (ported from BidCo): a file or a link → a batch to pick from
+    case 'dealer_load': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        require_once __DIR__ . '/dealer_stock_helper.php';
+        @set_time_limit(300);
+        $branch = (int)($_POST['branch_id'] ?? 0) ?: null;
+        $link   = trim($_POST['link'] ?? '');
+        try {
+            if (!empty($_FILES['file']['tmp_name']) && ($_FILES['file']['error'] ?? 1) === UPLOAD_ERR_OK) {
+                if ($_FILES['file']['size'] > 20 * 1048576) fail('That file is over 20 MB.');
+                $batch = dealer_load_batch($branch, (string)file_get_contents($_FILES['file']['tmp_name']), basename($_FILES['file']['name']));
+            } elseif ($link !== '') {
+                $batch = dealer_load_batch($branch, null, '', $link);
+            } else {
+                fail('Choose a stock file or paste a link.');
+            }
+        } catch (RuntimeException $e) {
+            fail($e->getMessage());
+        }
+        $b = dealer_get_batch($batch);
+        logAdminAction($admin, 'dealer_load', null, ['source' => $b['label'], 'format' => $b['format'], 'vehicles' => count($b['vehicles'])]);
+        ok(['batch' => $batch]);
+    }
+
+    // The vehicles in a loaded batch, with which ones are already taken
+    case 'dealer_batch': {
+        adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        require_once __DIR__ . '/dealer_stock_helper.php';
+        ahgSchemaReady();
+        $b = dealer_get_batch((string)($_GET['batch'] ?? ''));
+        if (!$b) fail('That list has expired — load it again.');
+        $taken = dealer_taken($b);
+        $rows = [];
+        foreach ($b['vehicles'] as $i => $v) {
+            $rows[] = ['i' => $i, 'ref' => $v['ref'], 'title' => trim(($v['year'] ?: '') . ' ' . dealer_words($v['make'] . ' ' . $v['model'])),
+                       'mileage' => $v['mileage'], 'price' => $v['price'], 'photos' => count($v['images']),
+                       'thumb' => $v['images'][0] ?? '', 'location' => $v['location'], 'taken' => $taken[$v['ref']] ?? null];
+        }
+        ok(['label' => $b['label'], 'format' => $b['format'], 'loaded' => $b['loaded'], 'branch_id' => $b['branch_id'], 'vehicles' => $rows]);
+    }
+
+    // Take picked vehicles as drafts (a few per call: their photos are downloaded)
+    case 'dealer_take': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        require_once __DIR__ . '/dealer_stock_helper.php';
+        ahgSchemaReady();
+        @set_time_limit(240);
+        $b = dealer_get_batch((string)($_POST['batch'] ?? ''));
+        if (!$b) fail('That list has expired — load it again.');
+        $idx = array_slice(array_map('intval', array_filter(explode(',', (string)($_POST['picks'] ?? '')), 'is_numeric')), 0, 5);
+        if (!$idx) fail('Tick at least one vehicle.');
+        $r = dealer_take($b, $idx, (int)$admin['sub']);
+        if ($r['added']) logAdminAction($admin, 'dealer_take', null, ['source' => $b['label']] + $r);
+        ok($r);
+    }
+
     // New stock from a branch: photos + details → draft
     case 'stock_new': {
         $admin = adminOnly();

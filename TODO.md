@@ -32,6 +32,10 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
       Admin → **Stock Import** → pick the branch → upload the ZIP (or, if it's over the upload limit, put it in
       `/home/auctionhubgroupc/ahg_import/inbox/` with File Manager and pick it from the list). Check each draft
       (title, year, make, price, photos), then *Publish as sold* or *Publish as lot*.
+- [ ] **Branches that won't share Facebook logins:** ask each branch (or partner dealer) for the stock export from
+      their dealer system (CSV/Excel, the list they send to the classifieds), a feed link, or their website's stock
+      page. Admin → **Stock Import** → *From a stock list or website* → pick the branch → *Read list* → tick vehicles
+      → *Take as drafts*.
 
 ## 2. Done in this round
 
@@ -68,6 +72,10 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
 - [x] **Pop-ups:** the old rotating "notification" pop-ups (incl. test/diagnostic rows) are gone. The site now shows
       real new bids ("Bidder ••042 bid R… — now leading") above the Live Bids pill, a *Who's leading* tab in the
       panel, and only *Custom* messages from Admin → Notifications
+- [x] **Dealer / branch stock seeder** (ported from BidCo, `dealer_stock_helper.php`): Stock Import reads CSV
+      (comma/semicolon/tab), Excel .xlsx, XML, JSON, feed links and dealer websites (WordPress Motors sitemaps, or
+      stock pages → vehicle pages, robots.txt respected). Columns matched by name; tick which vehicles to take; photos
+      downloaded into staging; same branch + stock number is never taken twice; local/private addresses never fetched
 
 ## 3. Next features (borrowed from our other sites)
 

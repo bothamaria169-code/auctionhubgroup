@@ -178,6 +178,10 @@ function describeAdminActivity(string $action, ?string $detailsJson): string {
             return 'xAI key ' . ($d['key'] ?? 'changed');
         case 'stock_import':
             return 'Imported Facebook export ' . ($d['file'] ?? '') . ' (' . (int)($d['posts'] ?? 0) . ' posts with photos)';
+        case 'dealer_load':
+            return 'Loaded stock list ' . ($d['source'] ?? '') . ' (' . ($d['format'] ?? '') . ', ' . (int)($d['vehicles'] ?? 0) . ' vehicles)';
+        case 'dealer_take':
+            return 'Took ' . (int)($d['added'] ?? 0) . ' vehicle(s) from ' . ($d['source'] ?? 'a stock list') . ' as drafts';
         case 'stock_publish':
             return 'Published draft as ' . (($d['mode'] ?? '') === 'sold' ? 'a past sale' : 'an upcoming lot') . ' (' . (int)($d['photos'] ?? 0) . ' photos)';
         case 'floor_bidder':
@@ -5956,7 +5960,7 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
     <div class="dashboard-header">
       <div>
         <h1><i class="fas fa-file-import"></i> Stock Import</h1>
-        <p class="text-muted">Bring in old Facebook posts and new branch stock as drafts, check them, then publish. <?= $stCount ?> draft<?= $stCount === 1 ? '' : 's' ?> waiting · <?= $stDone ?> published.</p>
+        <p class="text-muted">Bring in old Facebook posts, branch or dealer stock lists and new branch stock as drafts, check them, then publish. <?= $stCount ?> draft<?= $stCount === 1 ? '' : 's' ?> waiting · <?= $stDone ?> published.</p>
       </div>
     </div>
 
@@ -5999,6 +6003,36 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
       </div>
     </div>
 
+    <!-- Dealer / branch stock list (ported from BidCo's Dealer Stock seeder) -->
+    <div class="card" style="margin-bottom:1.5rem;">
+      <h3 style="margin-top:0"><i class="fas fa-table-list"></i> From a stock list or website</h3>
+      <p class="text-muted" style="font-size:.85rem;margin-top:0;">
+        For branches and partner dealers who won't share Facebook logins: ask them for the <strong>stock export from their dealer system</strong>
+        (CSV or Excel, the same list they send to the classifieds), a <strong>feed link</strong> (XML / CSV / JSON), or paste their
+        <strong>own website's stock page</strong>. Columns are recognised by name (Stock No, Make, Model, Year, Kms, Price, Photos…).
+        Only use lists from our branches or dealers who agreed.
+      </p>
+      <div id="dlResult"></div>
+      <form id="dlForm" class="st-form dl-form">
+        <label>Branch for these vehicles<select name="branch_id" class="form-control"><?= $branchOpts(null) ?></select></label>
+        <label>Stock file<input type="file" name="file" accept=".csv,.txt,.xlsx,.xml,.json" class="form-control"></label>
+        <label>…or a feed / website link<input type="url" name="link" class="form-control" placeholder="https://branch-website.co.za/used-cars/"></label>
+        <button type="submit" class="btn btn-primary" id="dlBtn"><i class="fas fa-magnifying-glass"></i> Read list</button>
+      </form>
+      <div id="dlPicker" hidden>
+        <div class="dl-head">
+          <strong id="dlLabel"></strong>
+          <label class="dl-all"><input type="checkbox" id="dlAll"> Tick all new</label>
+        </div>
+        <div class="dl-list" id="dlList"></div>
+        <div class="dl-foot">
+          <button type="button" class="btn btn-primary" id="dlTake" disabled><i class="fas fa-download"></i> Take 0 as drafts</button>
+          <div class="st-progress" id="dlProgress" hidden style="flex:1"><span></span></div>
+        </div>
+        <small class="text-muted">Photos are downloaded into the staging folder; nothing goes live until you publish each draft below.</small>
+      </div>
+    </div>
+
     <h3 style="margin:0 0 .75rem;">Drafts to check <span class="av-tab-count"><?= $stCount ?></span></h3>
     <?php if (!$stDrafts): ?>
       <div class="card" style="text-align:center;color:#889;">No drafts waiting. Import a Facebook export or add new stock above.</div>
@@ -6015,7 +6049,7 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
           <?php endforeach; ?>
         </div>
         <small class="text-muted"><?= count($ph) ?> photo<?= count($ph) === 1 ? '' : 's' ?> · first is the main photo · tap to leave one out, ★ to make main ·
-          <?= $d['source'] === 'facebook' ? 'Facebook post ' . safeDate('d M Y', $d['posted_at']) : 'Uploaded ' . safeDate('d M Y', $d['created_at']) ?></small>
+          <?= $d['source'] === 'facebook' ? 'Facebook post ' . safeDate('d M Y', $d['posted_at']) : ($d['source'] === 'dealer' ? 'From a stock list ' : 'Uploaded ') . safeDate('d M Y', $d['created_at']) ?></small>
         <form class="st-form st-edit">
           <label>Vehicle name<input type="text" name="title" class="form-control" value="<?= e($d['title']) ?>" maxlength="255"></label>
           <div class="grid-2" style="gap:.5rem;">
@@ -6073,6 +6107,17 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
       .st-msg:empty { display:none; }
       .st-card details summary { cursor:pointer; font-size:.8rem; font-weight:600; color:#1565c0; }
       @media (max-width:480px) { .st-grid { grid-template-columns:1fr; } }
+      .dl-form { flex-direction:row; flex-wrap:wrap; align-items:flex-end; }
+      .dl-form label { flex:1 1 220px; }
+      .dl-head, .dl-foot { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; margin:1rem 0 .5rem; }
+      .dl-all { display:flex; align-items:center; gap:.35rem; font-size:.82rem; }
+      .dl-list { max-height:460px; overflow-y:auto; border:1px solid #e3e9f2; border-radius:8px; }
+      .dl-row { display:grid; grid-template-columns:24px 64px 1fr auto; gap:.6rem; align-items:center; padding:.45rem .6rem; border-bottom:1px solid #eef2f7; font-size:.84rem; cursor:pointer; }
+      .dl-row:last-child { border-bottom:0; }
+      .dl-row img, .dl-row .dl-noimg { width:64px; height:46px; object-fit:cover; border-radius:6px; background:#eef2f7; display:block; }
+      .dl-row small { display:block; color:#778; font-size:.74rem; }
+      .dl-row.dl-taken { opacity:.55; cursor:default; }
+      .dl-price { font-weight:700; color:#003f73; text-align:right; white-space:nowrap; }
     </style>
     <script>
     (function () {
@@ -6115,6 +6160,69 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
             } catch { say(out, false, 'The import stopped (connection or timeout). Press Import again: it carries on where it stopped.'); }
             btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-import"></i> Import posts';
         });
+
+        // Dealer / branch stock list: read → tick → take as drafts
+        let dlBatch = '';
+        const dlEsc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+        const dlPicks = () => [...document.querySelectorAll('#dlList input:checked')].map(i => +i.value);
+        const dlCount = () => { const n = dlPicks().length, b = document.getElementById('dlTake');
+            b.disabled = !n; b.innerHTML = `<i class="fas fa-download"></i> Take ${n} as draft${n === 1 ? '' : 's'}`; };
+        async function dlShow(batch) {
+            const d = await (await fetch('api.php?action=dealer_batch&batch=' + encodeURIComponent(batch))).json();
+            if (!d.success) { try { localStorage.removeItem('ahg_dl_batch'); } catch (e) {} return; }
+            dlBatch = batch;
+            try { localStorage.setItem('ahg_dl_batch', batch); } catch (e) {}
+            const fresh = d.vehicles.filter(v => !v.taken).length;
+            document.getElementById('dlLabel').textContent = `${d.label} (${d.format}) · ${d.vehicles.length} vehicles · ${fresh} new · read ${d.loaded}`;
+            document.getElementById('dlList').innerHTML = d.vehicles.map(v => `
+              <label class="dl-row${v.taken ? ' dl-taken' : ''}">
+                <input type="checkbox" value="${v.i}" ${v.taken ? 'disabled' : ''}>
+                ${v.thumb ? `<img src="${dlEsc(v.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="dl-noimg"></span>'}
+                <span>${dlEsc(v.title)}<small>${v.mileage ? Number(v.mileage).toLocaleString('en-ZA') + ' km · ' : ''}${v.photos} photo${v.photos === 1 ? '' : 's'}${v.location ? ' · ' + dlEsc(v.location) : ''} · ${dlEsc(String(v.ref).slice(0, 30))}${v.taken ? ' · <b>already ' + (v.taken === 'draft' ? 'a draft' : dlEsc(v.taken)) + '</b>' : ''}</small></span>
+                <span class="dl-price">${v.price ? 'R ' + Math.round(v.price).toLocaleString('en-ZA') : '—'}</span>
+              </label>`).join('');
+            document.getElementById('dlPicker').hidden = false;
+            document.getElementById('dlAll').checked = false;
+            dlCount();
+        }
+        document.getElementById('dlList').addEventListener('change', dlCount);
+        document.getElementById('dlAll').addEventListener('change', e => {
+            document.querySelectorAll('#dlList input:not(:disabled)').forEach(i => { i.checked = e.target.checked; });
+            dlCount();
+        });
+        document.getElementById('dlForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const f = e.target, out = document.getElementById('dlResult'), btn = document.getElementById('dlBtn');
+            if (!f.file.files[0] && !f.link.value.trim()) { say(out, false, 'Choose a stock file or paste a link.'); return; }
+            const fd = new FormData(f); fd.append('action', 'dealer_load');
+            if (!f.file.files[0]) fd.delete('file');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading… (a website can take a few minutes)';
+            out.innerHTML = '';
+            try { const d = await post(fd); if (!d.success) say(out, false, d.message); else await dlShow(d.batch); }
+            catch { say(out, false, 'Reading stopped (connection or timeout). Try again, or use the dealer export file instead.'); }
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-magnifying-glass"></i> Read list';
+        });
+        document.getElementById('dlTake').addEventListener('click', async () => {
+            const picks = dlPicks(), out = document.getElementById('dlResult'), bar = document.getElementById('dlProgress'), btn = document.getElementById('dlTake');
+            if (!picks.length) return;
+            btn.disabled = true; bar.hidden = false;
+            let done = 0, added = 0, skipped = 0, photos = 0;
+            try {
+                for (let i = 0; i < picks.length; i += 3) {
+                    const fd = new FormData();
+                    fd.append('action', 'dealer_take'); fd.append('batch', dlBatch); fd.append('picks', picks.slice(i, i + 3).join(','));
+                    const d = await post(fd);
+                    if (!d.success) { say(out, false, d.message); break; }
+                    done = Math.min(picks.length, i + 3); added += d.added; skipped += d.skipped; photos += d.photos;
+                    bar.firstElementChild.style.width = Math.round(done / picks.length * 100) + '%';
+                    say(out, true, `${done} of ${picks.length} done · ${added} new drafts · ${photos} photos${skipped ? ' · ' + skipped + ' already taken' : ''}`);
+                }
+                if (added) setTimeout(() => location.reload(), 1500);
+            } catch { say(out, false, 'Stopped part-way (connection or timeout). Tick the rest and press Take again; finished ones are kept.'); }
+            btn.disabled = false; bar.hidden = true;
+            if (!added) dlShow(dlBatch);
+        });
+        try { const last = localStorage.getItem('ahg_dl_batch'); if (last) dlShow(last); } catch (e) {}
 
         // New stock
         document.getElementById('stNewForm').addEventListener('submit', async e => {
