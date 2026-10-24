@@ -56,7 +56,7 @@ syncSession($currentUser);
 
 // ── Active tab ────────────────────────────────────────────────
 $activeTab = $_GET['tab'] ?? 'overview';
-$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai'];
+$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai', 'stock'];
 if (!in_array($activeTab, $validTabs)) $activeTab = 'overview';
 
 // ── Flash ─────────────────────────────────────────────────────
@@ -170,9 +170,16 @@ function describeAdminActivity(string $action, ?string $detailsJson): string {
         case 'ai_edit':
             return 'AI photo edit: "' . mb_strimwidth($d['instruction'] ?? '', 0, 70, '…') . '"';
         case 'ai_save':
+            if (!empty($d['preview'])) return 'Added a labelled after-repair preview to the gallery';
             return 'Saved AI-edited photo as ' . (($d['mode'] ?? '') === 'main' ? 'main photo' : 'gallery photo');
+        case 'photo_edit':
+            return 'Edited a photo by hand, saved as ' . (($d['mode'] ?? '') === 'main' ? 'main photo' : 'gallery photo');
         case 'ai_settings':
             return 'xAI key ' . ($d['key'] ?? 'changed');
+        case 'stock_import':
+            return 'Imported Facebook export ' . ($d['file'] ?? '') . ' (' . (int)($d['posts'] ?? 0) . ' posts with photos)';
+        case 'stock_publish':
+            return 'Published draft as ' . (($d['mode'] ?? '') === 'sold' ? 'a past sale' : 'an upcoming lot') . ' (' . (int)($d['photos'] ?? 0) . ' photos)';
         case 'floor_bidder':
             return (!empty($d['created']) ? 'Added floor bidder ' : 'Edited floor bidder ') . ($d['name'] ?? '')
                  . (!empty($d['bidder_number']) ? ' (' . $d['bidder_number'] . ')' : '');
@@ -594,6 +601,7 @@ require_once 'header.php';
       ['auctions',   'Auctions',              'fa-car',                0],
       ['events',     'Events',                'fa-calendar-alt',       0],
       ['manual_bid', 'Manual Bids & Floor',   'fa-gavel',              0],
+      ['stock',      'Stock Import',          'fa-file-import',        0],
       ['ai',         'AI Photos',             'fa-wand-magic-sparkles', 0],
       ['import',     'CSV Import',            'fa-file-csv',           0],
       ['url:manage_auction.php',                'Add Vehicle',  'fa-plus-circle', 0],
@@ -5167,6 +5175,13 @@ async function deleteSubscriber(id){
       </div>
     </div>
 
+    <div class="alert alert-info" style="margin-bottom:1.25rem;font-size:.86rem;">
+      <i class="fas fa-circle-info"></i>
+      Visitors now see <strong>real activity</strong> in the popups above the Live Bids button: each new bid, and who is
+      now leading. Only <strong>Custom</strong> messages from this list are still shown (once per visit). Bid / Leading / Win
+      examples are no longer shown, and anything containing "test" or "diagnostic" is skipped. You can delete those rows.
+    </div>
+
     <!-- ══ TICKER ANNOUNCEMENTS ══ -->
     <?php
     $tickerAdmin = [];
@@ -5671,7 +5686,7 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
     <div class="dashboard-header">
       <div>
         <h1><i class="fas fa-wand-magic-sparkles"></i> AI Photos</h1>
-        <p class="text-muted">Tidy vehicle photos with Grok (xAI): clean backgrounds, better lighting, blurred plates.</p>
+        <p class="text-muted">Edit vehicle photos by hand (crop, rotate, light, blur plates) or with Grok (xAI): clean backgrounds and after-repair previews.</p>
       </div>
     </div>
 
@@ -5716,12 +5731,31 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
       <div id="aiLotTitle" class="ai-lot-title"></div>
       <div id="aiPhotos" class="ai-photos"></div>
 
+      <div class="ai-modes" id="aiModes" style="display:none;">
+        <button type="button" class="ai-mode active" data-mode="ai"><i class="fas fa-wand-magic-sparkles"></i> AI edit (Grok)</button>
+        <button type="button" class="ai-mode" data-mode="manual"><i class="fas fa-sliders"></i> Edit manually (free)</button>
+      </div>
+
+      <div id="aiManual" style="display:none;">
+        <div id="peRoot" class="pe"></div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;">
+          <button type="button" class="btn btn-primary" onclick="peSave('main')"><i class="fas fa-star"></i> Save as main photo</button>
+          <button type="button" class="btn btn-outline" onclick="peSave('gallery')"><i class="fas fa-plus"></i> Save as extra gallery photo</button>
+        </div>
+        <small class="text-muted">The original is kept: "main photo" moves the old one into the gallery.</small>
+      </div>
+
       <div id="aiControls" style="display:none;">
         <h4 style="margin:1.25rem 0 .5rem;">What should change?</h4>
         <div class="ai-presets">
           <?php foreach (AI_PRESETS as $k => [$label, $text]): ?>
             <button type="button" class="btn btn-outline btn-sm ai-preset" data-preset="<?= e($k) ?>" title="<?= e($text) ?>"><?= e($label) ?></button>
           <?php endforeach; ?>
+        </div>
+        <div class="ai-repair">
+          <button type="button" class="btn btn-outline btn-sm ai-preset" data-preset="repair_preview"><i class="fas fa-screwdriver-wrench"></i> After-repair preview</button>
+          <span>Shows how the vehicle could look once its dents and scratches are fixed. The result is stamped
+            <b>"<?= e(AI_PREVIEW_LABEL) ?>"</b> and can only be added to the gallery, next to the real photos, never as the main photo.</span>
         </div>
         <textarea id="aiInstruction" class="form-control" rows="2" maxlength="600" placeholder="…or describe it, e.g. Remove the orange cones in front of the car" style="margin-top:.6rem;"></textarea>
         <button type="button" class="btn btn-primary" id="aiRunBtn" style="margin-top:.6rem;" <?= $aiMasked ? '' : 'disabled title="Save an xAI key first"' ?>>
@@ -5733,10 +5767,10 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
       <div id="aiResult" class="ai-result" style="display:none;">
         <div class="ai-compare">
           <figure><figcaption>Before</figcaption><img id="aiBefore" alt="Original photo"></figure>
-          <figure><figcaption>After (not saved yet)</figcaption><img id="aiAfter" alt="AI-edited photo"></figure>
+          <figure><figcaption id="aiAfterCap">After (not saved yet)</figcaption><img id="aiAfter" alt="AI-edited photo"></figure>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;">
-          <button type="button" class="btn btn-primary" onclick="aiSave('main')"><i class="fas fa-star"></i> Use as main photo</button>
+          <button type="button" class="btn btn-primary" id="aiMainBtn" onclick="aiSave('main')"><i class="fas fa-star"></i> Use as main photo</button>
           <button type="button" class="btn btn-outline" onclick="aiSave('gallery')"><i class="fas fa-plus"></i> Add to gallery</button>
           <button type="button" class="btn btn-outline" onclick="aiDiscard()"><i class="fas fa-xmark"></i> Discard</button>
         </div>
@@ -5761,7 +5795,24 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
       .ai-compare figcaption { font-size:.78rem; font-weight:700; color:#667; margin-bottom:.3rem; }
       .ai-compare img { width:100%; border-radius:8px; background:#eef2f7; min-height:120px; object-fit:contain; }
       @media (max-width:640px) { .ai-compare { grid-template-columns:1fr; } }
+      .ai-modes { display:flex; gap:.4rem; margin:1.1rem 0 .4rem; flex-wrap:wrap; }
+      .ai-mode { border:1px solid #c9d6e6; background:#fff; color:#003f73; border-radius:20px; padding:.4rem .95rem; font-weight:600; font-size:.85rem; cursor:pointer; }
+      .ai-mode.active { background:#003f73; color:#fff; border-color:#003f73; }
+      .ai-repair { display:flex; gap:.6rem; align-items:flex-start; margin-top:.6rem; padding:.6rem .75rem; background:#fff6e5; border:1px solid #ffd27a; border-radius:8px; font-size:.8rem; color:#6b4a00; }
+      .ai-repair .btn { flex-shrink:0; }
+      .pe-bar, .pe-sliders { display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; margin-bottom:.5rem; }
+      .pe-bar button { border:1px solid #c9d6e6; background:#fff; border-radius:6px; padding:.35rem .65rem; cursor:pointer; font-size:.82rem; color:#003f73; }
+      .pe-bar button.active { background:#1565c0; color:#fff; border-color:#1565c0; }
+      .pe-bar .pe-apply { background:#2e7d32; color:#fff; border-color:#2e7d32; }
+      .pe-sep { flex:1; }
+      .pe-sliders label { display:flex; align-items:center; gap:.35rem; font-size:.78rem; color:#445; }
+      .pe-sliders input { width:110px; }
+      .pe-stage { background:#1f2733; border-radius:8px; padding:.5rem; text-align:center; min-height:140px; }
+      .pe-stage canvas { max-width:100%; touch-action:none; }
+      .pe-hint { color:#cfd8e3; font-size:.85rem; margin:.5rem 0 0; }
+      @media (max-width:640px) { .ai-repair { flex-direction:column; } .pe-sliders input { width:90px; } }
     </style>
+    <script src="assets/js/photo-editor.js?v=<?= @filemtime(__DIR__ . '/assets/js/photo-editor.js') ?>"></script>
     <script>
     (function () {
         const post = async (fields) => {
@@ -5771,7 +5822,7 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
         };
         const say = (el, ok, msg) => document.getElementById(el).innerHTML =
             `<div class="alert alert-${ok ? 'success' : 'error'}" style="margin-bottom:.75rem">${String(msg).replace(/</g, '&lt;')}</div>`;
-        let lotId = 0, photoUrl = '', preset = '', token = '';
+        let lotId = 0, photoUrl = '', photoLarge = '', preset = '', token = '', mode = 'ai', editor = null;
 
         document.getElementById('aiKeyForm').addEventListener('submit', async e => {
             e.preventDefault();
@@ -5801,17 +5852,18 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
             document.getElementById('aiResult').style.display = 'none';
             const d = await (await fetch('api.php?action=ai_lot_photos&auction_id=' + id)).json();
             if (!d.success) { box.innerHTML = ''; document.getElementById('aiLotTitle').textContent = d.message; return; }
-            lotId = id; photoUrl = '';
+            lotId = id; photoUrl = ''; editor = null;
             document.getElementById('aiLotTitle').innerHTML = '#' + id + ' · ' + d.lot.item_name.replace(/</g, '&lt;')
                 + ' <a href="auction.php?id=' + id + '" target="_blank" style="font-weight:400;font-size:.82rem">view lot ↗</a>';
             if (!d.photos.length) { box.innerHTML = '<span class="text-muted">This lot has no photos.</span>'; return; }
             box.innerHTML = d.photos.map((p, i) =>
-                `<button type="button" data-url="${p.url.replace(/"/g, '&quot;')}">${p.kind === 'main' ? '<span class="ai-main-tag">MAIN</span>' : ''}<img src="${p.thumb.replace(/"/g, '&quot;')}" alt="Photo ${i + 1}" loading="lazy"></button>`).join('');
+                `<button type="button" data-url="${p.url.replace(/"/g, '&quot;')}" data-large="${p.large.replace(/"/g, '&quot;')}">${p.kind === 'main' ? '<span class="ai-main-tag">MAIN</span>' : ''}<img src="${p.thumb.replace(/"/g, '&quot;')}" alt="Photo ${i + 1}" loading="lazy"></button>`).join('');
             box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
                 box.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
                 b.classList.add('selected');
-                photoUrl = b.dataset.url;
-                document.getElementById('aiControls').style.display = '';
+                photoUrl = b.dataset.url; photoLarge = b.dataset.large; editor = null;
+                document.getElementById('aiModes').style.display = '';
+                showMode();
             }));
             box.querySelector('button').click();
         }
@@ -5820,6 +5872,25 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
             const id = parseInt(document.getElementById('aiLotId').value, 10);
             if (id > 0) loadLot(id);
         });
+        // AI edit (Grok) or manual editor (free, in the browser)
+        function showMode() {
+            document.querySelectorAll('.ai-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+            document.getElementById('aiControls').style.display = mode === 'ai' && photoUrl ? '' : 'none';
+            document.getElementById('aiManual').style.display = mode === 'manual' && photoUrl ? '' : 'none';
+            if (mode === 'manual') document.getElementById('aiResult').style.display = 'none';
+            if (mode === 'manual' && photoUrl && !editor) editor = AHGPhotoEditor(document.getElementById('peRoot'), photoLarge);
+        }
+        document.querySelectorAll('.ai-mode').forEach(b => b.addEventListener('click', () => { mode = b.dataset.mode; showMode(); }));
+        window.peSave = async (saveMode) => {
+            if (!editor) return;
+            if (!editor.changed()) { showToast('Make a change first (crop, rotate, light or blur).', 'error'); return; }
+            const image = editor.toDataURL();
+            if (!image) { showToast('The photo has not loaded yet.', 'error'); return; }
+            const d = await post({action: 'photo_save_edit', auction_id: lotId, mode: saveMode, image: image});
+            showToast(d.message, d.success ? 'success' : 'error');
+            if (d.success) loadLot(lotId);
+        };
+
         <?php if ($aiLot): ?>loadLot(<?= $aiLot ?>);<?php endif; ?>
 
         document.querySelectorAll('.ai-preset').forEach(b => b.addEventListener('click', () => {
@@ -5843,6 +5914,8 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
                 const d = await post({action: 'ai_edit', auction_id: lotId, photo_url: photoUrl, preset: preset, instruction: instruction});
                 if (!d.success) { showToast(d.message, 'error'); return; }
                 token = d.token;
+                document.getElementById('aiMainBtn').style.display = d.repair ? 'none' : '';
+                document.getElementById('aiAfterCap').textContent = d.repair ? 'After-repair preview (gallery only, not saved yet)' : 'After (not saved yet)';
                 document.getElementById('aiBefore').src = document.querySelector('.ai-photos button.selected img').src.replace(/tr:w-\d+/, 'tr:w-1200');
                 document.getElementById('aiAfter').src = d.preview;
                 document.getElementById('aiResult').style.display = '';
@@ -5858,6 +5931,250 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
             if (d.success) { token = ''; document.getElementById('aiResult').style.display = 'none'; loadLot(lotId); }
         };
         window.aiDiscard = () => { token = ''; document.getElementById('aiResult').style.display = 'none'; };
+    })();
+    </script>
+
+<?php elseif ($activeTab === 'stock'):
+    $stBranches = $pdo->query("SELECT id, name FROM branches ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $stMakes    = $pdo->query("SELECT id, name FROM makes ORDER BY name")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $stPage     = max(1, (int)($_GET['spage'] ?? 1));
+    $stCount    = (int)$pdo->query("SELECT COUNT(*) FROM stock_drafts WHERE status = 'draft'")->fetchColumn();
+    $stPages    = max(1, (int)ceil($stCount / 20));
+    $stDrafts   = $pdo->query("SELECT * FROM stock_drafts WHERE status = 'draft' ORDER BY posted_at DESC, id DESC LIMIT 20 OFFSET " . (($stPage - 1) * 20))->fetchAll();
+    $stDone     = (int)$pdo->query("SELECT COUNT(*) FROM stock_drafts WHERE status = 'published'")->fetchColumn();
+    $branchOpts = function ($sel) use ($stBranches) {
+        $o = '<option value="">— Branch —</option>';
+        foreach ($stBranches as $id => $n) $o .= '<option value="' . (int)$id . '"' . ((int)$sel === (int)$id ? ' selected' : '') . '>' . e($n) . '</option>';
+        return $o;
+    };
+    $makeOpts = function ($sel) use ($stMakes) {
+        $o = '<option value="">— Make —</option>';
+        foreach ($stMakes as $id => $n) $o .= '<option value="' . (int)$id . '"' . ((int)$sel === (int)$id ? ' selected' : '') . '>' . e($n) . '</option>';
+        return $o;
+    };
+?>
+    <div class="dashboard-header">
+      <div>
+        <h1><i class="fas fa-file-import"></i> Stock Import</h1>
+        <p class="text-muted">Bring in old Facebook posts and new branch stock as drafts, check them, then publish. <?= $stCount ?> draft<?= $stCount === 1 ? '' : 's' ?> waiting · <?= $stDone ?> published.</p>
+      </div>
+    </div>
+
+    <div class="grid-2" style="align-items:start;margin-bottom:1.5rem;">
+      <!-- Facebook export -->
+      <div class="card">
+        <h3 style="margin-top:0"><i class="fab fa-facebook" style="color:#1877f2"></i> From Facebook</h3>
+        <ol class="st-steps">
+          <li>On Facebook (as the Page): <strong>Settings → Your Facebook information → Download your information</strong>.</li>
+          <li>Pick <strong>Posts</strong> only, a date range, <strong>Format: JSON</strong>, <strong>Media quality: High</strong>. Facebook emails you when the ZIP is ready.</li>
+          <li>Small ZIP (under 100 MB): upload it here. Bigger: put it in the server folder <code>ahg_import/inbox</code> (one level above <code>public_html</code>) with cPanel File Manager, then pick it below.</li>
+        </ol>
+        <div id="stFbResult"></div>
+        <form id="stFbForm" class="st-form">
+          <label>Branch for these vehicles<select name="branch_id" class="form-control"><?= $branchOpts(null) ?></select></label>
+          <label>Upload ZIP<input type="file" name="zip" accept=".zip" class="form-control"></label>
+          <label>…or from the server inbox <select name="inbox_file" id="stInbox" class="form-control"><option value="">Loading…</option></select></label>
+          <button type="submit" class="btn btn-primary" id="stFbBtn"><i class="fas fa-file-import"></i> Import posts</button>
+          <div class="st-progress" id="stFbProgress" hidden><span></span></div>
+        </form>
+      </div>
+
+      <!-- New branch stock -->
+      <div class="card">
+        <h3 style="margin-top:0"><i class="fas fa-truck-ramp-box"></i> New stock from a branch</h3>
+        <div id="stNewResult"></div>
+        <form id="stNewForm" class="st-form">
+          <label>Vehicle name *<input type="text" name="title" class="form-control" maxlength="255" placeholder="2019 Toyota Hilux 2.4 GD-6 Raider"></label>
+          <div class="grid-2" style="gap:.6rem;">
+            <label>Branch<select name="branch_id" class="form-control"><?= $branchOpts(null) ?></select></label>
+            <label>Make<select name="make_id" class="form-control"><?= $makeOpts(null) ?></select></label>
+            <label>Year<input type="number" name="year" class="form-control" min="1980" max="<?= date('Y') + 1 ?>"></label>
+            <label>Mileage (km)<input type="text" name="mileage" class="form-control" inputmode="numeric"></label>
+            <label>Starting price (R)<input type="text" name="price" class="form-control" inputmode="decimal"></label>
+            <label>Photos *<input type="file" name="photos[]" accept="image/jpeg,image/png,image/webp" multiple class="form-control"></label>
+          </div>
+          <label>Description<textarea name="description" class="form-control" rows="2"></textarea></label>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Save as draft</button>
+        </form>
+      </div>
+    </div>
+
+    <h3 style="margin:0 0 .75rem;">Drafts to check <span class="av-tab-count"><?= $stCount ?></span></h3>
+    <?php if (!$stDrafts): ?>
+      <div class="card" style="text-align:center;color:#889;">No drafts waiting. Import a Facebook export or add new stock above.</div>
+    <?php endif; ?>
+    <div class="st-grid">
+      <?php foreach ($stDrafts as $d): $ph = json_decode($d['photos'] ?: '[]', true) ?: []; ?>
+      <div class="card st-card" id="st-<?= (int)$d['id'] ?>" data-id="<?= (int)$d['id'] ?>">
+        <div class="st-photos" data-photos="<?= e(json_encode($ph)) ?>">
+          <?php foreach ($ph as $n => $f): ?>
+            <button type="button" class="st-ph" data-f="<?= e($f) ?>" title="Tap to leave this photo out">
+              <img src="stock_photo.php?d=<?= (int)$d['id'] ?>&amp;f=<?= e($f) ?>" alt="" loading="lazy">
+              <span class="st-main" title="Make this the main photo">★</span>
+            </button>
+          <?php endforeach; ?>
+        </div>
+        <small class="text-muted"><?= count($ph) ?> photo<?= count($ph) === 1 ? '' : 's' ?> · first is the main photo · tap to leave one out, ★ to make main ·
+          <?= $d['source'] === 'facebook' ? 'Facebook post ' . safeDate('d M Y', $d['posted_at']) : 'Uploaded ' . safeDate('d M Y', $d['created_at']) ?></small>
+        <form class="st-form st-edit">
+          <label>Vehicle name<input type="text" name="title" class="form-control" value="<?= e($d['title']) ?>" maxlength="255"></label>
+          <div class="grid-2" style="gap:.5rem;">
+            <label>Make<select name="make_id" class="form-control"><?= $makeOpts($d['make_id']) ?></select></label>
+            <label>Year<input type="number" name="year" class="form-control" value="<?= e((string)$d['year']) ?>"></label>
+            <label>Mileage (km)<input type="text" name="mileage" class="form-control" value="<?= e((string)$d['mileage']) ?>"></label>
+            <label>Price (R)<input type="text" name="price" class="form-control" value="<?= $d['price'] !== null ? (float)$d['price'] : '' ?>"></label>
+            <label>Branch<select name="branch_id" class="form-control"><?= $branchOpts($d['branch_id']) ?></select></label>
+            <label>Sold at <small>(past sales)</small><select name="sale_channel" class="form-control">
+              <?php foreach (SALE_CHANNELS as $k => $l): ?><option value="<?= e($k) ?>"<?= $k === 'floor' ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?>
+            </select></label>
+          </div>
+          <details><summary>Post text / description</summary><textarea name="description" class="form-control" rows="4"><?= e($d['description'] ?? '') ?></textarea></details>
+          <details class="st-lot-opts"><summary>Auction times (new lots)</summary>
+            <div class="grid-2" style="gap:.5rem;">
+              <label>Start<input type="datetime-local" name="start_time" class="form-control" value="<?= date('Y-m-d\T09:00', strtotime('+1 day')) ?>"></label>
+              <label>End<input type="datetime-local" name="end_time" class="form-control" value="<?= date('Y-m-d\T18:00', strtotime('+8 days')) ?>"></label>
+              <label>Reserve (R)<input type="text" name="reserve" class="form-control"></label>
+            </div>
+          </details>
+          <div class="st-msg"></div>
+          <div class="st-actions">
+            <button type="button" class="btn btn-outline btn-sm" data-act="save"><i class="fas fa-save"></i> Save</button>
+            <button type="button" class="btn btn-primary btn-sm" data-act="lot"><i class="fas fa-gavel"></i> Publish as lot</button>
+            <button type="button" class="btn btn-sold btn-sm" data-act="sold"><i class="fas fa-tag"></i> Add to Sold page</button>
+            <button type="button" class="btn btn-outline btn-sm" data-act="skip" style="color:#c62828;border-color:#c62828"><i class="fas fa-xmark"></i> Skip</button>
+          </div>
+        </form>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php if ($stPages > 1): ?>
+    <nav class="av-pagination">
+      <?php for ($p = 1; $p <= $stPages; $p++): ?>
+        <a href="?tab=stock&amp;spage=<?= $p ?>" class="av-page-btn <?= $p === $stPage ? 'active' : '' ?>"><?= $p ?></a>
+      <?php endfor; ?>
+    </nav>
+    <?php endif; ?>
+
+    <style>
+      .st-steps { margin:.25rem 0 1rem; padding-left:1.2rem; font-size:.86rem; line-height:1.55; }
+      .st-form { display:flex; flex-direction:column; gap:.55rem; }
+      .st-form label { display:flex; flex-direction:column; gap:.2rem; font-size:.78rem; font-weight:600; color:#445; }
+      .st-progress { height:8px; border-radius:6px; background:#e3e9f2; overflow:hidden; }
+      .st-progress span { display:block; height:100%; width:0; background:#1565c0; transition:width .3s; }
+      .st-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:1rem; }
+      .st-card { display:flex; flex-direction:column; gap:.5rem; margin:0; }
+      .st-photos { display:flex; gap:.35rem; overflow-x:auto; padding-bottom:.2rem; }
+      .st-ph { position:relative; flex:0 0 96px; height:70px; padding:0; border:2px solid transparent; border-radius:8px; overflow:hidden; cursor:pointer; background:#eef2f7; }
+      .st-ph:first-child { border-color:#1565c0; }
+      .st-ph img { width:100%; height:100%; object-fit:cover; }
+      .st-ph.st-off { opacity:.3; border-color:#c62828; }
+      .st-main { position:absolute; right:3px; top:2px; color:#fff; text-shadow:0 1px 3px #000; font-size:.9rem; }
+      .st-actions { display:flex; flex-wrap:wrap; gap:.4rem; }
+      .st-msg:empty { display:none; }
+      .st-card details summary { cursor:pointer; font-size:.8rem; font-weight:600; color:#1565c0; }
+      @media (max-width:480px) { .st-grid { grid-template-columns:1fr; } }
+    </style>
+    <script>
+    (function () {
+        const post = async (fd) => (await fetch('api.php', {method: 'POST', body: fd})).json();
+        const say = (el, ok, msg) => { el.innerHTML = `<div class="alert alert-${ok ? 'success' : 'error'}" style="margin:0 0 .5rem">${String(msg).replace(/</g, '&lt;')}</div>`; };
+
+        // Server inbox list
+        fetch('api.php?action=stock_inbox').then(r => r.json()).then(d => {
+            const sel = document.getElementById('stInbox');
+            sel.innerHTML = '<option value="">— none —</option>' + (d.files || []).map(f =>
+                `<option value="${f.name.replace(/"/g, '&quot;')}">${f.name.replace(/</g, '&lt;')} (${f.mb} MB, ${f.date})</option>`).join('');
+        }).catch(() => {});
+
+        // Facebook import, batch by batch
+        document.getElementById('stFbForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const f = e.target, out = document.getElementById('stFbResult'), btn = document.getElementById('stFbBtn');
+            const bar = document.getElementById('stFbProgress');
+            btn.disabled = true; bar.hidden = false; out.innerHTML = '';
+            let file = null, offset = 0, added = 0, skipped = 0;
+            try {
+                while (true) {
+                    const fd = new FormData();
+                    fd.append('action', 'stock_import_fb');
+                    fd.append('branch_id', f.branch_id.value);
+                    fd.append('offset', offset);
+                    if (file) fd.append('inbox_file', file);
+                    else if (f.zip.files[0]) fd.append('zip', f.zip.files[0]);
+                    else fd.append('inbox_file', f.inbox_file.value);
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+                    const d = await post(fd);
+                    if (!d.success) { say(out, false, d.message); break; }
+                    file = d.file; added += d.added; skipped += d.skipped;
+                    const done = d.next === null ? d.total : d.next;
+                    bar.firstElementChild.style.width = Math.round(done / d.total * 100) + '%';
+                    say(out, true, `${done} of ${d.total} posts read · ${added} new drafts · ${skipped} already imported`);
+                    if (d.next === null) { setTimeout(() => location.reload(), 1500); break; }
+                    offset = d.next;
+                }
+            } catch { say(out, false, 'The import stopped (connection or timeout). Press Import again: it carries on where it stopped.'); }
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-import"></i> Import posts';
+        });
+
+        // New stock
+        document.getElementById('stNewForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const out = document.getElementById('stNewResult'), fd = new FormData(e.target);
+            fd.append('action', 'stock_new');
+            const b = e.target.querySelector('button'); b.disabled = true;
+            try { const d = await post(fd); say(out, d.success, d.message); if (d.success) setTimeout(() => location.reload(), 900); }
+            catch { say(out, false, 'Upload failed. Try fewer or smaller photos.'); }
+            b.disabled = false;
+        });
+
+        // Draft cards: photo keep/main, save, publish, skip
+        document.querySelectorAll('.st-card').forEach(card => {
+            const strip = card.querySelector('.st-photos'), msg = card.querySelector('.st-msg'), form = card.querySelector('.st-edit');
+            strip.addEventListener('click', e => {
+                const ph = e.target.closest('.st-ph');
+                if (!ph) return;
+                if (e.target.classList.contains('st-main')) { ph.classList.remove('st-off'); strip.prepend(ph); }
+                else ph.classList.toggle('st-off');
+            });
+            const kept = () => [...strip.querySelectorAll('.st-ph:not(.st-off)')].map(p => p.dataset.f);
+            const fields = (action) => {
+                const fd = new FormData(form);
+                fd.append('action', action);
+                fd.append('id', card.dataset.id);
+                fd.append('photos', JSON.stringify(kept()));
+                return fd;
+            };
+            card.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
+                const act = btn.dataset.act;
+                if (act === 'skip' && !confirm('Remove this draft? Its photos are deleted from the import folder.')) return;
+                if (!kept().length && act !== 'skip') { say(msg, false, 'Keep at least one photo.'); return; }
+                card.querySelectorAll('[data-act]').forEach(b => b.disabled = true);
+                try {
+                    if (act === 'skip') {
+                        const d = await post(fields('stock_draft_skip'));
+                        if (d.success) { card.remove(); return; }
+                        say(msg, false, d.message);
+                    } else {
+                        const s = await post(fields('stock_draft_save'));          // always save edits first
+                        if (!s.success) { say(msg, false, s.message); }
+                        else if (act === 'save') { say(msg, true, s.message); }
+                        else {
+                            say(msg, true, 'Uploading photos… (up to a minute)');
+                            const fd = fields('stock_draft_publish');
+                            fd.set('mode', act === 'sold' ? 'sold' : 'lot');
+                            ['start_time', 'end_time'].forEach(k => { const v = form[k].value; if (v) fd.set(k, v.replace('T', ' ') + ':00'); });
+                            const d = await post(fd);
+                            if (!d.success) say(msg, false, d.message);
+                            else {
+                                card.innerHTML = `<div class="alert alert-success" style="margin:0">${d.message} <a href="auction.php?id=${d.auction_id}" target="_blank">View lot ↗</a> · <a href="manage_auction.php?id=${d.auction_id}">Edit details</a></div>`;
+                                return;
+                            }
+                        }
+                    }
+                } catch { say(msg, false, 'Something went wrong. Please try again.'); }
+                card.querySelectorAll('[data-act]').forEach(b => b.disabled = false);
+            }));
+        });
     })();
     </script>
 

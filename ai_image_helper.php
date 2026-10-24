@@ -18,6 +18,14 @@ const AI_PROMPT_GUARD = 'Edit this used-vehicle auction photo. Keep the vehicle 
     . 'same make, model, colour, wheels, badges, number of doors, and every scratch, dent, rust spot or other damage. '
     . 'Do not add, remove or repair anything on the vehicle. Only make this change: ';
 
+// "After repair" preview: allowed only because the result is stamped as an AI
+// preview on the image itself and can only be saved as an extra gallery photo,
+// never the main one, so buyers can't mistake it for the vehicle's condition.
+const AI_REPAIR_PROMPT = 'Show this exact vehicle as it would look after its visible body damage '
+    . '(dents, scratches, scuffs, rust, cracked lights or glass) has been professionally repaired. '
+    . 'Keep the make, model, colour, wheels, camera angle, lighting and background identical.';
+const AI_PREVIEW_LABEL = 'AI PREVIEW - AFTER REPAIR - NOT CURRENT CONDITION';
+
 /** Ready-made edits shown as buttons in the admin */
 const AI_PRESETS = [
     'background' => ['Clean background',  'Replace the background with a clean, bright, neutral grey studio backdrop with a soft floor shadow.'],
@@ -107,10 +115,10 @@ function xaiTestKey(string $key): array {
  * Edit one photo. $imageUrl must be publicly reachable (our ImageKit URLs are).
  * Returns ['bytes' => binary image, 'mime' => 'image/…'].
  */
-function xaiEditImage(string $imageUrl, string $instruction): array {
+function xaiEditImage(string $imageUrl, string $instruction, bool $guard = true): array {
     [$code, $body] = xaiRequest('POST', '/v1/images/edits', [
         'model'           => aiModel(),
-        'prompt'          => AI_PROMPT_GUARD . $instruction,
+        'prompt'          => ($guard ? AI_PROMPT_GUARD : '') . $instruction,
         'image'           => ['url' => $imageUrl, 'type' => 'image_url'],
         'response_format' => 'b64_json',
     ]);
@@ -142,17 +150,36 @@ function aiTmpDir(): string {
     return $dir;
 }
 
-/** Store an edit; returns its token */
-function aiStoreTmp(array $img, int $auctionId): string {
+/**
+ * Stamp a wide banner across the bottom of an image ("AI PREVIEW - …").
+ * Built-in GD font drawn small, then scaled up, so no font file is needed.
+ */
+function aiLabelImage(array $img, string $label): array {
+    $src = @imagecreatefromstring($img['bytes']);
+    if (!$src) throw new RuntimeException('Could not read the generated image to label it.');
+    $w = imagesx($src); $h = imagesy($src);
+    $font = 5; $tw = imagefontwidth($font) * strlen($label); $th = imagefontheight($font);
+    $txt = imagecreatetruecolor($tw + 12, $th + 6);
+    imagefill($txt, 0, 0, imagecolorallocate($txt, 200, 16, 46));
+    imagestring($txt, $font, 6, 3, $label, imagecolorallocate($txt, 255, 255, 255));
+    $bw = (int)($w * 0.96); $bh = (int)round($bw * imagesy($txt) / imagesx($txt));
+    imagecopyresampled($src, $txt, (int)(($w - $bw) / 2), $h - $bh - (int)($h * 0.02), 0, 0, $bw, $bh, imagesx($txt), imagesy($txt));
+    ob_start(); imagejpeg($src, null, 90); $bytes = ob_get_clean();
+    imagedestroy($src); imagedestroy($txt);
+    return ['bytes' => $bytes, 'mime' => 'image/jpeg'];
+}
+
+/** Store an edit; returns its token ("_p…" marks a repair preview: gallery only) */
+function aiStoreTmp(array $img, int $auctionId, bool $preview = false): string {
     $ext   = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$img['mime']];
-    $token = $auctionId . '_' . bin2hex(random_bytes(12));
+    $token = $auctionId . '_' . ($preview ? 'p' : '') . bin2hex(random_bytes(12));
     file_put_contents(aiTmpDir() . DIRECTORY_SEPARATOR . "$token.$ext", $img['bytes']);
     return $token;
 }
 
 /** Path of a stored edit, or null (token format is checked, so no path tricks) */
 function aiTmpPath(string $token): ?string {
-    if (!preg_match('/^\d+_[a-f0-9]{24}$/', $token)) return null;
+    if (!preg_match('/^\d+_p?[a-f0-9]{24}$/', $token)) return null;
     foreach (['jpg', 'png', 'webp'] as $ext) {
         $p = aiTmpDir() . DIRECTORY_SEPARATOR . "$token.$ext";
         if (is_file($p)) return $p;
@@ -176,4 +203,31 @@ function aiLotPhotos(int $auctionId): array {
         $out[] = ['url' => $u, 'kind' => 'gallery', 'gallery_id' => (int)$r['id']];
     }
     return $out;
+}
+
+function aiIsPreviewToken(string $token): bool { return (bool)preg_match('/^\d+_p/', $token); }
+
+/**
+ * Upload an edited photo to ImageKit and attach it to a lot. 'main' replaces
+ * the main photo (the old one moves into the gallery, so nothing is lost);
+ * 'gallery' adds it at the end. Returns the uploaded URL.
+ */
+function aiSaveToLot(int $lotId, string $path, string $mode, string $tag): string {
+    global $pdo;
+    require_once __DIR__ . '/imagekit_helper.php';
+    $st = $pdo->prepare("SELECT image_url, cloudinary_public_id FROM auctions WHERE id = ?");
+    $st->execute([$lotId]);
+    $lot = $st->fetch();
+    if (!$lot) throw new RuntimeException('No lot with that ID.');
+    $up = uploadToImageKit($path, IMAGEKIT_VEHICLE_FOLDER, 'lot-' . $lotId . '-' . $tag . '-' . date('YmdHis'));
+    $next = $pdo->prepare("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM auction_gallery WHERE auction_id = ?");
+    $next->execute([$lotId]);
+    $add = $pdo->prepare("INSERT INTO auction_gallery (auction_id, file_path, cloudinary_public_id, sort_order) VALUES (?,?,?,?)");
+    if ($mode === 'main') {
+        if ($lot['image_url']) $add->execute([$lotId, $lot['image_url'], $lot['cloudinary_public_id'], (int)$next->fetchColumn()]);
+        $pdo->prepare("UPDATE auctions SET image_url = ?, cloudinary_public_id = ? WHERE id = ?")->execute([$up['url'], $up['file_id'], $lotId]);
+    } else {
+        $add->execute([$lotId, $up['url'], $up['file_id'], (int)$next->fetchColumn()]);
+    }
+    return $up['url'];
 }

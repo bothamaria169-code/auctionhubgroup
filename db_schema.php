@@ -64,6 +64,28 @@ const AHG_SCHEMA_TABLES = [
             created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_saved_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // Admin → Stock Import: drafts from Facebook exports / branch uploads
+    'stock_drafts' => "
+        CREATE TABLE IF NOT EXISTS stock_drafts (
+            id           INT AUTO_INCREMENT PRIMARY KEY,
+            source       VARCHAR(20)   NOT NULL,
+            source_ref   VARCHAR(64)   NOT NULL,
+            branch_id    INT           NULL,
+            title        VARCHAR(255)  NOT NULL DEFAULT '',
+            description  TEXT          NULL,
+            year         INT           NULL,
+            make_id      INT           NULL,
+            mileage      INT           NULL,
+            price        DECIMAL(12,2) NULL,
+            photos       TEXT          NULL,
+            posted_at    DATETIME      NULL,
+            status       VARCHAR(12)   NOT NULL DEFAULT 'draft',
+            auction_id   INT           NULL,
+            created_by   INT           NULL,
+            created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_draft_source (source, source_ref),
+            INDEX idx_draft_status (status, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 ];
 
 // Columns added to existing tables (table => [column => ALTER statement])

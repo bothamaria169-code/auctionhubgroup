@@ -127,19 +127,7 @@ try {
     $testimonials = [];
 }
 
-// 6. Popup notifications (active, for toast rotation)
-$popupNotifications = [];
-try {
-    $popupNotifications = $pdo->query("
-        SELECT message, type, icon, frequency
-        FROM popup_notifications
-        WHERE is_active = 1
-        ORDER BY id DESC
-        LIMIT 20
-    ")->fetchAll();
-} catch (Exception $e) {
-    $popupNotifications = [];
-}
+// 6. Popup notifications: shown sitewide by live_bids_widget.php (real bids + staff notes)
 
 // ── HELPER — display price ────────────────────────────────────
 function displayPrice(array $auction): string {
@@ -1417,58 +1405,5 @@ function scrollTestimonials(dir) {
     </div>
 </section>
 
-<!-- ══════════════════════════════════════════════════════════
-     POPUP NOTIFICATIONS (Toast Rotator)
-     ══════════════════════════════════════════════════════════ -->
-<?php if (!empty($popupNotifications)): ?>
-<div id="pvaToastContainer" style="position:fixed;bottom:1.5rem;left:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;max-width:380px;"></div>
-<script>
-(function(){
-    const notifications = <?= json_encode($popupNotifications) ?>;
-    if (!notifications.length) return;
-
-    const typeColors = {
-        bid:     { bg:'#e3f2fd', border:'#1565c0', color:'#0d47a1', icon:'fa-gavel' },
-        win:     { bg:'#e8f5e9', border:'#4caf50', color:'#2e7d32', icon:'fa-check-circle' },
-        leading: { bg:'#fff8e1', border:'#f9a825', color:'#f57f17', icon:'fa-trophy' },
-        custom:  { bg:'#f3e5f5', border:'#9c27b0', color:'#6a1b9a', icon:'fa-bell' }
-    };
-
-    let index = 0;
-    const container = document.getElementById('pvaToastContainer');
-
-    function showNotification() {
-        const n = notifications[index % notifications.length];
-        const style = typeColors[n.type] || typeColors.custom;
-        const icon = n.icon || style.icon;
-
-        const toast = document.createElement('div');
-        toast.style.cssText = 'pointer-events:auto;background:'+style.bg+';border-left:4px solid '+style.border+';border-radius:10px;padding:.85rem 1.1rem;box-shadow:0 8px 24px rgba(0,0,0,.15);display:flex;align-items:flex-start;gap:.65rem;transform:translateX(-120%);transition:transform .4s ease,opacity .4s;opacity:0;max-width:380px;';
-        toast.innerHTML = '<div style="width:32px;height:32px;border-radius:50%;background:'+style.border+';display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas '+icon+'" style="color:#fff;font-size:.8rem;"></i></div><div style="flex:1;"><p style="margin:0;font-size:.85rem;color:'+style.color+';font-weight:600;line-height:1.45;">'+n.message+'</p><span style="font-size:.72rem;color:#999;margin-top:.2rem;display:block;">Just now</span></div><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:1rem;padding:0;line-height:1;">&times;</button>';
-
-        container.appendChild(toast);
-
-        requestAnimationFrame(() => {
-            toast.style.transform = 'translateX(0)';
-            toast.style.opacity = '1';
-        });
-
-        setTimeout(() => {
-            toast.style.transform = 'translateX(-120%)';
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 500);
-        }, 5000);
-
-        // Schedule next notification using current notification's frequency
-        const freq = Math.max(5, parseInt(n.frequency) || 10);
-        index++;
-        setTimeout(showNotification, freq * 1000);
-    }
-
-    // Show first one after 3 seconds
-    setTimeout(showNotification, 3000);
-})();
-</script>
-<?php endif; ?>
 
 <?php require_once 'footer.php'; ?>

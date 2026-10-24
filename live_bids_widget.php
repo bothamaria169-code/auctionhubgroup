@@ -21,6 +21,7 @@ if (in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), $lbSkip, true)) return;
     </button>
     <button type="button" class="lb-hide" id="lbHide" title="Hide live bids" aria-label="Hide live bids">&times;</button>
 </div>
+<div class="lb-toasts" id="lbToasts" aria-live="polite"></div>
 <button type="button" class="lb-restore" id="lbRestore" hidden aria-label="Show live bids">
     <span class="lb-pulse" aria-hidden="true"></span> Live
 </button>
@@ -36,8 +37,8 @@ if (in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), $lbSkip, true)) return;
         </div>
         <div class="lb-tabs" role="tablist">
             <button type="button" role="tab" class="lb-tab active" data-tab="bids" aria-selected="true">Latest bids</button>
+            <button type="button" role="tab" class="lb-tab" data-tab="leading" aria-selected="false">Who's leading</button>
             <button type="button" role="tab" class="lb-tab" data-tab="ending" aria-selected="false">Ending soon</button>
-            <button type="button" role="tab" class="lb-tab" data-tab="hot" aria-selected="false">Most bid</button>
         </div>
         <div class="lb-list" id="lbList"></div>
         <a href="auctions.php" class="lb-all">See all live auctions <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
@@ -89,7 +90,11 @@ if (in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), $lbSkip, true)) return;
         var right, meta;
         if (tab === 'bids') {
             right = '<strong class="lb-amt">' + esc(item.amount_fmt) + '</strong><small>' + esc(item.ago) + '</small>';
-            meta = esc(item.bidder) + ' · ends in <span data-ends="' + esc(item.ends) + '">' + left(item.ends) + '</span>';
+            meta = esc(item.bidder) + (item.leading ? ' <span class="lb-lead">Leading</span>' : '') +
+                   ' · ends in <span data-ends="' + esc(item.ends) + '">' + left(item.ends) + '</span>';
+        } else if (tab === 'leading') {
+            right = '<strong class="lb-amt">' + esc(item.price_fmt) + '</strong><small>' + item.bids + ' bid' + (item.bids === 1 ? '' : 's') + '</small>';
+            meta = '<i class="fas fa-trophy"></i> ' + esc(item.leader) + ' leads · <span data-ends="' + esc(item.ends) + '">' + left(item.ends) + '</span> left';
         } else {
             right = '<strong class="lb-amt">' + esc(item.price_fmt) + '</strong><small>' + item.bids + ' bid' + (item.bids === 1 ? '' : 's') + '</small>';
             meta = '<i class="fas fa-clock"></i> <span data-ends="' + esc(item.ends) + '">' + left(item.ends) + '</span> left';
@@ -107,11 +112,54 @@ if (in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), $lbSkip, true)) return;
         document.getElementById('lbSub').textContent = data.live_count + ' vehicles live · updating every 20 seconds';
     }
 
+    // Toasts above the pill: real new bids (and who now leads), staff notes
+    var toasts = document.getElementById('lbToasts');
+    var ss = {
+        get: function (k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+        set: function (k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+    };
+    function toast(html, href) {
+        if (store.get('ahg_lb_hidden') === '1' || !panel.hidden) return;
+        var el = document.createElement(href ? 'a' : 'div');
+        el.className = 'lb-toast';
+        if (href) el.href = href;
+        el.innerHTML = html;
+        toasts.appendChild(el);
+        while (toasts.children.length > 2) toasts.removeChild(toasts.firstChild);
+        setTimeout(function () { el.classList.add('lb-toast-out'); setTimeout(function () { el.remove(); }, 400); }, 6500);
+    }
+    function bidToast(b) {
+        toast('<i class="fas fa-gavel" aria-hidden="true"></i><span><strong>' + esc(b.bidder) + '</strong> bid <strong>' +
+              esc(b.amount_fmt) + '</strong> on ' + esc(short(b.title)) +
+              (b.leading ? ' <span class="lb-lead">now leading</span>' : '') + '<em>' + esc(b.ago) + '</em></span>', BASE + b.url);
+    }
+    var firstLoad = true;
+    function notify(d, prevId) {
+        if (firstLoad) {
+            firstLoad = false;
+            // On arrival: the latest bid once per visit, if it's recent
+            var b = d.bids[0];
+            if (b && ss.get('ahg_lb_seen') !== String(b.bid_id) &&
+                (Date.now() + skew) - new Date(String(b.at).replace(' ', 'T')).getTime() < 30 * 60000) {
+                ss.set('ahg_lb_seen', String(b.bid_id));
+                setTimeout(function () { bidToast(b); }, 2500);
+            }
+            (d.notes || []).forEach(function (n, i) {
+                if (ss.get('ahg_note_' + n.id)) return;
+                ss.set('ahg_note_' + n.id, '1');
+                setTimeout(function () { toast('<i class="fas fa-bullhorn" aria-hidden="true"></i><span>' + esc(n.text) + '</span>'); }, 9000 + i * 8000);
+            });
+            return;
+        }
+        d.bids.filter(function (b) { return b.bid_id > prevId; }).slice(0, 2).reverse().forEach(bidToast);
+    }
+
     function load() {
         fetch(API, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (d) {
             if (!d || !d.success) return;
             skew = new Date(d.server_time.replace(' ', 'T')).getTime() - Date.now();
             var newest = d.bids.length ? d.bids[0].bid_id : 0;
+            var prevId = lastBidId;
             if (lastBidId && newest > lastBidId) {
                 d.bids.forEach(function (b) { b.isNew = b.bid_id > lastBidId; });
                 cycle = 0;
@@ -119,6 +167,7 @@ if (in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), $lbSkip, true)) return;
             }
             lastBidId = Math.max(lastBidId, newest);
             data = d;
+            notify(d, prevId);
             var anything = d.bids.length || d.ending.length || d.live_count;
             if (!anything) { dock.hidden = true; restore.hidden = true; return; }
             if (store.get('ahg_lb_hidden') === '1') { restore.hidden = false; } else { dock.hidden = false; }

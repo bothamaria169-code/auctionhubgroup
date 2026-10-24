@@ -27,6 +27,11 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
 - [ ] **Sold dates** you don't know: Sold tab → *Spread these dates* (undo available).
 - [ ] **Floor bidders:** Admin → **Manual Bids & Floor** → *Add floor bidder* for each person registered at a
       floor/live auction (name, cellphone, optional email and ID). Then *Bid* next to them to enter their bids.
+- [ ] **Old Facebook vehicles:** Facebook → Settings → *Download your information* → choose the Page (or profile),
+      tick only **Posts**, Format **JSON**, Media quality **High**, any date range → download the ZIP. Then
+      Admin → **Stock Import** → pick the branch → upload the ZIP (or, if it's over the upload limit, put it in
+      `/home/auctionhubgroupc/ahg_import/inbox/` with File Manager and pick it from the list). Check each draft
+      (title, year, make, price, photos), then *Publish as sold* or *Publish as lot*.
 
 ## 2. Done in this round
 
@@ -52,6 +57,17 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
       20 s, can be hidden. Bidder numbers masked (••042), no names. Not on admin/account/checkout pages
 - [x] Admin menu grouped (Dashboard · Sales & Auctions · Bidders & Payments · Marketing & Content · People),
       same groups on phones; user menu grouped (Bidding · My Account)
+- [x] **Stock Import** (Admin → Stock Import): Facebook export ZIP → drafts (year, make, price, km guessed from the
+      post text; emojis fixed; duplicates skipped; big ZIPs in batches of 25), plus *New stock* from any branch with
+      photos. Drafts: reorder/drop photos, edit, publish as an upcoming lot or as a past sale. Photos stay outside
+      `public_html` until published
+- [x] **Photo editor** (Admin → AI Photos → *Edit manually*): crop, rotate, brightness/contrast/saturation, blur an
+      area (plates), undo/reset; free, in the browser. **After-repair preview** (Grok) shows a fixed vehicle but is
+      stamped "AI PREVIEW - AFTER REPAIR - NOT CURRENT CONDITION" and can only go in the gallery, never as the
+      main photo. Normal AI edits still must keep all damage visible (Consumer Protection Act)
+- [x] **Pop-ups:** the old rotating "notification" pop-ups (incl. test/diagnostic rows) are gone. The site now shows
+      real new bids ("Bidder ••042 bid R… — now leading") above the Live Bids pill, a *Who's leading* tab in the
+      panel, and only *Custom* messages from Admin → Notifications
 
 ## 3. Next features (borrowed from our other sites)
 

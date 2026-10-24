@@ -251,25 +251,53 @@ switch ($action) {
             'img'   => $r['image_url'] ? cldImg($r['image_url'], CLD_THUMB) : '',
             'url'   => 'auction.php?id=' . (int)$r['id'],
         ];
+        $mask = function (?string $bidderNumber): string {
+            $num = preg_replace('/\D/', '', (string)$bidderNumber);
+            return $num !== '' ? 'Bidder ••' . substr($num, -3) : 'A bidder';
+        };
         $bids = [];
         foreach ($pdo->query("
             SELECT b.id AS bid_id, COALESCE(b.bid_amount, b.amount) AS amount, b.bidder_number,
-                   COALESCE(b.bid_time, b.created_at) AS at, a.id, a.item_name, a.image_url, a.end_time
+                   COALESCE(b.bid_time, b.created_at) AS at, a.id, a.item_name, a.image_url, a.end_time,
+                   (SELECT MAX(COALESCE(bx.bid_amount, bx.amount)) FROM bids bx WHERE bx.auction_id = a.id) AS top_amount
             FROM bids b JOIN auctions a ON a.id = b.auction_id
             WHERE a.status = 'active' AND a.is_sold = 0
             ORDER BY b.id DESC LIMIT 12
         ")->fetchAll() as $r) {
-            $num = preg_replace('/\D/', '', (string)$r['bidder_number']);
             $bids[] = $lotOut($r) + [
                 'bid_id' => (int)$r['bid_id'],
                 'amount' => (float)$r['amount'],
                 'amount_fmt' => formatRand((float)$r['amount']),
-                'bidder' => $num !== '' ? 'Bidder ••' . substr($num, -3) : 'A bidder',
+                'bidder' => $mask($r['bidder_number']),
+                'leading'=> (float)$r['amount'] >= (float)$r['top_amount'],
                 'at'     => $r['at'],
                 'ago'    => timeAgoShort($r['at']),
                 'ends'   => $r['end_time'],
             ];
         }
+        // Who leads each lot that has bids (most recently active first)
+        $leaders = [];
+        foreach ($pdo->query("
+            SELECT a.id, a.item_name, a.image_url, a.end_time, COUNT(b.id) AS bid_count,
+                   MAX(COALESCE(b.bid_amount, b.amount)) AS top_amount, MAX(b.id) AS last_bid,
+                   (SELECT bl.bidder_number FROM bids bl WHERE bl.auction_id = a.id
+                     ORDER BY COALESCE(bl.bid_amount, bl.amount) DESC, bl.id DESC LIMIT 1) AS leader
+            FROM auctions a JOIN bids b ON b.auction_id = a.id
+            WHERE a.status = 'active' AND a.is_sold = 0
+            GROUP BY a.id ORDER BY last_bid DESC LIMIT 8
+        ")->fetchAll() as $r) {
+            $leaders[] = $lotOut($r) + ['leader' => $mask($r['leader']), 'price_fmt' => formatRand((float)$r['top_amount']),
+                                        'bids' => (int)$r['bid_count'], 'ends' => $r['end_time']];
+        }
+        // Staff announcements from Admin → Notifications ("custom" only: the old canned
+        // bid/leading/win examples were not real, and test/diagnostic rows are skipped)
+        $notes = [];
+        try {
+            foreach ($pdo->query("SELECT id, message FROM popup_notifications WHERE is_active = 1 AND type = 'custom' ORDER BY id DESC LIMIT 5")->fetchAll() as $r) {
+                if (preg_match('/diagnostic|test/i', $r['message'])) continue;
+                $notes[] = ['id' => (int)$r['id'], 'text' => strip_tags($r['message'])];
+            }
+        } catch (PDOException $e) { /* table missing */ }
         $ending = [];
         foreach ($pdo->query("
             SELECT a.id, a.item_name, a.image_url, a.end_time,
@@ -294,7 +322,7 @@ switch ($action) {
         $liveCount = (int)$pdo->query("SELECT COUNT(*) FROM auctions WHERE status = 'active' AND is_sold = 0 AND end_time > NOW()")->fetchColumn();
         $json = json_encode(imgHostDeep([
             'success' => true, 'server_time' => date('Y-m-d H:i:s'), 'live_count' => $liveCount,
-            'bids' => $bids, 'ending' => $ending, 'hot' => $hot,
+            'bids' => $bids, 'leading' => $leaders, 'ending' => $ending, 'hot' => $hot, 'notes' => $notes,
         ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         @file_put_contents($cacheFile, $json, LOCK_EX);
         ob_end_clean();
@@ -3565,6 +3593,179 @@ switch ($action) {
     }
 
 // ════════════════════════════════════════════════════════════
+// STOCK IMPORT (admin) — Facebook exports + branch uploads → drafts → lots
+// See stock_import_helper.php
+// ════════════════════════════════════════════════════════════
+
+    // ZIPs placed in the server inbox (~/ahg_import/inbox) with File Manager
+    case 'stock_inbox': {
+        adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        $files = [];
+        foreach (glob(stockImportDir() . '/inbox/*.zip') ?: [] as $f) {
+            $files[] = ['name' => basename($f), 'mb' => round(filesize($f) / 1048576, 1), 'date' => date('d M Y H:i', filemtime($f))];
+        }
+        ok(['files' => $files, 'folder' => stockImportDir() . '/inbox']);
+    }
+
+    // One batch of a Facebook export. First call: upload 'zip' or name an inbox file.
+    case 'stock_import_fb': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        ahgSchemaReady();
+        @set_time_limit(240);
+        $inbox = stockImportDir() . '/inbox';
+        if (!empty($_FILES['zip']['tmp_name']) && ($_FILES['zip']['error'] ?? 1) === UPLOAD_ERR_OK) {
+            if (strtolower(pathinfo($_FILES['zip']['name'], PATHINFO_EXTENSION)) !== 'zip') fail('Upload the .zip file Facebook gave you.');
+            $name = 'facebook-' . date('Ymd-His') . '.zip';
+            if (!move_uploaded_file($_FILES['zip']['tmp_name'], "$inbox/$name")) fail('Could not save the upload.');
+        } else {
+            $name = basename((string)($_POST['inbox_file'] ?? ''));
+            if (!preg_match('/^[\w .()-]+\.zip$/i', $name) || !is_file("$inbox/$name")) {
+                fail(($_FILES['zip']['error'] ?? 0) === UPLOAD_ERR_INI_SIZE
+                    ? 'That ZIP is too big to upload here. Put it in the server inbox with File Manager instead.'
+                    : 'Choose a Facebook export ZIP.');
+            }
+        }
+        $branch = (int)($_POST['branch_id'] ?? 0) ?: null;
+        $offset = max(0, (int)($_POST['offset'] ?? 0));
+        try {
+            $r = importFacebookZip("$inbox/$name", $branch, $offset, 25, (int)$admin['sub']);
+        } catch (RuntimeException $e) {
+            fail($e->getMessage());
+        }
+        if ($r['next'] === null) logAdminAction($admin, 'stock_import', null, ['file' => $name, 'posts' => $r['total']]);
+        ok($r + ['file' => $name]);
+    }
+
+    // New stock from a branch: photos + details → draft
+    case 'stock_new': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        ahgSchemaReady();
+        $title = mb_substr(trim(strip_tags($_POST['title'] ?? '')), 0, 255);
+        if (mb_strlen($title) < 3) fail('Enter the vehicle name (e.g. 2019 Toyota Hilux 2.4 GD-6).');
+        $files = [];
+        foreach ((array)($_FILES['photos']['tmp_name'] ?? []) as $i => $tmp) {
+            $files[] = ['tmp_name' => $tmp, 'error' => $_FILES['photos']['error'][$i], 'size' => $_FILES['photos']['size'][$i]];
+        }
+        if (!$files) fail('Add at least one photo.');
+        $id = saveUploadDraft([
+            'branch_id' => (int)($_POST['branch_id'] ?? 0) ?: null, 'title' => $title,
+            'description' => trim(strip_tags($_POST['description'] ?? '')),
+            'year' => (int)($_POST['year'] ?? 0) ?: null, 'make_id' => (int)($_POST['make_id'] ?? 0) ?: null,
+            'mileage' => (int)preg_replace('/\D/', '', $_POST['mileage'] ?? '') ?: null,
+            'price' => (float)preg_replace('/[^\d.]/', '', $_POST['price'] ?? '') ?: null,
+        ], $files, (int)$admin['sub']);
+        ok(['message' => 'Draft saved. Review it below, then publish.', 'id' => $id]);
+    }
+
+    // Edit a draft's details and which photos to keep (in order)
+    case 'stock_draft_save': {
+        adminOnly();
+        $id = (int)($_POST['id'] ?? 0);
+        $st = $pdo->prepare("SELECT photos FROM stock_drafts WHERE id = ? AND status = 'draft'");
+        $st->execute([$id]);
+        $have = $st->fetchColumn();
+        if ($have === false) fail('Draft not found (already published?).');
+        $have = json_decode($have ?: '[]', true) ?: [];
+        $keep = array_values(array_intersect(json_decode($_POST['photos'] ?? '[]', true) ?: [], $have));
+        $pdo->prepare("
+            UPDATE stock_drafts SET title = ?, description = ?, year = ?, make_id = ?, mileage = ?, price = ?, branch_id = ?, photos = ?
+            WHERE id = ?
+        ")->execute([
+            mb_substr(trim(strip_tags($_POST['title'] ?? '')), 0, 255), trim(strip_tags($_POST['description'] ?? '')),
+            (int)($_POST['year'] ?? 0) ?: null, (int)($_POST['make_id'] ?? 0) ?: null,
+            (int)preg_replace('/\D/', '', $_POST['mileage'] ?? '') ?: null,
+            (float)preg_replace('/[^\d.]/', '', $_POST['price'] ?? '') ?: null,
+            (int)($_POST['branch_id'] ?? 0) ?: null, json_encode($keep ?: $have), $id,
+        ]);
+        ok(['message' => 'Draft saved.']);
+    }
+
+    // Publish a draft: 'lot' = upcoming auction lot, 'sold' = past sale on the Sold page
+    case 'stock_draft_publish': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        require_once __DIR__ . '/imagekit_helper.php';
+        ahgSchemaReady();
+        @set_time_limit(240);
+        $id   = (int)($_POST['id'] ?? 0);
+        $mode = ($_POST['mode'] ?? '') === 'sold' ? 'sold' : 'lot';
+        $st = $pdo->prepare("SELECT * FROM stock_drafts WHERE id = ? AND status = 'draft'");
+        $st->execute([$id]);
+        $d = $st->fetch();
+        if (!$d) fail('Draft not found (already published?).');
+        if (mb_strlen(trim($d['title'])) < 3) fail('Give the vehicle a name first (Save, then publish).');
+        $photos = json_decode($d['photos'] ?: '[]', true) ?: [];
+        if (!$photos) fail('This draft has no photos.');
+        $price = (float)$d['price'];
+        if ($price <= 0) fail($mode === 'sold' ? 'Enter the sold price first.' : 'Enter the starting price first.');
+
+        if ($mode === 'lot') {
+            $start = strtotime(trim($_POST['start_time'] ?? '')) ?: strtotime('+1 day 09:00');
+            $end   = strtotime(trim($_POST['end_time'] ?? ''))   ?: strtotime('+8 days 18:00');
+            if ($end <= $start) fail('End time must be after the start time.');
+            $reserve = (float)preg_replace('/[^\d.]/', '', $_POST['reserve'] ?? '') ?: null;
+        }
+        $channel = array_key_exists($_POST['sale_channel'] ?? '', SALE_CHANNELS) ? $_POST['sale_channel'] : 'floor';
+
+        // The lot first (its id names the photos), then the photos, then the links
+        $pdo->prepare("
+            INSERT INTO auctions (item_name, make_id, year, mileage, description, start_price, reserve_price, current_price,
+                                  start_time, end_time, status, is_sold, final_price, sold_date, sale_channel, branch_id, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ")->execute([
+            trim($d['title']), $d['make_id'], $d['year'], $d['mileage'], $d['description'],
+            $price, $mode === 'lot' ? $reserve : null,
+            $mode === 'lot' ? date('Y-m-d H:i:s', $start) : $d['posted_at'],
+            $mode === 'lot' ? date('Y-m-d H:i:s', $end)   : $d['posted_at'],
+            $mode === 'lot' ? ($start <= time() ? 'active' : 'upcoming') : 'closed',
+            $mode === 'sold' ? 1 : 0, $mode === 'sold' ? $price : null,
+            $mode === 'sold' ? ($d['posted_at'] ?: date('Y-m-d H:i:s')) : null,
+            $mode === 'sold' ? $channel : null, $d['branch_id'], $admin['sub'],
+        ]);
+        $lotId = (int)$pdo->lastInsertId();
+
+        $uploaded = [];
+        try {
+            foreach ($photos as $n => $file) {
+                $path = stockPhotoPath($id, $file);
+                if (!$path) continue;
+                $uploaded[] = uploadToImageKit($path, IMAGEKIT_VEHICLE_FOLDER, sprintf('lot-%d-%02d', $lotId, $n + 1));
+            }
+        } catch (RuntimeException $e) {
+            $pdo->prepare("DELETE FROM auctions WHERE id = ?")->execute([$lotId]);
+            foreach ($uploaded as $u) deleteStoredImage($u['url'], $u['file_id']);
+            fail('Photo upload failed, nothing was published: ' . $e->getMessage());
+        }
+        if (!$uploaded) {
+            $pdo->prepare("DELETE FROM auctions WHERE id = ?")->execute([$lotId]);
+            fail('None of the photos could be read.');
+        }
+        $pdo->prepare("UPDATE auctions SET image_url = ?, cloudinary_public_id = ? WHERE id = ?")
+            ->execute([$uploaded[0]['url'], $uploaded[0]['file_id'], $lotId]);
+        // Photo 1 is the main image; the gallery holds the rest (lot pages show main + gallery)
+        $g = $pdo->prepare("INSERT INTO auction_gallery (auction_id, file_path, cloudinary_public_id, sort_order) VALUES (?,?,?,?)");
+        foreach (array_slice($uploaded, 1) as $n => $u) $g->execute([$lotId, $u['url'], $u['file_id'], $n + 1]);
+
+        $pdo->prepare("UPDATE stock_drafts SET status = 'published', auction_id = ? WHERE id = ?")->execute([$lotId, $id]);
+        stockRemoveDraftFiles($id);
+        logAdminAction($admin, 'stock_publish', $lotId, ['mode' => $mode, 'draft' => $id, 'photos' => count($uploaded)]);
+        ok(['message' => ($mode === 'sold' ? 'Added to the Sold page' : 'Published as an upcoming lot') . ' with ' . count($uploaded) . ' photo(s).',
+            'auction_id' => $lotId]);
+    }
+
+    case 'stock_draft_skip': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/stock_import_helper.php';
+        $id = (int)($_POST['id'] ?? 0);
+        $pdo->prepare("UPDATE stock_drafts SET status = 'skipped' WHERE id = ? AND status = 'draft'")->execute([$id]);
+        stockRemoveDraftFiles($id);
+        ok(['message' => 'Draft removed.']);
+    }
+
+// ════════════════════════════════════════════════════════════
 // AI PHOTOS — Grok (xAI) image editing (admin). See ai_image_helper.php
 // ════════════════════════════════════════════════════════════
 
@@ -3609,7 +3810,7 @@ switch ($action) {
         $st->execute([$id]);
         $lot = $st->fetch();
         if (!$lot) fail('No lot with that ID.');
-        $photos = array_map(fn($p) => $p + ['thumb' => cldImg($p['url'], CLD_THUMB)], aiLotPhotos($id));
+        $photos = array_map(fn($p) => $p + ['thumb' => cldImg($p['url'], CLD_THUMB), 'large' => cldImg($p['url'], CLD_LARGE)], aiLotPhotos($id));
         ok(['lot' => $lot, 'photos' => $photos]);
     }
 
@@ -3623,7 +3824,9 @@ switch ($action) {
         $photoUrl = trim($_POST['photo_url'] ?? '');
         $preset   = $_POST['preset'] ?? '';
         $custom   = trim(strip_tags($_POST['instruction'] ?? ''));
-        $instruction = isset(AI_PRESETS[$preset]) ? AI_PRESETS[$preset][1] : mb_substr($custom, 0, 600);
+        $repair      = $preset === 'repair_preview';
+        $instruction = $repair ? AI_REPAIR_PROMPT
+                     : (isset(AI_PRESETS[$preset]) ? AI_PRESETS[$preset][1] : mb_substr($custom, 0, 600));
         if ($instruction === '') fail('Pick a preset or describe the change.');
 
         // Only this lot's own photos can be sent (no arbitrary URLs)
@@ -3631,14 +3834,16 @@ switch ($action) {
         if (!in_array($photoUrl, $owned, true)) fail('Pick one of this lot\'s photos.');
 
         try {
-            $img = xaiEditImage(cldImg($photoUrl, CLD_LARGE), $instruction);
+            $img = xaiEditImage(cldImg($photoUrl, CLD_LARGE), $instruction, !$repair);
+            if ($repair) $img = aiLabelImage($img, AI_PREVIEW_LABEL);   // stamped before anyone can save it
         } catch (RuntimeException $e) {
             fail($e->getMessage());
         }
-        $token = aiStoreTmp($img, $id);
+        $token = aiStoreTmp($img, $id, $repair);
         logAdminAction($admin, 'ai_edit', $id, ['instruction' => mb_substr($instruction, 0, 200), 'source' => $photoUrl]);
         ok([
             'token'   => $token,
+            'repair'  => $repair,
             'preview' => 'data:' . $img['mime'] . ';base64,' . base64_encode($img['bytes']),
             'message' => 'Edit ready — compare it, then save or discard.',
         ]);
@@ -3649,39 +3854,44 @@ switch ($action) {
     case 'ai_save': {
         $admin = adminOnly();
         require_once __DIR__ . '/ai_image_helper.php';
-        require_once __DIR__ . '/imagekit_helper.php';
         $id    = (int)($_POST['auction_id'] ?? 0);
         $token = (string)($_POST['token'] ?? '');
         $mode  = ($_POST['mode'] ?? '') === 'main' ? 'main' : 'gallery';
         $path  = aiTmpPath($token);
         if (!$path || strpos($token, $id . '_') !== 0) fail('That edit has expired — run it again.');
-
-        $st = $pdo->prepare("SELECT image_url, cloudinary_public_id FROM auctions WHERE id = ?");
-        $st->execute([$id]);
-        $lot = $st->fetch();
-        if (!$lot) fail('No lot with that ID.');
-
+        if ($mode === 'main' && aiIsPreviewToken($token)) fail('An after-repair preview can only be added to the gallery, never as the main photo.');
         try {
-            $up = uploadToImageKit($path, IMAGEKIT_VEHICLE_FOLDER, 'lot-' . $id . '-ai-' . date('YmdHis'));
+            $url = aiSaveToLot($id, $path, $mode, aiIsPreviewToken($token) ? 'repair-preview' : 'ai');
         } catch (RuntimeException $e) {
-            fail('Upload to ImageKit failed: ' . $e->getMessage());
-        }
-        $nextSort = $pdo->prepare("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM auction_gallery WHERE auction_id = ?");
-        $nextSort->execute([$id]);
-        $sort = (int)$nextSort->fetchColumn();
-        $addGallery = $pdo->prepare("INSERT INTO auction_gallery (auction_id, file_path, cloudinary_public_id, sort_order) VALUES (?,?,?,?)");
-
-        if ($mode === 'main') {
-            if ($lot['image_url']) $addGallery->execute([$id, $lot['image_url'], $lot['cloudinary_public_id'], $sort]);
-            $pdo->prepare("UPDATE auctions SET image_url = ?, cloudinary_public_id = ? WHERE id = ?")
-                ->execute([$up['url'], $up['file_id'], $id]);
-        } else {
-            $addGallery->execute([$id, $up['url'], $up['file_id'], $sort]);
+            fail('Could not save: ' . $e->getMessage());
         }
         @unlink($path);
-        logAdminAction($admin, 'ai_save', $id, ['mode' => $mode, 'url' => $up['url']]);
+        logAdminAction($admin, 'ai_save', $id, ['mode' => $mode, 'url' => $url, 'preview' => aiIsPreviewToken($token)]);
         ok(['message' => $mode === 'main' ? 'Saved as the main photo (the old one is now in the gallery).' : 'Added to the gallery.',
-            'url' => $up['url']]);
+            'url' => $url]);
+    }
+
+    // Manual photo editor (crop / rotate / light / blur) — the browser sends the result
+    case 'photo_save_edit': {
+        $admin = adminOnly();
+        require_once __DIR__ . '/ai_image_helper.php';
+        $id   = (int)($_POST['auction_id'] ?? 0);
+        $mode = ($_POST['mode'] ?? '') === 'main' ? 'main' : 'gallery';
+        if (!preg_match('#^data:image/(jpeg|png|webp);base64,(.+)$#s', (string)($_POST['image'] ?? ''), $m)) fail('No edited image received.');
+        $bytes = base64_decode($m[2], true);
+        if (!$bytes || strlen($bytes) > 12 * 1048576) fail('The edited image is missing or too large.');
+        $mime = (new finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) fail('Not an image.');
+        $token = aiStoreTmp(['bytes' => $bytes, 'mime' => $mime], $id);
+        try {
+            $url = aiSaveToLot($id, aiTmpPath($token), $mode, 'edit');
+        } catch (RuntimeException $e) {
+            fail('Could not save: ' . $e->getMessage());
+        } finally {
+            if ($p = aiTmpPath($token)) @unlink($p);
+        }
+        logAdminAction($admin, 'photo_edit', $id, ['mode' => $mode, 'url' => $url]);
+        ok(['message' => $mode === 'main' ? 'Saved as the main photo (the old one is now in the gallery).' : 'Added to the gallery.', 'url' => $url]);
     }
 
 // ════════════════════════════════════════════════════════════
