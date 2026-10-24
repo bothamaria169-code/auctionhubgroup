@@ -20,8 +20,8 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
       `/usr/local/bin/php /home/auctionhubgroupc/public_html/generate_sitemaps.php`). It also writes `feed.xml`,
       which is currently missing (404); `feed.php` works.
 - [ ] **Paste the xAI key** in Admin → AI Photos (from console.x.ai) to switch on photo editing.
-- [ ] **Deploy the 24 Oct update** (Update from Remote → Deploy HEAD Commit), then try *Edit Sale* again.
-      Any problem now shows as a red message inside the popup: send a screenshot of it.
+- [ ] **Deploy the popup fix** (Update from Remote → Deploy HEAD Commit), then press **Ctrl+F5** once on the
+      admin page. Edit Sale, Add floor bidder, Set Times, Winner, Log Out etc. all open again.
 - [ ] **Real sale prices:** Admin → Auctions → **Sold** → *Edit Sale* on each lot: price, date, **Sold at**
       (online / live / floor / pre-auction / private) and buyer. The 86 bulk-marked lots also show under *Needs attention*.
 - [ ] **Sold dates** you don't know: Sold tab → *Spread these dates* (undo available).
@@ -43,6 +43,10 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
       errors shown inside the popup; bulk Mark Sold sets the channel too
 - [x] Floor & phone bidders (Admin → Manual Bids & Floor): create/edit name, cellphone, email, ID, bidder no.;
       verified at once; can't log in or reset a password; never emailed; one-click *Bid* for them
+- [x] **Admin popups fixed:** every popup (14 in the admin, plus the user dashboard's) opened invisible and
+      unclickable since before Oct 2026, because CSS hid `.modal-overlay` unless it had the `open` class. Popups
+      shown with `display:flex` now count as open; `openModal()` sets the class too. Page titles on the blue
+      headers are white again
 - [x] Admin menu grouped (Dashboard · Sales & Auctions · Bidders & Payments · Marketing & Content · People),
       same groups on phones; user menu grouped (Bidding · My Account)
 

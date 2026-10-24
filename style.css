@@ -7104,3 +7104,37 @@ select.form-control {
 @media (max-width: 768px) {
     .sidebar-group { display: none; }   /* sidebar turns into a strip, like .sidebar-divider */
 }
+
+/* ── Popups opened by setting display directly ────────────────────
+   .modal-overlay is invisible (opacity 0, pointer-events none) until it has
+   the class "open". The admin dashboard, user dashboard and footer open their
+   popups with element.style.display = 'flex' instead, which left them
+   invisible and unclickable ("buttons do nothing"). Treat a displayed
+   overlay as open, whichever way it was shown. */
+.modal-overlay[style*="display: flex"],
+.modal-overlay[style*="display:flex"],
+.modal-overlay[style*="display: block"],
+.modal-overlay[style*="display:block"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+.modal-overlay[style*="display: flex"] .modal-box,
+.modal-overlay[style*="display:flex"] .modal-box,
+.modal-overlay[style*="display: block"] .modal-box,
+.modal-overlay[style*="display:block"] .modal-box {
+    transform: none;
+}
+
+/* ── Blue page headers: readable text ───────────────────────────── */
+.dashboard-header h1,
+.dashboard-header h2,
+.dashboard-header h1 i { color: #fff; }
+.dashboard-header p,
+.dashboard-header .text-muted { color: rgba(255,255,255,.82) !important; }
+.dashboard-header p a { color: #fff; text-decoration: underline; }
+.dashboard-header .btn-primary {
+    background: #fff; color: #0b3d91; border-color: #fff;
+}
+.dashboard-header .btn-primary:hover { background: #e8f0fe; color: #0b3d91; }
+.dashboard-header .btn-outline { color: #fff; border-color: rgba(255,255,255,.7); background: transparent; }
+.dashboard-header .btn-outline:hover { background: rgba(255,255,255,.12); color: #fff; }

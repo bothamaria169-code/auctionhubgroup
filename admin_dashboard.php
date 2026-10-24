@@ -6427,8 +6427,9 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
 
 <script>
 // ── Modal helpers ──────────────────────────────────────────────
-function openModal(id) { document.getElementById(id).style.display='flex'; }
-function closeModal(id) { document.getElementById(id).style.display='none'; }
+// .modal-overlay stays invisible without the "open" class (style.css), so set both
+function openModal(id) { const m = document.getElementById(id); m.style.display = 'flex'; m.classList.add('open'); }
+function closeModal(id) { const m = document.getElementById(id); m.style.display = 'none'; m.classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
     m.addEventListener('click', e => { if(e.target===m) m.style.display='none'; });
 });
