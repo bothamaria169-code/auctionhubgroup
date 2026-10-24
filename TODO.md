@@ -47,6 +47,9 @@ Updated 24 Oct 2026. Ticked items are done in the code; "you" items need someone
       unclickable since before Oct 2026, because CSS hid `.modal-overlay` unless it had the `open` class. Popups
       shown with `display:flex` now count as open; `openModal()` sets the class too. Page titles on the blue
       headers are white again
+- [x] **Live Bids** (bottom-centre pill between WhatsApp and the chatbot): cycles the latest real bids; tap for a
+      centred panel (bottom sheet on phones) with Latest bids · Ending soon · Most bid, live countdowns, refresh every
+      20 s, can be hidden. Bidder numbers masked (••042), no names. Not on admin/account/checkout pages
 - [x] Admin menu grouped (Dashboard · Sales & Auctions · Bidders & Payments · Marketing & Content · People),
       same groups on phones; user menu grouped (Bidding · My Account)
 

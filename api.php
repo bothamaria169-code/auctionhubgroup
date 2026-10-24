@@ -234,6 +234,75 @@ switch ($action) {
     }
 
     // ── TICKER — live activity feed ──────────────────────────
+    // ── LIVE BIDS (public) — bottom-centre "Live Bids" pill + panel ──────
+    // Latest bids on lots still for sale, lots ending soon, most-bid lots.
+    // No names; bidder numbers masked to the last 3 digits. Cached 15 s.
+    case 'live_bids': {
+        $cacheFile = sys_get_temp_dir() . '/ahg_live_bids.json';
+        if (is_file($cacheFile) && filemtime($cacheFile) > time() - 15) {
+            ob_end_clean();
+            header('Cache-Control: public, max-age=15');
+            echo file_get_contents($cacheFile);
+            exit;
+        }
+        $lotOut = fn(array $r) => [
+            'id'    => (int)$r['id'],
+            'title' => $r['item_name'],
+            'img'   => $r['image_url'] ? cldImg($r['image_url'], CLD_THUMB) : '',
+            'url'   => 'auction.php?id=' . (int)$r['id'],
+        ];
+        $bids = [];
+        foreach ($pdo->query("
+            SELECT b.id AS bid_id, COALESCE(b.bid_amount, b.amount) AS amount, b.bidder_number,
+                   COALESCE(b.bid_time, b.created_at) AS at, a.id, a.item_name, a.image_url, a.end_time
+            FROM bids b JOIN auctions a ON a.id = b.auction_id
+            WHERE a.status = 'active' AND a.is_sold = 0
+            ORDER BY b.id DESC LIMIT 12
+        ")->fetchAll() as $r) {
+            $num = preg_replace('/\D/', '', (string)$r['bidder_number']);
+            $bids[] = $lotOut($r) + [
+                'bid_id' => (int)$r['bid_id'],
+                'amount' => (float)$r['amount'],
+                'amount_fmt' => formatRand((float)$r['amount']),
+                'bidder' => $num !== '' ? 'Bidder ••' . substr($num, -3) : 'A bidder',
+                'at'     => $r['at'],
+                'ago'    => timeAgoShort($r['at']),
+                'ends'   => $r['end_time'],
+            ];
+        }
+        $ending = [];
+        foreach ($pdo->query("
+            SELECT a.id, a.item_name, a.image_url, a.end_time,
+                   GREATEST(COALESCE(a.current_price, 0), a.start_price) AS price,
+                   (SELECT COUNT(*) FROM bids b WHERE b.auction_id = a.id) AS bid_count
+            FROM auctions a
+            WHERE a.status = 'active' AND a.is_sold = 0 AND a.end_time > NOW()
+            ORDER BY a.end_time ASC LIMIT 6
+        ")->fetchAll() as $r) {
+            $ending[] = $lotOut($r) + ['price_fmt' => formatRand((float)$r['price']), 'bids' => (int)$r['bid_count'], 'ends' => $r['end_time']];
+        }
+        $hot = [];
+        foreach ($pdo->query("
+            SELECT a.id, a.item_name, a.image_url, a.end_time,
+                   GREATEST(COALESCE(a.current_price, 0), a.start_price) AS price, COUNT(b.id) AS bid_count
+            FROM auctions a JOIN bids b ON b.auction_id = a.id
+            WHERE a.status = 'active' AND a.is_sold = 0
+            GROUP BY a.id ORDER BY bid_count DESC, MAX(b.id) DESC LIMIT 6
+        ")->fetchAll() as $r) {
+            $hot[] = $lotOut($r) + ['price_fmt' => formatRand((float)$r['price']), 'bids' => (int)$r['bid_count'], 'ends' => $r['end_time']];
+        }
+        $liveCount = (int)$pdo->query("SELECT COUNT(*) FROM auctions WHERE status = 'active' AND is_sold = 0 AND end_time > NOW()")->fetchColumn();
+        $json = json_encode(imgHostDeep([
+            'success' => true, 'server_time' => date('Y-m-d H:i:s'), 'live_count' => $liveCount,
+            'bids' => $bids, 'ending' => $ending, 'hot' => $hot,
+        ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        @file_put_contents($cacheFile, $json, LOCK_EX);
+        ob_end_clean();
+        header('Cache-Control: public, max-age=15');
+        echo $json;
+        exit;
+    }
+
     case 'ticker': {
         // Mix: announcement messages + recent bid activity
         $items = [];

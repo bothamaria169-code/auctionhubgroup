@@ -211,6 +211,8 @@ $waHref         = waLink($waMessage);
 $waConvSendTo   = gadsSendTo('GADS_LABEL_WHATSAPP');
 $callConvSendTo = gadsSendTo('GADS_LABEL_CALL');
 ?>
+<?php include __DIR__ . '/live_bids_widget.php'; // bottom-centre Live Bids pill + panel ?>
+
 <div class="whatsapp-float" id="waFloatWrap">
     <div class="wa-agent-popup" id="waAgentPopup">
         <div class="wa-agent-header">
