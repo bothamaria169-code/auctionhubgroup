@@ -54,3 +54,9 @@ Thumbs.db
 
 # ── Private local files (dumps, invoices, dev scripts) — whole folder ──
 private/
+
+# ── Generated on the server by generate_sitemaps.php (never deploy stale copies) ──
+sitemap.xml
+articles.xml
+news-sitemap.xml
+feed.xml
