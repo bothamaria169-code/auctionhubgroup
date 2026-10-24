@@ -4,19 +4,21 @@ Updated 23 Oct 2026. Ticked items are done in the code; "you" items need someone
 
 ## 1. Do now (you, in cPanel)
 
-- [ ] **Delete private files from `public_html`.** The manual upload made the customer database dump
-      and other private files downloadable. Remove: every `*.sql` file in the site root,
-      `Invoice.pdf`, `cipc.pdf`, `gen_hash.php`, `test.php`, `online_swap_vehicle_data.sql`.
-      The next git deploy also removes them and blocks them for good.
+- [x] **Private files removed from `public_html`** by the git deploy on 23 Oct 2026, and blocked for good
+      (`.sql`, `.md`, `.zip`, secrets file all 403/404; folder listings off).
+- [ ] **Move `auctionhubgroup.zip` and the `auctionhubgroup/` folder out of `public_html`.** They're blocked (403),
+      but a full backup with every password shouldn't sit in the web folder.
 - [ ] **POPIA:** the database dump (names, emails, phones, ID numbers) was public on 23 Oct 2026.
       Check cPanel → Raw Access logs for downloads of `auctionhubgroupc_db.sql`, and decide with your
       information officer whether to notify the Regulator and the people affected.
-- [ ] **Switch to git deploys.** Follow [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md): connect the repo once, then
-      *Update from Remote* → *Deploy HEAD Commit* after every change.
+- [x] **Git deploys work** (account `auctionhubgroupc`). After every change: *Update from Remote* → *Deploy HEAD Commit*.
 - [ ] **Move `config.secrets.php`** from `public_html` up one folder (to `/home/auctionhubgroupc/`).
 - [ ] **Rotate secrets** that were in old files or public git history: `AHG_CRON_KEY`, the database password,
       the `admin@`/`careers@` mailbox passwords, and the Groq, Pexels and Cloudinary keys.
 - [ ] **Turn on the cron** (DEPLOY_CHECKLIST → Optional). Without it, lots only close when someone opens them.
+- [ ] **Daily sitemap cron:** `generate_sitemaps.php` (cPanel → Cron Jobs, once a day,
+      `/usr/local/bin/php /home/auctionhubgroupc/public_html/generate_sitemaps.php`). It also writes `feed.xml`,
+      which is currently missing (404); `feed.php` works.
 - [ ] **Paste the xAI key** in Admin → AI Photos (from console.x.ai) to switch on photo editing.
 - [ ] **Sold dates:** Admin → Auctions → Sold → *Spread these dates*. Then add real prices with *Edit Sale*
       where you know them.
