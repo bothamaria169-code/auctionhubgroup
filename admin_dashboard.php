@@ -56,7 +56,7 @@ syncSession($currentUser);
 
 // ── Active tab ────────────────────────────────────────────────
 $activeTab = $_GET['tab'] ?? 'overview';
-$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai', 'stock'];
+$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai', 'stock', 'leads', 'templates'];
 if (!in_array($activeTab, $validTabs)) $activeTab = 'overview';
 
 // ── Flash ─────────────────────────────────────────────────────
@@ -85,6 +85,12 @@ $stats['total_bids']        = $pdo->query("SELECT COUNT(*) FROM bids")->fetchCol
 $stats['revenue']           = $pdo->query("SELECT COALESCE(SUM(final_price),0) FROM auctions WHERE is_sold=1 AND final_price > 0")->fetchColumn();
 $stats['pending_refunds']   = 0;
 try { $stats['pending_refunds'] = $pdo->query("SELECT COUNT(*) FROM refund_requests WHERE status IN ('pending','under_review')")->fetchColumn(); } catch(Exception $e) {}
+
+// Leads waiting for a first contact (last 7 days) + call-backs due — menu badge and Overview strip
+require_once __DIR__ . '/leads_helper.php';
+$stats['leads_waiting'] = leadWaitingCount();
+$stats['bank_requests'] = 0;
+try { $stats['bank_requests'] = (int)$pdo->query("SELECT COUNT(*) FROM bank_detail_requests WHERE status = 'pending'")->fetchColumn(); } catch (Exception $e) {}
 
 // Sales summary + change log (Overview tab only)
 $sales = null;
@@ -601,6 +607,10 @@ require_once 'header.php';
       ['overview',   'Overview',   'fa-th-large',   0],
       ['analytics',  'Analytics',  'fa-chart-line', 0],
     ],
+    'Leads' => [
+      ['leads',      'Leads',                 'fa-user-plus',          (int)$stats['leads_waiting']],
+      ['templates',  'Email &amp; WA Templates',  'fa-pen-to-square',      0],
+    ],
     'Sales & Auctions' => [
       ['auctions',   'Auctions',              'fa-car',                0],
       ['events',     'Events',                'fa-calendar-alt',       0],
@@ -650,8 +660,8 @@ require_once 'header.php';
     <i class="fas fa-bars" aria-hidden="true"></i>
     <span class="admin-mnav-current"><?= $tabLabels[$activeTab] ?? 'Menu' ?></span>
     <span class="admin-mnav-badge-wrap">
-      <?php if ($stats['pending_pops'] + $stats['pending_refunds'] > 0): ?>
-        <span class="admin-mnav-badge"><?= $stats['pending_pops'] + $stats['pending_refunds'] ?></span>
+      <?php if ($stats['pending_pops'] + $stats['pending_refunds'] + $stats['leads_waiting'] > 0): ?>
+        <span class="admin-mnav-badge"><?= $stats['pending_pops'] + $stats['pending_refunds'] + $stats['leads_waiting'] ?></span>
       <?php endif; ?>
     </span>
     <i class="fas fa-chevron-down admin-mnav-arrow" aria-hidden="true"></i>
@@ -737,6 +747,20 @@ require_once 'header.php';
       <a href="manage_auction.php" class="btn btn-primary">
         <i class="fas fa-plus"></i> Add Vehicle
       </a>
+    </div>
+
+    <!-- Waiting on you: the jobs only a person can do, each one tap away (idea from BidCo's Today page) -->
+    <?php $todo = [
+        ['leads',   'fa-user-plus',     (int)$stats['leads_waiting'],   'lead(s) to contact'],
+        ['pop',     'fa-file-invoice',  (int)$stats['pending_pops'],    'proof(s) of payment to approve'],
+        ['banking', 'fa-university',    (int)$stats['bank_requests'],   'banking request(s)'],
+        ['refunds', 'fa-rotate-left',   (int)$stats['pending_refunds'], 'refund(s) to process'],
+    ]; $todoTotal = array_sum(array_column($todo, 2)); ?>
+    <div class="todo-strip<?= $todoTotal ? '' : ' todo-clear' ?>">
+      <strong class="todo-title"><i class="fas fa-list-check"></i> <?= $todoTotal ? 'Waiting on you' : 'All caught up' ?></strong>
+      <?php foreach ($todo as [$tab, $icon, $n, $label]): if (!$n) continue; ?>
+        <a class="todo-item" href="?tab=<?= $tab ?>"><i class="fas <?= $icon ?>"></i> <b><?= $n ?></b> <?= $label ?></a>
+      <?php endforeach; ?>
     </div>
 
     <!-- Stats Row 1: Auctions -->
@@ -5937,6 +5961,12 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
         window.aiDiscard = () => { token = ''; document.getElementById('aiResult').style.display = 'none'; };
     })();
     </script>
+
+<?php elseif ($activeTab === 'leads'):
+    require __DIR__ . '/admin_leads_tab.php'; ?>
+
+<?php elseif ($activeTab === 'templates'):
+    require __DIR__ . '/admin_templates_tab.php'; ?>
 
 <?php elseif ($activeTab === 'stock'):
     $stBranches = $pdo->query("SELECT id, name FROM branches ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR);

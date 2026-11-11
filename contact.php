@@ -102,6 +102,9 @@ require_once __DIR__ . '/header.php';
                     </div>
                 </div>
 
+                <!-- Enquiry form (saved to Admin → Leads) -->
+                <?php $enqTitle = 'Send us an enquiry'; $enqAuctionId = null; require __DIR__ . '/enquiry_form.php'; ?>
+
                 <!-- Email Enquiry -->
                 <div style="background:#fff;border-radius:16px;border:1px solid #e5eaf0;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:1.5rem;">
                     <div style="background:linear-gradient(135deg,#005BA1,#003f73);padding:1.25rem 1.5rem;display:flex;align-items:center;gap:.75rem;">

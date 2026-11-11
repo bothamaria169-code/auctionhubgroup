@@ -86,6 +86,53 @@ const AHG_SCHEMA_TABLES = [
             UNIQUE KEY uq_draft_source (source, source_ref),
             INDEX idx_draft_status (status, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // Website enquiry forms (Contact page, vehicle pages) — leads_helper.php
+    'enquiries' => "
+        CREATE TABLE IF NOT EXISTS enquiries (
+            id           INT AUTO_INCREMENT PRIMARY KEY,
+            type         VARCHAR(20)   NOT NULL DEFAULT 'general',
+            name         VARCHAR(150)  NOT NULL,
+            email        VARCHAR(190)  NULL,
+            phone        VARCHAR(30)   NULL,
+            auction_id   INT           NULL,
+            message      TEXT          NULL,
+            source_page  VARCHAR(255)  NULL,
+            attribution  TEXT          NULL,
+            status       VARCHAR(12)   NOT NULL DEFAULT 'new',
+            ip           VARCHAR(45)   NULL,
+            created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_enq_created (created_at),
+            INDEX idx_enq_email (email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // Admin → Leads: where each person is (one row per person, keyed e:email or p:last 9 digits)
+    'lead_status' => "
+        CREATE TABLE IF NOT EXISTS lead_status (
+            lead_key     VARCHAR(200)  NOT NULL PRIMARY KEY,
+            stage        VARCHAR(12)   NOT NULL DEFAULT 'new',
+            outcome      VARCHAR(30)   NULL,
+            note         TEXT          NULL,
+            call_back_at DATE          NULL,
+            emailed_at   DATETIME      NULL,
+            called_at    DATETIME      NULL,
+            calls        INT           NOT NULL DEFAULT 0,
+            updated_by   VARCHAR(150)  NULL,
+            updated_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_lead_stage (stage)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // Every email / WhatsApp sent to a lead from the Leads page
+    'lead_messages' => "
+        CREATE TABLE IF NOT EXISTS lead_messages (
+            id           INT AUTO_INCREMENT PRIMARY KEY,
+            lead_key     VARCHAR(200)  NOT NULL,
+            channel      VARCHAR(10)   NOT NULL,
+            template     VARCHAR(40)   NULL,
+            recipient    VARCHAR(190)  NULL,
+            subject      VARCHAR(255)  NULL,
+            ok           TINYINT(1)    NOT NULL DEFAULT 1,
+            sent_by      VARCHAR(150)  NULL,
+            created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_lm_lead (lead_key, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 ];
 
 // Columns added to existing tables (table => [column => ALTER statement])

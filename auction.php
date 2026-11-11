@@ -1099,6 +1099,11 @@ $breadcrumbLd = [
 
         </div><!-- /.bid-panel -->
 
+        <?php if (!$isSold): // Ask about this vehicle — saved to Admin → Leads
+            $enqTitle = 'Ask about this vehicle'; $enqAuctionId = $auctionId; $enqCompact = true;
+            require __DIR__ . '/enquiry_form.php'; ?>
+        <?php endif; ?>
+
         <!-- ════════════════════════════════════════════════
              LIVE BID FEED
              ════════════════════════════════════════════════ -->

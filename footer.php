@@ -499,20 +499,31 @@ $showNewsletterPopup = !in_array($currentPage ?? '', $noPopupPages);
 <script>
 (function(){
   const KEY  = 'ahg_nl_popup';
-  const DELAY = 6000; // 6 seconds
+  // Phones: a full-screen pop-up after 6 s blocks the page (and Google ranks
+  // intrusive mobile pop-ups lower), so wait much longer there.
+  const PHONE = window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
+  const DELAY = PHONE ? 40000 : 6000;
+  const SNOOZE = 'ahg_nl_snooze';
+  function store(kind, k){ try { return kind === 'get' ? (localStorage.getItem(k) || sessionStorage.getItem(k)) : null; } catch(e){ return null; } }
 
   function showPopup(){
+    // Never interrupt someone typing in a form (enquiry, bid, register)
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { setTimeout(showPopup, 15000); return; }
     const el = document.getElementById('nlPopupOverlay');
     if(el){ el.style.display='flex'; }
   }
   function dismissNlPopup(permanent){
     document.getElementById('nlPopupOverlay').style.display='none';
-    if(permanent) localStorage.setItem(KEY, '1');
+    try {
+      if(permanent) localStorage.setItem(KEY, '1');
+      else sessionStorage.setItem(SNOOZE, '1'); // closed: not again this visit
+    } catch(e){}
   }
   window.dismissNlPopup = dismissNlPopup;
 
   // Don't show if already dismissed or subscribed
-  if(localStorage.getItem(KEY)) return;
+  if(store('get', KEY) || store('get', SNOOZE)) return;
   // Don't show if user is logged in
   if(window.AHG && window.AHG.isLoggedIn) return;
   setTimeout(showPopup, DELAY);

@@ -20,6 +20,10 @@
 **Deploy with git, never by uploading this folder.** See [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md) and the
 open items in [TODO.md](TODO.md).
 
+**New (Nov 2026):** enquiry forms on the Contact page and every vehicle page, Admin → **Leads** (one card per
+person with Call / WhatsApp / Email / Log call and call scripts), Admin → **Email & WA Templates**, and a
+"Waiting on you" bar on the Overview. How to use them: [docs/LEADS-GUIDE.md](docs/LEADS-GUIDE.md).
+
 ---
 
 ## Table of Contents

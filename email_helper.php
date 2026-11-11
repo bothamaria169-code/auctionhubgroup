@@ -54,7 +54,7 @@ function _buildMailer(string $fromEmail = MAIL_FROM_EMAIL, string $fromName = MA
 // <style> block kept for Outlook/Apple Mail/Thunderbird.
 // Gmail strips <head> CSS — all layout-critical elements also carry
 // inline styles so rendering survives in every client.
-function _emailTemplate(string $title, string $bodyContent): string {
+function _emailTemplate(string $title, string $bodyContent, bool $replyable = false): string {
     $t = htmlspecialchars($title);
     return '<!DOCTYPE html>
 <html lang="en">
@@ -114,7 +114,7 @@ function _emailTemplate(string $title, string $bodyContent): string {
           <p style="margin:0 0 4px;color:#999999;font-size:11px;">KwaZulu-Natal &mdash; Durban: Quarry Place, Off Queen Nandi Drive, River Horse Estate, Durban</p>
           <p style="margin:0 0 4px;color:#999999;font-size:11px;">Free State &mdash; Bloemfontein: Cnr R64 &amp; Valentia Road, Waterbron, Bloemfontein</p>
           <p style="margin:0 0 10px;color:#999999;font-size:11px;">Eastern Cape &mdash; Gqeberha (PE): ABSA Vehicle &amp; Asset Finance Trade Centre, 142 Burman Road, Deal Party, Gqeberha (PE)</p>
-          <p style="margin:0;color:#aaaaaa;font-size:12px;">This is an automated message. Please do not reply directly to this email.</p>
+          <p style="margin:0;color:#aaaaaa;font-size:12px;">' . ($replyable ? 'Reply to this email, call us or WhatsApp ' . (defined('COMPANY_WHATSAPP') ? COMPANY_WHATSAPP : '') . ' &mdash; a consultant will help you.' : 'This is an automated message. Please do not reply directly to this email.') . '</p>
         </td>
       </tr>
 
