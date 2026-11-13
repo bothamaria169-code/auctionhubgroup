@@ -1,10 +1,13 @@
 <?php
 // ============================================================
 // AUCTION HUB GROUP — my_application.php?t=TOKEN
-// The client's private page for an in-house finance application or a
-// pre-auction (Buy Now) request: where it stands, and every step they take —
-// choose a plan, accept a suggestion, confirm, upload documents and proof of
-// payment, see their Buyer's Code and VIN, book the test drive, decide.
+// The client's private page for an In-House Finance application or a
+// Pre-Auction Purchase request: progress, and each step they take.
+//   Finance:     choose a term · upload documents & proof of payment ·
+//                Buyer Code · book the test drive
+//   Pre-auction: proforma invoice + POP upload (invoice_pop_upload.php) ·
+//                Buyer Code · after the 1h30 test drive: proceed, switch
+//                to the alternative, or cancel for a refund
 // ============================================================
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
@@ -17,15 +20,14 @@ if (!$app) {
     $noIndex = true;
     require_once __DIR__ . '/header.php';
     require __DIR__ . '/fin_ui.php';
-    echo '<div class="ap-wrap" style="max-width:640px"><div class="ap-card"><h2>We could not find that application</h2>'
-       . '<p>Please use the button in your email, or <a href="' . APP_URL . '/my_applications.php">find your applications</a>. You can also call us on ' . e(COMPANY_PHONE) . '.</p></div></div>';
+    finHero('<i class="fas fa-circle-question"></i> Application', 'We Could Not Find That Application', 'Please use the button in your email, or have your links emailed to you again.', 'My Application');
+    echo '<section class="ap-section"><div class="ap-container" style="text-align:center"><a class="btn btn-primary" href="' . APP_URL . '/my_applications.php"><i class="fas fa-envelope"></i> Email Me My Links</a></div></section>';
     require_once __DIR__ . '/footer.php';
     exit;
 }
 
 $isFin = $app['kind'] === 'finance';
 $back  = finLink($app);
-$d     = &$app['details'];
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -39,26 +41,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isFin && $action === 'choose' && in_array($s, ['quoted', 'chosen'], true)) {
         $m = (int)($_POST['months'] ?? 0);
         $plan = null;
-        foreach ($d['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m) $plan = $p;
+        foreach ($app['details']['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m) $plan = $p;
         if ($plan) {
-            $d['choice'] = ['months' => $m, 'at' => date('Y-m-d H:i:s')];
+            $app['details']['choice'] = ['months' => $m, 'at' => date('Y-m-d H:i:s')];
             $app['months'] = $m;
             $app['status'] = 'chosen';
-            finLog($app, "Chose the $m-month plan at " . formatRand($plan['monthly']) . ' a month');
+            finLog($app, "Chose the $m-month term at " . formatRand($plan['monthly']) . ' per month');
             finSave($app);
-            finMailOffice($app, "Plan chosen: $m months at " . formatRand($plan['monthly']) . ' — approve the deposit');
-            finFlash('success', "Thank you — you chose <strong>$m months at " . e(formatRand($plan['monthly'])) . ' a month</strong>. We are reviewing your deposit now; your deposit invoice comes to you by email.');
+            finMailOffice($app, "Term chosen: $m months at " . formatRand($plan['monthly']) . ' — approve the deposit');
+            finFlash('success', "You chose <strong>$m months at " . e(formatRand($plan['monthly'])) . ' per month</strong>. Our finance team is reviewing your deposit — we email you as soon as it is approved.');
         } else {
-            finFlash('error', 'Please choose one of the plans.');
+            finFlash('error', 'Please choose one of the terms.');
         }
         $to = 'plans';
-    } elseif ($action === 'upload' && in_array($s, ['invoiced', 'chosen', 'approved', 'confirmed'], true)) {
+    } elseif ($isFin && $action === 'upload' && in_array($s, ['invoiced', 'approved'], true)) {
         $kind = (string)($_POST['doc'] ?? '');
         [$n, $err] = finDocUpload($app, $kind, $_FILES['files'] ?? []);
         if ($n) {
             finSave($app);
             finMailOffice($app, 'Document uploaded: ' . (FIN_DOCS[$kind][0] ?? $kind));
-            finFlash('success', e(FIN_DOCS[$kind][0]) . ' uploaded — thank you. We check it and let you know.');
+            finFlash('success', e(FIN_DOCS[$kind][0]) . ' uploaded — thank you. Our team will review it.');
         }
         if ($err !== '') finFlash('error', e($err));
         $to = 'documents';
@@ -67,345 +69,310 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($e = finViewingError($date, $time)) {
             finFlash('error', e($e));
         } else {
-            $d['viewing'] = ['date' => $date, 'time' => $time, 'status' => 'requested', 'note' => trim(mb_substr((string)($_POST['note'] ?? ''), 0, 500)), 'at' => date('Y-m-d H:i:s')];
-            finLog($app, 'Asked for a test drive on ' . finViewingLabel($d['viewing']));
+            $app['details']['viewing'] = ['date' => $date, 'time' => $time, 'status' => 'requested', 'note' => trim(mb_substr((string)($_POST['note'] ?? ''), 0, 500)), 'at' => date('Y-m-d H:i:s')];
+            finLog($app, 'Requested a test drive on ' . finViewingLabel($app['details']['viewing']));
             finSave($app);
-            finMailOffice($app, 'Test drive requested: ' . finViewingLabel($d['viewing']));
-            finFlash('success', 'Thank you — we confirm your test drive shortly.');
+            finMailOffice($app, 'Test drive requested: ' . finViewingLabel($app['details']['viewing']));
+            finFlash('success', 'Thank you — we will confirm your test drive shortly.');
         }
         $to = 'viewing';
-    } elseif (!$isFin && $action === 'accept' && $s === 'countered') {
-        finLog($app, 'Accepted the suggested ' . paPercent($app) . '%');
-        paApproved($app, 'client');
-        finSave($app);
-        finMailOffice($app, 'Client accepted ' . paPercent($app) . '%');
-        finFlash('success', 'Approved at ' . paPercent($app) . '%. One last step: read your commitment letter and confirm below.');
-        $to = 'confirm';
-    } elseif (!$isFin && $action === 'confirm' && $s === 'approved') {
-        $gate = [
-            'id_number' => trim(mb_substr((string)($_POST['id_number'] ?? ''), 0, 20)),
-            'car_reg'   => strtoupper(trim(mb_substr((string)($_POST['car_reg'] ?? ''), 0, 15))),
-            'people'    => max(1, min(4, (int)($_POST['people'] ?? 1))),
-        ];
-        if (!preg_match('/^[A-Za-z0-9]{6,20}$/', $gate['id_number'])) $errors['id_number'] = 'Please enter your ID or passport number (for the security gate).';
-        if (empty($_POST['understood'])) $errors['understood'] = 'Please confirm you have read and understood the commitment letter.';
-        if (!$errors) {
-            paConfirm($app, $gate);
-            finSave($app);
-            finFlash('success', 'You are in! Your commitment invoice is on this page and in your email. Pay within ' . FIN_DECISION_DAYS . ' days to lock the vehicle in your name.');
-            $to = 'documents';
-        }
-    } elseif (!$isFin && $action === 'decision' && $s === 'paid' && empty($d['decision'])) {
+    } elseif (!$isFin && $action === 'decision' && $s === 'paid' && empty($app['details']['decision'])) {
         $choice = (string)($_POST['choice'] ?? '');
-        if (in_array($choice, ['proceed', 'alternative', 'refund'], true)) {
-            $d['decision'] = ['choice' => $choice, 'at' => date('Y-m-d H:i:s'), 'reason' => trim(mb_substr((string)($_POST['reason'] ?? ''), 0, 500))];
+        if (in_array($choice, ['proceed', 'alternative', 'refund'], true) && ($choice !== 'alternative' || !empty($app['details']['alt']))) {
+            $app['details']['decision'] = ['choice' => $choice, 'at' => date('Y-m-d H:i:s'), 'reason' => trim(mb_substr((string)($_POST['reason'] ?? ''), 0, 500))];
             if ($choice === 'refund') $app['status'] = 'refund';
-            $label = ['proceed' => 'Going ahead — will pay the balance', 'alternative' => 'Switching to the alternative vehicle', 'refund' => 'Asked for the commitment back'][$choice];
+            $label = ['proceed' => 'Proceeding with the purchase — will pay the outstanding balance', 'alternative' => 'Switching to the nominated alternative vehicle', 'refund' => 'Cancelled after the test drive — refund requested'][$choice];
             finLog($app, $label);
             finSave($app);
             finMailOffice($app, $label);
             finFlash('success', $choice === 'refund'
-                ? 'Understood. Your commitment is refunded within 3–5 business days, less R' . number_format(PA_REFUND_FEE, 2) . ' for bank and administration charges.'
-                : 'Thank you — our team will send the balance invoice and arrange handover.');
+                ? 'Understood. Your commitment fee is refunded within 3–5 business days to the account it came from, less R' . number_format(PA_REFUND_FEE, 2) . ' admin and bank charges.'
+                : 'Thank you — our team will contact you to finalise and arrange handover.');
         }
         $to = 'decision';
-    } elseif ($action === 'cancel' && in_array($s, ['quoted', 'chosen', 'invoiced', 'requested', 'countered', 'approved', 'confirmed'], true)
-              && !($isFin && $s === 'approved')) {
-        $app['status'] = (!$isFin && in_array($s, ['countered', 'approved'], true)) ? 'not_ready' : 'cancelled';
-        $d['cancelled'] = ['at' => date('Y-m-d H:i:s'), 'reason' => trim(mb_substr((string)($_POST['reason'] ?? ''), 0, 500))];
-        finLog($app, ($app['status'] === 'not_ready' ? 'Not ready to commit' : 'Cancelled') . ($d['cancelled']['reason'] !== '' ? ': ' . $d['cancelled']['reason'] : ''));
+    } elseif ($action === 'cancel' && in_array($s, ['quoted', 'chosen', 'invoiced', 'requested', 'expired'], true)) {
+        $app['status'] = 'cancelled';
+        $app['details']['cancelled'] = ['at' => date('Y-m-d H:i:s'), 'reason' => trim(mb_substr((string)($_POST['reason'] ?? ''), 0, 500))];
+        finLog($app, 'Cancelled' . ($app['details']['cancelled']['reason'] !== '' ? ': ' . $app['details']['cancelled']['reason'] : ''));
         finSave($app);
-        finMailOffice($app, $app['status'] === 'not_ready' ? 'Client is not ready to commit' : 'Client cancelled');
-        finFlash('info', 'Done — nothing is owed. You can still get a great deal at auction: <a href="' . APP_URL . '/login.php?tab=register">register</a>, view and bid.');
+        finMailOffice($app, 'Client cancelled');
+        finFlash('info', 'Cancelled — nothing is owed. You can still buy at auction: <a href="' . APP_URL . '/login.php?tab=register">register to bid</a>.');
     }
-    if (!$errors) { header('Location: ' . $back . ($to !== '' ? '#' . $to : '')); exit; }
+    header('Location: ' . $back . ($to !== '' ? '#' . $to : '')); exit;
 }
 
+$d       = $app['details'];
 $s       = $app['status'];
 $step    = finStepIndex($app);
-$closed  = finClosed($app);
 $vehicle = finVehicle((int)$app['auction_id']);
 $showVin = ($isFin && in_array($s, ['approved', 'completed'], true)) || (!$isFin && in_array($s, ['paid', 'completed'], true));
 $vin     = $showVin ? vinForAuction((int)$app['auction_id']) : '';
 $plan    = $isFin ? finChosenPlan($app) : null;
+$inv     = !$isFin ? paInvoiceRow($app) : null;
 $bank    = getBankSettings();
 $csrf    = e(finCsrfToken());
 $first   = explode(' ', trim($app['name']))[0];
 $img     = $d['vehicle']['image'] ?? ($vehicle['image_url'] ?? '');
+$R       = fn($n) => formatRand((float)$n);
 
-$pageTitle = ($isFin ? 'My finance application' : 'My pre-auction request') . ' — ' . $app['vehicle'];
+$pageTitle = ($isFin ? 'My Finance Application' : 'My Pre-Auction Purchase') . ' — ' . $app['vehicle'];
 $pageDescription = 'Your private Auction Hub Group application page.';
-$bodyClass = 'page-financing';
+$bodyClass = $isFin ? 'page-financing' : 'page-preauction';
 $noIndex = true;
 require_once __DIR__ . '/header.php';
 require __DIR__ . '/fin_ui.php';
-?>
-<section class="ap-hero" style="padding:2.4rem 1.25rem 2rem">
-  <span class="ap-eyebrow"><?= $isFin ? '<i class="fas fa-handshake"></i> In-house finance' : '<i class="fas fa-bolt"></i> Pre-auction purchase' ?> · <?= e(finRef($app)) ?></span>
-  <h1 style="font-size:clamp(1.6rem,3.6vw,2.3rem)">Hi <?= e($first) ?> — here is where it stands</h1>
-  <p><?= e($app['vehicle']) ?> · <?= formatRand((float)$app['price']) ?></p>
-</section>
 
-<div class="ap-wrap">
+finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance · ' . e(finRef($app)) : '<i class="fas fa-key"></i> Pre-Auction Purchase · ' . e(finRef($app)),
+    'Hi ' . e($first) . ', Here Is Where It Stands', e($app['vehicle']) . ' · ' . $R($app['price']),
+    $isFin ? 'My Finance Application' : 'My Pre-Auction Purchase');
+?>
+<section class="ap-section"><div class="ap-container">
   <?= finFlashHtml() ?>
 
-  <?php if (!in_array($s, ['declined', 'cancelled', 'not_ready'], true)): ?>
+  <?php if (!in_array($s, ['declined', 'cancelled'], true)): ?>
   <ol class="ap-steps" aria-label="Progress">
-    <?php foreach (finSteps($app['kind']) as $i => $label): ?>
-      <li class="<?= $i < $step ? 'done' : ($i === $step ? 'now' : '') ?>"><b><?= $i < $step ? '✓' : $i + 1 ?></b><?= e($label) ?></li>
+    <?php foreach (finSteps($app['kind']) as $i => [$icon, $color, $label]): ?>
+      <li class="<?= $i < $step ? 'done' : ($i === $step ? 'now' : '') ?>" style="--c:<?= $color ?>">
+        <span class="n"><i class="fas <?= $i < $step ? 'fa-check' : $icon ?>"></i></span><b><?= e($label) ?></b></li>
     <?php endforeach; ?>
   </ol>
   <?php endif; ?>
 
   <div class="ap-grid">
     <div>
-      <?php // ── Closed states ── ?>
-      <?php if ($s === 'declined'): ?>
-        <div class="ap-card"><h2>We could not approve this one</h2>
-          <p>We are sorry — we are not able to approve this <?= $isFin ? 'finance application' : 'pre-auction request' ?> on this vehicle.</p>
-          <?php if (!empty($d['declined']['reason'])): ?><div class="ap-note"><?= nl2br(e($d['declined']['reason'])) ?></div><?php endif; ?>
-          <div class="ap-row"><a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'decline')) ?>" target="_blank"><i class="fas fa-file-lines"></i> My letter</a>
-            <a class="ap-btn ap-btn-sm" href="<?= APP_URL ?>/auctions.php">See what's on auction</a>
-            <a class="ap-btn ap-btn-out ap-btn-sm" href="<?= APP_URL ?>/<?= $isFin ? 'finance_apply.php' : 'preauction_request.php' ?>">Apply on another vehicle</a></div></div>
-      <?php elseif (in_array($s, ['cancelled', 'not_ready'], true)): ?>
-        <div class="ap-card"><h2><?= $s === 'not_ready' ? 'No problem — maybe next time' : 'Cancelled' ?></h2>
-          <p>Nothing is owed. You can still get a great deal at auction: <a href="<?= APP_URL ?>/login.php?tab=register">register to bid</a> (the deposit is refundable), view on a preview day and bid.</p>
-          <a class="ap-btn ap-btn-sm" href="<?= APP_URL ?>/auctions.php">Browse auctions</a></div>
-      <?php endif; ?>
+    <?php if ($s === 'declined'): ?>
+      <div class="ap-card"><div class="ap-card-head"><i class="fas fa-circle-info"></i> <?= !empty($d['declined']['institution']) ? 'Decision From the Financial Institution' : 'We Could Not Proceed' ?></div><div class="ap-card-body">
+        <p><?= !empty($d['declined']['institution'])
+            ? 'The financial institution holding this vehicle has determined that the pre-auction commitment cannot be processed at this time. This is not a reflection of your creditworthiness.'
+            : 'We are sorry — we are not able to proceed with this ' . ($isFin ? 'finance application' : 'request') . ' on this vehicle. This is not a reflection of your creditworthiness.' ?></p>
+        <?php if (!empty($d['declined']['reason'])): ?><div class="ap-notice"><i class="fas fa-circle-info"></i><div><?= nl2br(e($d['declined']['reason'])) ?></div></div><?php endif; ?>
+        <?php if (!$isFin && $inv && $inv['pop_file_path']): ?><p class="ap-help">Any commitment fee paid is refunded within 3–5 business days, less R<?= number_format(PA_REFUND_FEE, 2) ?> admin and bank charges.</p><?php endif; ?>
+        <div class="ap-row" style="margin-top:1rem"><a class="btn btn-primary btn-sm" href="<?= APP_URL ?>/preauction.php">Browse Pre-Auction Vehicles</a>
+          <a class="btn btn-outline btn-sm" href="<?= APP_URL ?>/auctions.php">Live Auctions</a></div>
+      </div></div>
+    <?php elseif ($s === 'cancelled'): ?>
+      <div class="ap-card"><div class="ap-card-head"><i class="fas fa-circle-info"></i> Cancelled</div><div class="ap-card-body">
+        <p>Nothing is owed. You can still get a great deal at auction — <a href="<?= APP_URL ?>/login.php?tab=register">register to bid</a> (the <?= e(REG_FEE_LABEL) ?> deposit is refundable).</p>
+        <a class="btn btn-primary btn-sm" href="<?= APP_URL ?>/auctions.php">Browse Auctions</a></div></div>
+    <?php endif; ?>
 
-      <?php // ════════ FINANCE ════════ ?>
-      <?php if ($isFin && !empty($d['quote'])): $q = $d['quote']; ?>
-        <?php if (in_array($s, ['quoted', 'chosen'], true)): ?>
-        <form class="ap-card" id="plans" method="post">
+    <?php /* ════════ IN-HOUSE FINANCE ════════ */ ?>
+    <?php if ($isFin && !empty($d['quote'])): $q = $d['quote']; ?>
+      <?php if (in_array($s, ['quoted', 'chosen'], true)): ?>
+      <form class="ap-card" id="plans" method="post">
+        <div class="ap-card-head"><i class="fas fa-calendar-days"></i> <?= !empty($q['counter']) ? 'Your Updated Quote' : 'Choose Your Repayment Term' ?></div>
+        <div class="ap-card-body">
           <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="choose">
-          <h2><?= !empty($q['counter']) ? 'Your updated quotation' : 'Choose your monthly plan' ?></h2>
           <?php if (!empty($q['counter'])): ?>
-            <div class="ap-note">We could not approve your first deposit, but we <strong>can approve <?= formatRand((float)$q['deposit']) ?></strong>. Choose your plan at this deposit to go ahead.<?= $q['note'] !== '' ? '<br>' . nl2br(e($q['note'])) : '' ?>
-              <br><a href="<?= e(finDocLink($app, 'counter')) ?>" target="_blank">Read the deposit letter</a></div>
+            <div class="ap-notice"><i class="fas fa-circle-info"></i><div>We can approve a deposit of <strong><?= $R($q['deposit']) ?></strong> on this vehicle. Choose your term at this deposit to continue.<?= $q['note'] !== '' ? '<br>' . nl2br(e($q['note'])) : '' ?></div></div>
           <?php endif; ?>
-          <p class="ap-help" style="margin-bottom:.8rem">Deposit <?= formatRand((float)$q['deposit']) ?> · amount financed <strong><?= formatRand((float)$q['financed']) ?></strong>. Quotation <?= e($q['number']) ?>, valid until <?= date('j F Y', strtotime($q['valid'])) ?>.</p>
+          <div style="margin-bottom:1rem">
+            <div class="ap-rowline"><span class="lbl">Vehicle price</span><span class="val"><?= $R($q['price']) ?></span></div>
+            <div class="ap-rowline fee"><span class="lbl">Your deposit</span><span class="val">− <?= $R($q['deposit']) ?></span></div>
+            <div class="ap-rowline big"><span class="lbl">Amount financed</span><span class="val"><?= $R($q['financed']) ?></span></div>
+          </div>
           <?php foreach ($q['plans'] as $p): $on = (int)($d['choice']['months'] ?? 0) === (int)$p['months']; ?>
             <label class="ap-plan<?= $on ? ' chosen' : '' ?>">
               <input type="radio" name="months" value="<?= (int)$p['months'] ?>"<?= $on ? ' checked' : '' ?> required>
-              <span class="m"><?= (int)$p['months'] ?> months</span>
-              <span class="ap-help" style="margin:0">Total <?= formatRand($p['total']) ?></span>
-              <span class="p"><?= formatRand($p['monthly']) ?><small style="font-weight:600;color:#667"> /mo</small></span>
+              <span><span class="m"><?= (int)$p['months'] ?> Months</span> <?= (int)$p['months'] === 12 ? '<span class="pop">Popular</span>' : '' ?><br><span class="t">Total <?= $R($p['total']) ?></span></span>
+              <span class="p"><?= $R($p['monthly']) ?><small> /month</small></span>
             </label>
           <?php endforeach; ?>
-          <div class="ap-row" style="margin-top:.8rem">
-            <button class="ap-btn ap-btn-green" type="submit"><i class="fas fa-check"></i> <?= $s === 'chosen' ? 'Change my plan' : 'Choose this plan' ?></button>
-            <a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'quote')) ?>" target="_blank"><i class="fas fa-print"></i> View / print quotation</a>
+          <p class="ap-help">Quote <?= e($q['number']) ?> · valid until <?= date('j F Y', strtotime($q['valid'])) ?> · indicative until you sign your agreement.</p>
+          <div class="ap-row" style="margin-top:.9rem">
+            <button class="btn btn-success" type="submit"><i class="fas fa-check"></i> <?= $s === 'chosen' ? 'Change My Term' : 'Choose This Term' ?></button>
+            <a class="btn btn-outline btn-sm" href="<?= e(finDocLink($app, 'quote')) ?>" target="_blank"><i class="fas fa-print"></i> Print Quote</a>
           </div>
-          <?php if ($s === 'chosen'): ?><p class="ap-help"><i class="fas fa-hourglass-half"></i> You chose <?= (int)$d['choice']['months'] ?> months. We are reviewing your deposit — your deposit invoice comes next.</p><?php endif; ?>
-        </form>
-        <?php endif; ?>
-
-        <?php if (in_array($s, ['invoiced', 'approved', 'completed'], true)): ?>
-        <div class="ap-card">
-          <h2><?= $s === 'invoiced' ? 'Pay your deposit' : 'Your plan' ?></h2>
-          <ul class="ap-kv">
-            <li><span>Deposit</span><span><?= formatRand((float)$app['amount']) ?></span></li>
-            <?php if ($plan): ?><li><span>Plan</span><span><?= (int)$plan['months'] ?> months × <?= formatRand($plan['monthly']) ?></span></li><?php endif; ?>
-            <li><span>Amount financed</span><span><?= formatRand((float)$q['financed']) ?></span></li>
-            <?php if ($s === 'invoiced'): ?>
-              <li><span>Bank</span><span><?= e($bank['bank_name']) ?></span></li>
-              <li><span>Account name</span><span><?= e($bank['bank_account_name']) ?></span></li>
-              <li><span>Account number</span><span><?= e($bank['bank_account_no']) ?></span></li>
-              <li><span>Branch code</span><span><?= e($bank['bank_branch_code']) ?></span></li>
-              <li><span>Reference</span><span><?= e(finPayRef($app)) ?></span></li>
-              <li><span>Please pay by</span><span><?= date('j F Y', strtotime($d['invoice']['due'])) ?></span></li>
-            <?php endif; ?>
-          </ul>
-          <div class="ap-row" style="margin-top:.8rem">
-            <?php if (!empty($d['invoice'])): ?><a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'invoice')) ?>" target="_blank"><i class="fas fa-file-invoice"></i> Deposit invoice</a><?php endif; ?>
-            <a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'quote')) ?>" target="_blank"><i class="fas fa-print"></i> Quotation</a>
-            <?php if ($s !== 'invoiced'): ?><a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'approval')) ?>" target="_blank"><i class="fas fa-award"></i> Approval letter</a><?php endif; ?>
-          </div>
-          <?php if ($s === 'invoiced'): ?><p class="ap-help"><i class="fas fa-shield-halved"></i> Only ever pay into the account on your invoice. We never change banking details by email or WhatsApp.</p><?php endif; ?>
+          <?php if ($s === 'chosen'): ?><div class="alert alert-info" style="margin:1rem 0 0"><i class="fas fa-hourglass-half"></i><span>You chose <?= (int)$d['choice']['months'] ?> months. Our finance team is reviewing your deposit — next you submit your documents.</span></div><?php endif; ?>
         </div>
-        <?php endif; ?>
+      </form>
       <?php endif; ?>
 
-      <?php // ════════ PRE-AUCTION ════════ ?>
-      <?php if (!$isFin): $pc = paPercent($app); $commit = paCommitment($app); ?>
-        <?php if (in_array($s, ['requested', 'countered', 'approved'], true)): ?>
-        <div class="ap-card" id="decision">
-          <h2><?= $s === 'requested' ? 'We are checking your request' : ($s === 'countered' ? 'We can approve ' . $pc . '%' : 'Approved at ' . $pc . '% — please confirm') ?></h2>
-          <ul class="ap-kv">
-            <li><span>Price</span><span><?= formatRand((float)$app['price']) ?></span></li>
-            <li><span>Commitment <?= $s === 'requested' ? 'you asked for' : '' ?></span><span><?= $pc ?>% = <?= formatRand($commit) ?></span></li>
-            <li><span>Balance after the test drive</span><span><?= formatRand((float)$app['price'] - $commit) ?></span></li>
-            <?php if (!empty($d['viewing']['date'])): ?><li><span>Test drive wanted</span><span><?= e(finViewingLabel($d['viewing'])) ?></span></li><?php endif; ?>
-            <?php if (!empty($d['alt'])): ?><li><span>Alternative</span><span><?= e($d['alt']['title']) ?></span></li><?php endif; ?>
-          </ul>
+      <?php if (in_array($s, ['invoiced', 'approved', 'completed'], true)): ?>
+      <div class="ap-card">
+        <div class="ap-card-head"><i class="fas fa-file-invoice-dollar"></i> <?= $s === 'invoiced' ? 'Pay Your Deposit' : 'Your Finance Plan' ?></div>
+        <div class="ap-card-body">
+          <div class="ap-rowline"><span class="lbl">Deposit</span><span class="val"><?= $R($app['amount']) ?></span></div>
+          <?php if ($plan): ?><div class="ap-rowline"><span class="lbl">Term</span><span class="val"><?= (int)$plan['months'] ?> months × <?= $R($plan['monthly']) ?></span></div><?php endif; ?>
+          <div class="ap-rowline big"><span class="lbl">Amount financed</span><span class="val"><?= $R($q['financed']) ?></span></div>
+          <?php if ($s === 'invoiced'): ?>
+            <div style="background:#f0f6fc;border-radius:10px;padding:.4rem 1rem;margin-top:1rem">
+              <div class="ap-rowline"><span class="lbl">Bank</span><span class="val"><?= e($bank['bank_name']) ?></span></div>
+              <div class="ap-rowline"><span class="lbl">Account name</span><span class="val"><?= e($bank['bank_account_name']) ?></span></div>
+              <div class="ap-rowline"><span class="lbl">Account number</span><span class="val"><?= e($bank['bank_account_no']) ?></span></div>
+              <div class="ap-rowline"><span class="lbl">Branch code</span><span class="val"><?= e($bank['bank_branch_code']) ?></span></div>
+              <div class="ap-rowline"><span class="lbl">Reference</span><span class="val"><?= e(finPayRef($app)) ?></span></div>
+            </div>
+            <p class="ap-help"><i class="fas fa-shield-halved"></i> Only pay into the account on your Auction Hub Group invoice. Please pay by <?= date('j F Y', strtotime($d['invoice']['due'])) ?>.</p>
+          <?php endif; ?>
+          <div class="ap-row" style="margin-top:.9rem">
+            <?php if (!empty($d['invoice'])): ?><a class="btn btn-outline btn-sm" href="<?= e(finDocLink($app, 'invoice')) ?>" target="_blank"><i class="fas fa-file-invoice"></i> Deposit Invoice</a><?php endif; ?>
+            <a class="btn btn-outline btn-sm" href="<?= e(finDocLink($app, 'quote')) ?>" target="_blank"><i class="fas fa-print"></i> Quote</a>
+            <?php if ($s !== 'invoiced'): ?><a class="btn btn-outline btn-sm" href="<?= e(finDocLink($app, 'approval')) ?>" target="_blank"><i class="fas fa-award"></i> Approval Letter</a><?php endif; ?>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <?php /* ════════ PRE-AUCTION PURCHASE ════════ */ ?>
+    <?php if (!$isFin && !in_array($s, ['declined', 'cancelled'], true)): $pc = paPercent($app); ?>
+      <div class="ap-card">
+        <div class="ap-card-head"><i class="fas fa-file-invoice-dollar"></i> <?= match ($s) {
+            'requested' => 'Your Proforma Invoice Is Being Prepared', 'invoiced' => 'Pay Your Commitment Fee',
+            'expired' => 'Your Invoice Has Expired', 'pop_uploaded' => 'Verifying Your Payment', default => 'Your Pre-Auction Purchase' } ?></div>
+        <div class="ap-card-body">
+          <div class="ap-rowline"><span class="lbl">Total price</span><span class="val"><?= $R($app['price']) ?></span></div>
+          <div class="ap-rowline fee"><span class="lbl">Commitment fee (<?= $pc ?>%)</span><span class="val"><?= $R($inv ? $inv['commitment_fee_amount'] : paCommitment($app)) ?></span></div>
+          <div class="ap-rowline big"><span class="lbl">Outstanding after your test drive</span><span class="val"><?= $R($inv ? $inv['outstanding_amount'] : (float)$app['price'] - paCommitment($app)) ?></span></div>
+          <?php if (!empty($d['alt'])): ?><div class="ap-rowline"><span class="lbl">Alternative vehicle</span><span class="val"><?= e($d['alt']['title']) ?></span></div><?php endif; ?>
+          <?php if ($inv): ?><div class="ap-rowline"><span class="lbl">Invoice</span><span class="val"><?= e($inv['invoice_number']) ?></span></div><?php endif; ?>
+
           <?php if ($s === 'requested'): ?>
-            <p class="ap-help"><i class="fas fa-hourglass-half"></i> We check your request with the financial institution and come back to you — usually the same business day. No invoice is sent before you confirm.</p>
-          <?php elseif ($s === 'countered'): ?>
-            <div class="ap-note">We cannot approve <?= (int)$app['percent'] ?>% on this vehicle, but we can approve <strong><?= $pc ?>%</strong>.<?= !empty($d['office_note']) ? '<br>' . nl2br(e($d['office_note'])) : '' ?></div>
-            <form method="post" class="ap-row"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="accept">
-              <button class="ap-btn ap-btn-green" type="submit"><i class="fas fa-check"></i> Accept <?= $pc ?>%</button></form>
+            <div class="alert alert-info" style="margin:1rem 0 0"><i class="fas fa-hourglass-half"></i><span>Our team is preparing your personalised proforma invoice — usually within the hour. It comes to you by email and appears here.</span></div>
+          <?php elseif ($s === 'invoiced' && $inv): ?>
+            <div class="ap-notice"><i class="fas fa-clock"></i><div><strong>Valid for 24 hours</strong> — until <?= safeDate('l j F, H:i', $inv['expires_at']) ?>. This window is set by the financial institution; once it closes the vehicle returns to the auction process.</div></div>
+            <a class="btn btn-primary btn-lg btn-block" href="<?= e(paInvoiceLink($inv)) ?>"><i class="fas fa-upload"></i> View Invoice &amp; Upload Proof of Payment</a>
+          <?php elseif ($s === 'pop_uploaded'): ?>
+            <div class="alert alert-info" style="margin:1rem 0 0"><i class="fas fa-magnifying-glass-dollar"></i><span>We have your proof of payment and are verifying it with the financial institution. Your Buyer Code follows by email.</span></div>
+          <?php elseif ($s === 'expired'): ?>
+            <div class="alert alert-warning" style="margin:1rem 0 0"><i class="fas fa-triangle-exclamation"></i><span>The 24-hour window closed before payment. Please <a href="<?= e(finWhatsAppUrl($app)) ?>" target="_blank" rel="noopener">WhatsApp us</a> — if the vehicle is still available we can re-issue your invoice.</span></div>
           <?php endif; ?>
         </div>
-        <?php endif; ?>
+      </div>
+    <?php endif; ?>
 
-        <?php if ($s === 'approved'): ?>
-        <form class="ap-card" id="confirm" method="post">
-          <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="confirm">
-          <h2>Confirm you are going ahead</h2>
-          <p>Please <a href="<?= e(finDocLink($app, 'letter')) ?>" target="_blank"><strong>read your commitment letter</strong></a> first. The commitment is mandatory to reserve the vehicle; your invoice is issued the moment you confirm.</p>
-          <div class="ap-form">
-            <div class="<?= isset($errors['id_number']) ? 'ap-err' : '' ?>"><label for="id_number">ID / passport number</label><input class="ap-input" id="id_number" name="id_number" required value="<?= e($_POST['id_number'] ?? '') ?>">
-              <?= isset($errors['id_number']) ? '<span class="ap-err-text">' . e($errors['id_number']) . '</span>' : '' ?><span class="ap-help">For your gate pass at head office.</span></div>
-            <div><label for="car_reg">Car you arrive in (reg) <span style="font-weight:400;color:#889">optional</span></label><input class="ap-input" id="car_reg" name="car_reg" value="<?= e($_POST['car_reg'] ?? '') ?>"></div>
-            <div><label for="people">People coming (incl. you)</label><select class="ap-input" id="people" name="people"><?php for ($i = 1; $i <= 4; $i++): ?><option><?= $i ?></option><?php endfor; ?></select></div>
-          </div>
-          <label class="ap-check <?= isset($errors['understood']) ? 'ap-err' : '' ?>"><input type="checkbox" name="understood" value="1"><span>I have read the commitment letter. I pay the commitment of <?= formatRand($commit) ?> only into the account on my invoice; after the test drive I pay the balance or ask for my commitment back (less R<?= number_format(PA_REFUND_FEE, 2) ?>).</span></label>
-          <?= isset($errors['understood']) ? '<span class="ap-err-text">' . e($errors['understood']) . '</span>' : '' ?>
-          <button class="ap-btn ap-btn-green" type="submit" style="margin-top:.6rem"><i class="fas fa-file-invoice"></i> Confirm and get my invoice</button>
-        </form>
-        <?php endif; ?>
-
-        <?php if (in_array($s, ['confirmed', 'paid', 'completed', 'refund'], true)): ?>
-        <div class="ap-card">
-          <h2><?= $s === 'confirmed' ? 'Pay your commitment' : 'Your purchase' ?></h2>
-          <ul class="ap-kv">
-            <li><span>Commitment (<?= (int)$app['percent'] ?>%)</span><span><?= formatRand((float)$app['amount']) ?></span></li>
-            <li><span>Balance after the test drive</span><span><?= formatRand((float)$app['price'] - (float)$app['amount']) ?></span></li>
-            <?php if ($s === 'confirmed'): ?>
-              <li><span>Bank</span><span><?= e($bank['bank_name']) ?></span></li>
-              <li><span>Account name</span><span><?= e($bank['bank_account_name']) ?></span></li>
-              <li><span>Account number</span><span><?= e($bank['bank_account_no']) ?></span></li>
-              <li><span>Branch code</span><span><?= e($bank['bank_branch_code']) ?></span></li>
-              <li><span>Reference</span><span><?= e(finPayRef($app)) ?></span></li>
-              <li><span>Please pay by</span><span><?= date('j F Y', strtotime($d['invoice']['due'])) ?></span></li>
-            <?php endif; ?>
-          </ul>
-          <div class="ap-row" style="margin-top:.8rem">
-            <a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'invoice')) ?>" target="_blank"><i class="fas fa-file-invoice"></i> Commitment invoice</a>
-            <a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'letter')) ?>" target="_blank"><i class="fas fa-file-lines"></i> Commitment letter</a>
-            <?php if ($s !== 'confirmed'): ?><a class="ap-btn ap-btn-out ap-btn-sm" href="<?= e(finDocLink($app, 'code')) ?>" target="_blank"><i class="fas fa-key"></i> Buyer's Code letter</a><?php endif; ?>
-          </div>
+    <?php /* ── Buyer Code access pass ── */ ?>
+    <?php if (!empty($app['buyer_code']) && in_array($s, ['approved', 'paid', 'completed'], true)): ?>
+      <div class="ap-pass">
+        <div class="ap-pass-head"><div class="ap-pass-icon"><i class="fas fa-gavel"></i></div>
+          <div><small>Auction Hub Group</small><strong><?= $isFin ? 'Finance Access Pass' : 'Pre-Auction Access Pass' ?></strong></div>
+          <span class="ap-pass-ok"><i class="fas fa-circle-check"></i> <?= $isFin ? 'Approved' : 'Presold' ?></span></div>
+        <div class="ap-pass-body">
+          <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#888;font-weight:700">Registered Buyer</div>
+          <div style="font-weight:800;color:#003f73"><?= e($app['name']) ?></div>
+          <div class="ap-pass-code"><small>Buyer Code</small><b><?= e($app['buyer_code']) ?></b></div>
+          <?php if ($showVin): ?>
+            <div class="ap-rowline"><span class="lbl">VIN</span><span class="val"><?= $vin !== '' ? e($vin) : 'Shown on site, on the vehicle' ?></span></div>
+            <p class="ap-help">Shared with you as a verified buyer — see our <a href="<?= APP_URL ?>/vin-policy.php">VIN policy</a>. Check it against the plate on the vehicle.</p>
+          <?php endif; ?>
+          <p class="ap-help"><i class="fas fa-triangle-exclamation" style="color:#e8a000"></i> Present this code on arrival at <?= e(COMPANY_ADDRESS) ?>. It is unique to you — do not share it. No Buyer Code, no entry.</p>
         </div>
-        <?php endif; ?>
-      <?php endif; ?>
-
-      <?php // ── Buyer's Code + VIN ── ?>
-      <?php if (!empty($app['buyer_code']) && !in_array($s, ['declined', 'cancelled', 'refund'], true)): ?>
-      <div class="ap-card">
-        <h2><i class="fas fa-key" style="color:#005BA1"></i> Your Buyer's Code</h2>
-        <div class="ap-code"><?= e($app['buyer_code']) ?></div>
-        <p class="ap-help">Your gate pass for the test drive at <?= e(COMPANY_ADDRESS) ?>. Unique to you — don't share it. No Buyer's Code, no entry.</p>
-        <?php if ($showVin): ?>
-          <ul class="ap-kv" style="margin-top:.6rem"><li><span>VIN</span><span><?= $vin !== '' ? e($vin) : 'Shown on site — on the vehicle itself' ?></span></li></ul>
-          <p class="ap-help">Shared with you as a verified buyer under our <a href="<?= APP_URL ?>/vin-policy.php">VIN policy</a>. Check it against the plate on the vehicle.</p>
-        <?php endif; ?>
       </div>
-      <?php endif; ?>
+    <?php endif; ?>
 
-      <?php // ── Viewing / test drive ── ?>
-      <?php if (($isFin && in_array($s, ['approved', 'completed'], true)) || (!$isFin && in_array($s, ['paid', 'completed'], true))): $v = $d['viewing'] ?? []; ?>
+    <?php /* ── Test drive ── */ ?>
+    <?php if (($isFin && in_array($s, ['approved', 'completed'], true)) || (!$isFin && in_array($s, ['paid', 'completed'], true))): $v = $d['viewing'] ?? []; ?>
       <div class="ap-card" id="viewing">
-        <h2>Your test drive</h2>
-        <?php if (($v['status'] ?? '') === 'confirmed'): ?>
-          <div class="ap-flash ap-flash-success" style="margin:0 0 .6rem"><i class="fas fa-calendar-check"></i> Confirmed: <?= e(finViewingLabel($v)) ?></div>
-          <?php if (!empty($v['note'])): ?><p class="ap-help"><?= nl2br(e($v['note'])) ?></p><?php endif; ?>
-          <p class="ap-help">At our head office, <?= e(COMPANY_ADDRESS) ?>. You have 1 hour 30 minutes. Bring your Buyer's Code, ID and driver's licence.</p>
-        <?php elseif (!empty($v['date']) && in_array($v['status'] ?? '', ['requested', 'wanted'], true)): ?>
-          <p><i class="fas fa-hourglass-half"></i> You asked for <strong><?= e(finViewingLabel($v)) ?></strong> — we confirm it shortly.</p>
-        <?php endif; ?>
-        <?php if ($isFin && $s === 'approved' && ($v['status'] ?? '') !== 'confirmed'): ?>
-          <form method="post" class="ap-form" style="margin-top:.6rem">
-            <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="viewing">
-            <div><label for="v-date">Day</label><input class="ap-input" id="v-date" type="date" name="date" required min="<?= date('Y-m-d', strtotime('tomorrow')) ?>" max="<?= date('Y-m-d', strtotime('+60 days')) ?>"></div>
-            <div><label for="v-time">Time</label><select class="ap-input" id="v-time" name="time"><?php for ($h = 8; $h <= 15; $h++): ?><option><?= sprintf('%02d:00', $h) ?></option><?php endfor; ?></select></div>
-            <div class="full"><label for="v-note">Note <span style="font-weight:400;color:#889">optional</span></label><input class="ap-input" id="v-note" name="note"></div>
-            <div class="full"><button class="ap-btn" type="submit"><i class="fas fa-calendar-plus"></i> <?= !empty($v['date']) ? 'Ask for another time' : 'Book my test drive' ?></button></div>
-          </form>
-        <?php endif; ?>
-      </div>
-      <?php endif; ?>
-
-      <?php // ── Pre-auction decision after the test drive ── ?>
-      <?php if (!$isFin && in_array($s, ['paid', 'refund', 'completed'], true)): ?>
-      <div class="ap-card" id="decision">
-        <h2>After your test drive</h2>
-        <?php if (!empty($d['decision'])): ?>
-          <p><strong><?= e(['proceed' => 'You are going ahead — we send the balance invoice and arrange handover.', 'alternative' => 'You are switching to your alternative vehicle — we will be in touch.', 'refund' => 'You asked for your commitment back. It is refunded within 3–5 business days, less R' . number_format(PA_REFUND_FEE, 2) . '.'][$d['decision']['choice']]) ?></strong></p>
-        <?php else: ?>
-          <p class="ap-help">Once you have inspected and driven it, let us know what you decide.</p>
-          <form method="post">
-            <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="decision">
-            <label class="ap-check"><input type="radio" name="choice" value="proceed" required><span><strong>I'm going ahead</strong> — send me the balance invoice of <?= formatRand((float)$app['price'] - (float)$app['amount']) ?></span></label>
-            <?php if (!empty($d['alt'])): ?><label class="ap-check"><input type="radio" name="choice" value="alternative"><span><strong>Switch to my alternative</strong> — <?= e($d['alt']['title']) ?></span></label><?php endif; ?>
-            <label class="ap-check"><input type="radio" name="choice" value="refund"><span><strong>Not for me</strong> — refund my commitment (less R<?= number_format(PA_REFUND_FEE, 2) ?>)</span></label>
-            <input class="ap-input" name="reason" placeholder="Anything we should know? (optional)" style="margin:.4rem 0 .8rem">
-            <button class="ap-btn" type="submit">Send my decision</button>
-          </form>
-        <?php endif; ?>
-      </div>
-      <?php endif; ?>
-
-      <?php // ── Documents ── ?>
-      <?php if (($isFin && in_array($s, ['invoiced', 'approved'], true)) || (!$isFin && in_array($s, ['confirmed', 'paid'], true))): ?>
-      <div class="ap-card" id="documents">
-        <h2><?= $isFin ? 'Your documents' : 'Proof of payment' ?></h2>
-        <p class="ap-help" style="margin-bottom:.8rem">PDF or photos, up to 8 MB each. Stored privately — only you and our finance team can open them.</p>
-        <?php foreach (finDocKinds($app) as $k): [$label, $hint, $max] = FIN_DOCS[$k]; $doc = $d['docs'][$k] ?? null; $st = $doc['status'] ?? ''; ?>
-          <div class="ap-doc">
-            <div class="ap-doc-head">
-              <div><strong><?= e($label) ?></strong><div class="ap-help" style="margin:0"><?= e($hint) ?></div></div>
-              <span class="ap-pill <?= ['pending' => 'ap-pill-wait', 'accepted' => 'ap-pill-ok', 'rejected' => 'ap-pill-bad'][$st] ?? 'ap-pill-none' ?>"><?= ['pending' => 'Checking', 'accepted' => 'Accepted', 'rejected' => 'Please upload again'][$st] ?? 'Needed' ?></span>
-            </div>
-            <?php if ($st === 'rejected' && !empty($doc['note'])): ?><div class="ap-note" style="margin:.5rem 0"><?= nl2br(e($doc['note'])) ?></div><?php endif; ?>
-            <?php if (!empty($doc['files'])): ?><p class="ap-help"><?php foreach ($doc['files'] as $f): ?><a href="<?= APP_URL ?>/application_file.php?t=<?= e($app['token']) ?>&amp;f=<?= e($f['file']) ?>" target="_blank"><i class="fas fa-paperclip"></i> <?= e($f['original']) ?></a> &nbsp;<?php endforeach; ?></p><?php endif; ?>
-            <?php if ($st !== 'accepted'): ?>
-            <form method="post" enctype="multipart/form-data" class="ap-row" style="margin-top:.5rem">
-              <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="upload"><input type="hidden" name="doc" value="<?= e($k) ?>">
-              <input type="file" name="files[]" accept=".pdf,image/jpeg,image/png,image/webp"<?= $max > 1 ? ' multiple' : '' ?> required style="font-size:.85rem;max-width:100%">
-              <button class="ap-btn ap-btn-sm" type="submit"><i class="fas fa-upload"></i> Upload</button>
+        <div class="ap-card-head"><i class="fas fa-car-side"></i> Your Test Drive</div>
+        <div class="ap-card-body">
+          <?php if (($v['status'] ?? '') === 'confirmed'): ?>
+            <div class="alert alert-success" style="margin:0 0 .8rem"><i class="fas fa-calendar-check"></i><span>Confirmed: <strong><?= e(finViewingLabel($v)) ?></strong></span></div>
+            <?php if (!empty($v['note'])): ?><p class="ap-help"><?= nl2br(e($v['note'])) ?></p><?php endif; ?>
+          <?php elseif (!empty($v['date'])): ?>
+            <div class="alert alert-info" style="margin:0 0 .8rem"><i class="fas fa-hourglass-half"></i><span>You asked for <strong><?= e(finViewingLabel($v)) ?></strong> — our team confirms the time with you.</span></div>
+          <?php endif; ?>
+          <p class="ap-help">At <?= e(COMPANY_ADDRESS) ?>. You have <strong>1 hour 30 minutes</strong> to test drive and inspect — bring your own mechanic if you like, plus your ID<?= $isFin ? ' and driver\'s licence' : '' ?>.</p>
+          <?php if ($isFin && $s === 'approved' && ($v['status'] ?? '') !== 'confirmed'): ?>
+            <form method="post" class="ap-form" style="margin-top:1rem">
+              <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="viewing">
+              <div class="form-group"><label class="form-label" for="v-date">Day</label><input class="form-control" id="v-date" type="date" name="date" required min="<?= date('Y-m-d', strtotime('tomorrow')) ?>" max="<?= date('Y-m-d', strtotime('+60 days')) ?>"></div>
+              <div class="form-group"><label class="form-label" for="v-time">Time</label><select class="form-control" id="v-time" name="time"><?php for ($h = 8; $h <= 15; $h++): ?><option><?= sprintf('%02d:00', $h) ?></option><?php endfor; ?></select></div>
+              <div class="full form-group"><label class="form-label" for="v-note">Note <span style="font-weight:400;color:#889">optional</span></label><input class="form-control" id="v-note" name="note"></div>
+              <div class="full"><button class="btn btn-primary" type="submit"><i class="fas fa-calendar-plus"></i> <?= !empty($v['date']) ? 'Request Another Time' : 'Book My Test Drive' ?></button></div>
             </form>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
       </div>
-      <?php endif; ?>
+    <?php endif; ?>
 
-      <?php if (!$closed && !in_array($s, ['paid'], true) && !($isFin && $s === 'approved')): ?>
-        <details class="ap-card"><summary style="cursor:pointer;font-weight:700;color:#7a8794"><?= !$isFin && in_array($s, ['countered', 'approved'], true) ? 'Not ready to commit?' : 'Cancel this ' . ($isFin ? 'application' : 'request') ?></summary>
-          <form method="post" style="margin-top:.7rem"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="cancel">
-            <input class="ap-input" name="reason" placeholder="Tell us why (optional) — it helps us" style="margin-bottom:.6rem">
-            <button class="ap-btn ap-btn-red ap-btn-sm" type="submit" onclick="return confirm('Cancel this? Nothing is owed.')">Yes, cancel</button></form></details>
-      <?php endif; ?>
+    <?php /* ── Pre-auction: decide after the test drive ── */ ?>
+    <?php if (!$isFin && in_array($s, ['paid', 'refund', 'completed'], true)): ?>
+      <div class="ap-card" id="decision">
+        <div class="ap-card-head green"><i class="fas fa-scale-balanced"></i> After Your Test Drive — Your Choice</div>
+        <div class="ap-card-body">
+          <?php if (!empty($d['decision'])): ?>
+            <div class="alert alert-success" style="margin:0"><i class="fas fa-circle-check"></i><span><?= e(['proceed' => 'You are proceeding — our team contacts you for the outstanding balance and handover.', 'alternative' => 'You are switching to your alternative vehicle — our team will be in touch.', 'refund' => 'You cancelled — your commitment fee is refunded within 3–5 business days, less R' . number_format(PA_REFUND_FEE, 2) . '.'][$d['decision']['choice']]) ?></span></div>
+          <?php else: ?>
+            <p class="ap-help" style="margin:0 0 .8rem">No pressure, no penalties — once you have inspected and driven it, let us know.</p>
+            <form method="post">
+              <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="decision">
+              <label class="ap-check"><input type="radio" name="choice" value="proceed" required><span><strong>Proceed with the purchase</strong> — pay the outstanding balance of <?= $R($inv ? $inv['outstanding_amount'] : (float)$app['price'] - (float)$app['amount']) ?></span></label>
+              <?php if (!empty($d['alt'])): ?><label class="ap-check"><input type="radio" name="choice" value="alternative"><span><strong>Switch to my alternative</strong> — <?= e($d['alt']['title']) ?></span></label><?php endif; ?>
+              <label class="ap-check"><input type="radio" name="choice" value="refund"><span><strong>Cancel the deal</strong> — refund of my commitment fee, less R<?= number_format(PA_REFUND_FEE, 2) ?> admin and bank charges</span></label>
+              <input class="form-control" name="reason" placeholder="Anything we should know? (optional)" style="margin:.5rem 0 .9rem">
+              <button class="btn btn-primary" type="submit">Send My Decision</button>
+            </form>
+          <?php endif; ?>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <?php /* ── Finance documents ── */ ?>
+    <?php if ($isFin && in_array($s, ['invoiced', 'approved'], true)): ?>
+      <div class="ap-card" id="documents">
+        <div class="ap-card-head"><i class="fas fa-folder-open"></i> Submit Your Documents</div>
+        <div class="ap-card-body">
+          <p class="ap-help" style="margin:0 0 1rem">PDF or photos, up to 8 MB each. Stored privately — only you and our finance team can open them.</p>
+          <?php foreach (FIN_DOCS as $k => [$label, $hint, $max]): $doc = $d['docs'][$k] ?? null; $st = $doc['status'] ?? ''; ?>
+            <div class="ap-doc">
+              <div class="ap-doc-head">
+                <div><strong><?= e($label) ?></strong><div class="ap-help" style="margin:0"><?= e($hint) ?></div></div>
+                <span class="badge <?= ['pending' => 'badge-pending', 'accepted' => 'badge-approved', 'rejected' => 'badge-rejected'][$st] ?? 'badge-registered' ?>"><?= ['pending' => 'Under review', 'accepted' => 'Accepted', 'rejected' => 'Please re-upload'][$st] ?? 'Required' ?></span>
+              </div>
+              <?php if ($st === 'rejected' && !empty($doc['note'])): ?><div class="ap-notice" style="margin:.6rem 0"><i class="fas fa-circle-info"></i><div><?= nl2br(e($doc['note'])) ?></div></div><?php endif; ?>
+              <?php if (!empty($doc['files'])): ?><p class="ap-help"><?php foreach ($doc['files'] as $f): ?><a href="<?= APP_URL ?>/application_file.php?t=<?= e($app['token']) ?>&amp;f=<?= e($f['file']) ?>" target="_blank"><i class="fas fa-paperclip"></i> <?= e($f['original']) ?></a> &nbsp;<?php endforeach; ?></p><?php endif; ?>
+              <?php if ($st !== 'accepted'): ?>
+              <form method="post" enctype="multipart/form-data" class="ap-row" style="margin-top:.6rem">
+                <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="upload"><input type="hidden" name="doc" value="<?= e($k) ?>">
+                <input type="file" name="files[]" accept=".pdf,image/jpeg,image/png,image/webp"<?= $max > 1 ? ' multiple' : '' ?> required style="font-size:.85rem;max-width:100%">
+                <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-upload"></i> Upload</button>
+              </form>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <?php if (in_array($s, ['quoted', 'chosen', 'invoiced', 'requested', 'expired'], true)): ?>
+      <details class="ap-card" style="padding:1rem 1.4rem"><summary style="cursor:pointer;font-weight:700;color:#6a7f96">Cancel this <?= $isFin ? 'application' : 'request' ?></summary>
+        <form method="post" style="margin-top:.8rem"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="cancel">
+          <input class="form-control" name="reason" placeholder="Tell us why (optional)" style="margin-bottom:.7rem">
+          <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Cancel this? Nothing is owed.')">Yes, Cancel</button></form></details>
+    <?php endif; ?>
     </div>
 
     <aside>
-      <div class="ap-card">
+      <div class="ap-card"><div class="ap-card-body">
         <div class="ap-veh">
           <?php if ($img): ?><img src="<?= e(cldImg($img, CLD_THUMB)) ?>" alt="" loading="lazy"><?php endif; ?>
-          <div><strong style="color:#003f73"><?= e($app['vehicle']) ?></strong>
-            <div class="ap-help" style="margin:0"><?= e(implode(' · ', array_filter([$d['vehicle']['mileage'] ? number_format((int)$d['vehicle']['mileage']) . ' km' : '', $d['vehicle']['transmission'] ?? '', $d['vehicle']['fuel'] ?? '']))) ?></div>
-            <?php if ($vehicle): ?><a class="ap-help" href="<?= APP_URL ?>/auction.php?id=<?= (int)$app['auction_id'] ?>">View the vehicle</a><?php endif; ?></div>
+          <div><strong><?= e($app['vehicle']) ?></strong>
+            <span class="ap-help"><?= e(implode(' · ', array_filter([!empty($d['vehicle']['mileage']) ? number_format((int)$d['vehicle']['mileage']) . ' km' : '', $d['vehicle']['transmission'] ?? '', $d['vehicle']['fuel'] ?? '']))) ?></span>
+            <?php if ($vehicle): ?><br><a class="ap-help" href="<?= APP_URL ?>/auction.php?id=<?= (int)$app['auction_id'] ?>">View vehicle →</a><?php endif; ?></div>
         </div>
-        <ul class="ap-kv" style="margin-top:.8rem">
-          <li><span>Reference</span><span><?= e(finRef($app)) ?></span></li>
-          <li><span>Status</span><span><?= e(finStatusLabel($app)) ?></span></li>
-          <li><span>Applied</span><span><?= safeDate('j M Y', $app['created_at']) ?></span></li>
-        </ul>
-      </div>
+        <div style="margin-top:1rem">
+          <div class="ap-rowline"><span class="lbl">Reference</span><span class="val"><?= e(finRef($app)) ?></span></div>
+          <div class="ap-rowline"><span class="lbl">Status</span><span class="val"><?= finBadge($app) ?></span></div>
+          <div class="ap-rowline"><span class="lbl">Submitted</span><span class="val"><?= safeDate('j M Y', $app['created_at']) ?></span></div>
+        </div>
+      </div></div>
       <div class="ap-card">
-        <h3>Talk to us</h3>
-        <div class="ap-row">
-          <a class="ap-btn ap-btn-wa ap-btn-sm" href="<?= e(finWhatsAppUrl($app)) ?>" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> WhatsApp</a>
-          <a class="ap-btn ap-btn-out ap-btn-sm" href="tel:<?= e(preg_replace('/\s/', '', COMPANY_PHONE)) ?>"><i class="fas fa-phone"></i> <?= e(COMPANY_PHONE) ?></a>
+        <div class="ap-card-head"><i class="fas fa-headset"></i> Talk to Us</div>
+        <div class="ap-card-body">
+          <div class="ap-row">
+            <a class="btn btn-wa btn-sm" href="<?= e(finWhatsAppUrl($app)) ?>" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+            <a class="btn btn-outline btn-sm" href="tel:<?= e(preg_replace('/\s/', '', COMPANY_PHONE)) ?>"><i class="fas fa-phone"></i> <?= e(COMPANY_PHONE) ?></a>
+          </div>
+          <p class="ap-help">Keep this page's link private — anyone with it can see your application.</p>
         </div>
-        <p class="ap-help">Keep this page's link private — anyone with it can see your application.</p>
       </div>
       <?php if (!empty($d['log'])): ?>
-      <div class="ap-card"><h3>History</h3><ul class="ap-log">
+      <div class="ap-card"><div class="ap-card-head"><i class="fas fa-clock-rotate-left"></i> History</div><div class="ap-card-body"><ul class="ap-log">
         <?php foreach (array_reverse($d['log']) as $l): ?><li><?= safeDate('j M, H:i', $l['at']) ?> — <?= e($l['what']) ?></li><?php endforeach; ?>
-      </ul></div>
+      </ul></div></div>
       <?php endif; ?>
     </aside>
   </div>
-</div>
+</div></section>
 <?php require_once __DIR__ . '/footer.php'; ?>

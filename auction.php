@@ -205,9 +205,9 @@ $vinVisible = vinVisibleToVisitor($currentUser);
 if (!$vinVisible) {
     $auction['description'] = vinScrub($auction['description'] ?? '');
 }
-// No bids yet and not reserved: in-house finance and pre-auction (Buy Now) are open.
+// No bids yet and not Presold: pre-auction purchase and in-house finance are open.
 $canBuyBefore = !$isSold && in_array($auction['status'], ['upcoming', 'active'], true) && $bidCount === 0
-                && (float)($auction['start_price'] ?: $auction['current_price']) > 0
+                && (float)($auction['current_price'] ?: $auction['start_price']) > 0
                 && !in_array($auctionId, ahgSchemaReady() ? finReservedIds() : [], true);
 
 // ── PAGE META ─────────────────────────────────────────────────
@@ -1110,13 +1110,13 @@ $breadcrumbLd = [
             <?php endif; ?>
             <?php if ($canBuyBefore): ?>
             <!-- Other ways to buy: only while the lot has no bids -->
-            <div class="buy-before" style="margin-top:1rem;border-top:1px solid rgba(0,0,0,.08);padding-top:1rem">
-                <p style="font-weight:700;color:#003f73;margin:0 0 .5rem;font-size:.92rem"><i class="fas fa-bolt" aria-hidden="true"></i> No bids yet — buy it before the auction</p>
+            <div class="buy-before" style="margin-top:1.1rem;background:linear-gradient(135deg,#f0f6fc,#e8f4fd);border:1.5px solid #b8d4ee;border-radius:12px;padding:1rem">
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#003f73;font-size:1.05rem;letter-spacing:.02em;margin:0 0 .6rem;text-transform:uppercase"><i class="fas fa-bolt" style="color:#e8a000" aria-hidden="true"></i> No bids yet — secure it before the auction</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
-                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="justify-content:center"><i class="fas fa-handshake" aria-hidden="true"></i> In-house finance</a>
-                    <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="justify-content:center"><i class="fas fa-key" aria-hidden="true"></i> Reserve (Buy Now)</a>
+                    <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-primary btn-sm"><i class="fas fa-key" aria-hidden="true"></i> Pre-Auction Purchase</a>
+                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> In-House Finance</a>
                 </div>
-                <p style="font-size:.78rem;color:#667;margin:.45rem 0 0">Finance from <?= formatRand(finMinDeposit($auction)) ?> deposit, no credit checks · or reserve it with a <?= paRange()[0] ?>–<?= paRange()[1] ?>% commitment. Instant quotation.</p>
+                <p style="font-size:.78rem;color:#5a6a7a;margin:.55rem 0 0;line-height:1.55">Pre-auction: <?= paRange()[0] ?>–<?= paRange()[1] ?>% commitment fee, Presold under your name. Finance: from <?= formatRand(finMinDeposit($auction)) ?> deposit, no credit checks — instant quote.</p>
             </div>
             <?php endif; ?>
             <!-- END BID PANEL MAIN CONTENT -->

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS client_applications (
     amount        DECIMAL(12,2) NOT NULL DEFAULT 0,       -- finance deposit / pre-auction commitment
     percent       DECIMAL(5,2)  NULL,                     -- pre-auction commitment %
     months        INT           NULL,                     -- finance plan chosen
-    buyer_code    VARCHAR(10)   NULL,                     -- 6-digit Buyer's Code (gate pass)
+    buyer_code    VARCHAR(30)   NULL,                     -- AHG Buyer Code (AHG-FN-... / AHG-PA-...)
     details       MEDIUMTEXT    NULL,                     -- JSON: quotation, documents, letters, viewing, history
     ip            VARCHAR(45)   NULL,
     created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,

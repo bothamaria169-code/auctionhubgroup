@@ -992,8 +992,8 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
                     </a>
                     <?php $paOpen = (int)$v['bid_count'] === 0; ?>
                     <a href="<?= $paOpen ? APP_URL . '/preauction_request.php?id=' . (int)$v['id'] : 'mailto:' . COMPANY_EMAIL . '?subject=Pre-Auction%20Enquiry%3A%20' . urlencode($vehicleName) ?>"
-                       style="background:#1e9e4a;color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
-                        <?= $paOpen ? '<i class="fas fa-key"></i> Reserve' : '<i class="fas fa-envelope"></i> Enquire' ?>
+                       style="background:linear-gradient(135deg,#c8860a,#e8a000);color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
+                        <?= $paOpen ? '<i class="fas fa-key"></i> Secure It' : '<i class="fas fa-envelope"></i> Enquire' ?>
                     </a>
                 </div>
             </div>

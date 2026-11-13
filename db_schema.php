@@ -151,7 +151,7 @@ const AHG_SCHEMA_TABLES = [
             amount        DECIMAL(12,2) NOT NULL DEFAULT 0,
             percent       DECIMAL(5,2)  NULL,
             months        INT           NULL,
-            buyer_code    VARCHAR(10)   NULL,
+            buyer_code    VARCHAR(30)   NULL,
             details       MEDIUMTEXT    NULL,
             ip            VARCHAR(45)   NULL,
             created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
