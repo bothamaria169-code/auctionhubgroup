@@ -56,7 +56,7 @@ syncSession($currentUser);
 
 // ── Active tab ────────────────────────────────────────────────
 $activeTab = $_GET['tab'] ?? 'overview';
-$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai', 'stock', 'leads', 'templates'];
+$validTabs = ['overview', 'pop', 'auctions', 'events', 'users', 'email', 'import', 'analytics', 'manual_bid', 'banking', 'testimonials', 'team', 'notifications', 'refunds', 'news', 'newsletter', 'careers', 'workers', 'ai', 'stock', 'leads', 'templates', 'applications'];
 if (!in_array($activeTab, $validTabs)) $activeTab = 'overview';
 
 // ── Flash ─────────────────────────────────────────────────────
@@ -89,6 +89,8 @@ try { $stats['pending_refunds'] = $pdo->query("SELECT COUNT(*) FROM refund_reque
 // Leads waiting for a first contact (last 7 days) + call-backs due — menu badge and Overview strip
 require_once __DIR__ . '/leads_helper.php';
 $stats['leads_waiting'] = leadWaitingCount();
+$stats['applications_waiting'] = 0;   // finance / pre-auction applications waiting on the office
+try { if (ahgSchemaReady()) $stats['applications_waiting'] = (int)$pdo->query("SELECT COUNT(*) FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed')")->fetchColumn(); } catch (Exception $e) {}
 $stats['bank_requests'] = 0;
 try { $stats['bank_requests'] = (int)$pdo->query("SELECT COUNT(*) FROM bank_detail_requests WHERE status = 'pending'")->fetchColumn(); } catch (Exception $e) {}
 
@@ -612,6 +614,7 @@ require_once 'header.php';
       ['templates',  'Email &amp; WA Templates',  'fa-pen-to-square',      0],
     ],
     'Sales & Auctions' => [
+      ['applications', 'Finance &amp; Pre-Auction', 'fa-handshake',       (int)$stats['applications_waiting']],
       ['auctions',   'Auctions',              'fa-car',                0],
       ['events',     'Events',                'fa-calendar-alt',       0],
       ['manual_bid', 'Manual Bids & Floor',   'fa-gavel',              0],
@@ -752,6 +755,7 @@ require_once 'header.php';
     <!-- Waiting on you: the jobs only a person can do, each one tap away (idea from BidCo's Today page) -->
     <?php $todo = [
         ['leads',   'fa-user-plus',     (int)$stats['leads_waiting'],   'lead(s) to contact'],
+        ['applications', 'fa-handshake', (int)$stats['applications_waiting'], 'finance / pre-auction application(s) to action'],
         ['pop',     'fa-file-invoice',  (int)$stats['pending_pops'],    'proof(s) of payment to approve'],
         ['banking', 'fa-university',    (int)$stats['bank_requests'],   'banking request(s)'],
         ['refunds', 'fa-rotate-left',   (int)$stats['pending_refunds'], 'refund(s) to process'],
@@ -5967,6 +5971,9 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
 
 <?php elseif ($activeTab === 'templates'):
     require __DIR__ . '/admin_templates_tab.php'; ?>
+
+<?php elseif ($activeTab === 'applications'):
+    require __DIR__ . '/admin_applications_tab.php'; ?>
 
 <?php elseif ($activeTab === 'stock'):
     $stBranches = $pdo->query("SELECT id, name FROM branches ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR);

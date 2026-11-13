@@ -88,6 +88,9 @@
                 <a href="<?= APP_URL ?>/preauction.php"    class="footer-link"><i class="fas fa-chevron-right"></i> Pre-Auction Deals</a>
                 <a href="<?= APP_URL ?>/auction-guide.php" class="footer-link"><i class="fas fa-chevron-right"></i> Auction Guide</a>
                 <a href="<?= APP_URL ?>/financing.php"     class="footer-link"><i class="fas fa-chevron-right"></i> Financing Options</a>
+                <a href="<?= APP_URL ?>/finance_apply.php" class="footer-link"><i class="fas fa-chevron-right"></i> Apply for Finance</a>
+                <a href="<?= APP_URL ?>/my_applications.php" class="footer-link"><i class="fas fa-chevron-right"></i> Track my Application</a>
+                <a href="<?= APP_URL ?>/vin-policy.php"    class="footer-link"><i class="fas fa-chevron-right"></i> VIN Policy</a>
                 <a href="<?= APP_URL ?>/testimonials.php"  class="footer-link"><i class="fas fa-chevron-right"></i> Testimonials</a>
                 <a href="<?= APP_URL ?>/news.php"          class="footer-link"><i class="fas fa-chevron-right"></i> News &amp; Reviews</a>
                 <a href="<?= APP_URL ?>/faq.php"           class="footer-link"><i class="fas fa-chevron-right"></i> FAQ</a>

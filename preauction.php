@@ -309,9 +309,9 @@ $allBranches = $pdo->query("SELECT id, name, city, province FROM branches ORDER 
                style="background:#005BA1;color:#fff;padding:.9rem 2.25rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;border:2px solid #005BA1;">
                 <i class="fas fa-car"></i> Browse Vehicles
             </a>
-            <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Pre-Auction%20Purchase%20Enquiry"
+            <a href="<?= APP_URL ?>/preauction_request.php"
                style="background:#fff;color:#003f73;padding:.9rem 2.25rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;border:2px solid #fff;">
-                <i class="fas fa-envelope"></i> Email Us
+                <i class="fas fa-key"></i> Reserve a Vehicle
             </a>
             <a href="#how-it-works"
                style="background:rgba(255,255,255,.12);color:#fff;padding:.9rem 2.25rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;border:1px solid rgba(255,255,255,.3);">
@@ -990,9 +990,10 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
                        style="background:#005BA1;color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
                         <i class="fas fa-eye"></i> View Details
                     </a>
-                    <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Pre-Auction%20Enquiry%3A%20<?= urlencode($vehicleName) ?>"
-                       style="background:#005BA1;color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
-                        <i class="fas fa-envelope"></i> Enquire
+                    <?php $paOpen = (int)$v['bid_count'] === 0; ?>
+                    <a href="<?= $paOpen ? APP_URL . '/preauction_request.php?id=' . (int)$v['id'] : 'mailto:' . COMPANY_EMAIL . '?subject=Pre-Auction%20Enquiry%3A%20' . urlencode($vehicleName) ?>"
+                       style="background:#1e9e4a;color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
+                        <?= $paOpen ? '<i class="fas fa-key"></i> Reserve' : '<i class="fas fa-envelope"></i> Enquire' ?>
                     </a>
                 </div>
             </div>
@@ -1124,9 +1125,9 @@ function filterByBranch(branchId, btn) {
                    style="background:#fff;color:#003f73;padding:.75rem 1.75rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem;display:inline-flex;align-items:center;gap:.4rem;">
                     <i class="fas fa-hand-holding-dollar"></i> Learn About Finance
                 </a>
-                <a href="mailto:<?= COMPANY_EMAIL ?>?subject=In-House%20Finance%20Enquiry%20—%20Pre-Auction"
+                <a href="<?= APP_URL ?>/finance_apply.php"
                    style="background:rgba(255,255,255,.15);color:#fff;padding:.75rem 1.75rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem;display:inline-flex;align-items:center;gap:.4rem;border:1px solid rgba(255,255,255,.3);">
-                    <i class="fas fa-envelope"></i> Apply via Email
+                    <i class="fas fa-file-signature"></i> Apply for Finance
                 </a>
             </div>
         </div>
@@ -1211,9 +1212,9 @@ function filterByBranch(branchId, btn) {
                style="background:#fff;color:#003f73;padding:.9rem 2.25rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;">
                 <i class="fas fa-user-plus"></i> Register Free
             </a>
-            <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Pre-Auction%20Purchase%20Enquiry&body=Hi%20AHG%2C%0A%0AI%27m%20interested%20in%20a%20pre-auction%20purchase.%20Please%20send%20me%20available%20vehicles.%0A%0ARegards"
+            <a href="<?= APP_URL ?>/preauction_request.php"
                style="background:rgba(255,255,255,.12);color:#fff;padding:.9rem 2.25rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;border:1px solid rgba(255,255,255,.3);">
-                <i class="fas fa-envelope"></i> Email to Enquire
+                <i class="fas fa-key"></i> Reserve Before Auction
             </a>
             <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Pre-Auction%20Purchase%20Enquiry&body=Hi%20AHG%2C%0A%0AI%27m%20interested%20in%20making%20a%20pre-auction%20purchase.%20Please%20send%20me%20available%20vehicles.%0A%0ARegards"
                style="background:rgba(255,255,255,.12);color:#fff;padding:.9rem 2.25rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;border:1px solid rgba(255,255,255,.3);">

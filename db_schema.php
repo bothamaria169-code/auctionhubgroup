@@ -133,6 +133,35 @@ const AHG_SCHEMA_TABLES = [
             created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_lm_lead (lead_key, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // In-house finance applications and pre-auction (Buy Now) requests — finance_helper.php.
+    // One row per application; the steps, quotation, documents and letters live in `details` (JSON).
+    'client_applications' => "
+        CREATE TABLE IF NOT EXISTS client_applications (
+            id            INT AUTO_INCREMENT PRIMARY KEY,
+            kind          VARCHAR(12)   NOT NULL,
+            token         CHAR(32)      NOT NULL,
+            status        VARCHAR(24)   NOT NULL DEFAULT 'new',
+            name          VARCHAR(150)  NOT NULL,
+            email         VARCHAR(190)  NOT NULL,
+            phone         VARCHAR(30)   NOT NULL,
+            user_id       INT           NULL,
+            auction_id    INT           NULL,
+            vehicle       VARCHAR(255)  NULL,
+            price         DECIMAL(12,2) NOT NULL DEFAULT 0,
+            amount        DECIMAL(12,2) NOT NULL DEFAULT 0,
+            percent       DECIMAL(5,2)  NULL,
+            months        INT           NULL,
+            buyer_code    VARCHAR(10)   NULL,
+            details       MEDIUMTEXT    NULL,
+            ip            VARCHAR(45)   NULL,
+            created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_ca_token (token),
+            UNIQUE KEY uq_ca_code (buyer_code),
+            INDEX idx_ca_kind_status (kind, status),
+            INDEX idx_ca_email (email),
+            INDEX idx_ca_auction (auction_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 ];
 
 // Columns added to existing tables (table => [column => ALTER statement])

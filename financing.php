@@ -94,9 +94,9 @@ require_once __DIR__ . '/header.php';
             <div style="font-size:3.2rem;font-weight:800;line-height:1;margin-bottom:.5rem;font-family:'Barlow Condensed',sans-serif;">R10,500</div>
             <p style="color:rgba(255,255,255,.7);font-size:.88rem;margin-bottom:.5rem;">One-time. No credit checks.</p>
             <p style="color:#6eff9e;font-size:.82rem;font-weight:600;margin-bottom:1.25rem;">Pay any amount above R10,500 to reduce your instalments</p>
-            <a href="mailto:<?= COMPANY_EMAIL ?>?subject=In-House%20Finance%20Enquiry&body=Hi%20AHG%2C%20I%20am%20interested%20in%20your%20in-house%20vehicle%20finance.%20Please%20send%20me%20more%20details."
+            <a href="<?= APP_URL ?>/finance_apply.php"
                style="background:#005BA1;color:#fff;padding:.75rem 1.75rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.9rem;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="fas fa-envelope"></i> Enquire via Email
+                <i class="fas fa-file-signature"></i> Apply Now &mdash; Instant Quote
             </a>
         </div>
 
@@ -573,9 +573,9 @@ require_once __DIR__ . '/header.php';
             </p>
             <p style="color:rgba(255,255,255,.5);font-size:.85rem;margin-bottom:2rem;">No credit checks. No ITC. No bureau inquiries. From R10,500 deposit &mdash; pay more to lower your instalments.</p>
             <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;">
-                <a href="mailto:<?= COMPANY_EMAIL ?>?subject=In-House%20Finance%20Application&body=Hi%20AHG%2C%20I%20want%20to%20apply%20for%20in-house%20vehicle%20finance.%20Please%20help%20me%20get%20started."
+                <a href="<?= APP_URL ?>/finance_apply.php"
                    style="background:#005BA1;color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
-                    <i class="fas fa-envelope"></i> Enquire via Email
+                    <i class="fas fa-file-signature"></i> Apply Online
                 </a>
                 <a href="tel:<?= COMPANY_PHONE ?>"
                    style="background:rgba(255,255,255,.15);color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(255,255,255,.3);display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
@@ -584,6 +584,10 @@ require_once __DIR__ . '/header.php';
                 <a href="<?= APP_URL ?>/auctions.php"
                    style="background:#fff;color:#005BA1;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
                     <i class="fas fa-gavel"></i> Browse Vehicles
+                </a>
+                <a href="<?= APP_URL ?>/my_applications.php"
+                   style="background:rgba(255,255,255,.15);color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(255,255,255,.3);display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
+                    <i class="fas fa-route"></i> Track my application
                 </a>
             </div>
         </div>

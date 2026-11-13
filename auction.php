@@ -197,6 +197,19 @@ $canBid        = $isActive
                  && $currentUser
                  && ($currentUser['bidder_status'] ?? '') === 'verified_bidder';
 
+// ── VIN policy + other ways to buy (finance_helper.php) ───────
+// VINs are never public: only the office and paid-up registered bidders see
+// them here (vin-policy.php). VIN-like text in the description is hidden too.
+require_once __DIR__ . '/finance_helper.php';
+$vinVisible = vinVisibleToVisitor($currentUser);
+if (!$vinVisible) {
+    $auction['description'] = vinScrub($auction['description'] ?? '');
+}
+// No bids yet and not reserved: in-house finance and pre-auction (Buy Now) are open.
+$canBuyBefore = !$isSold && in_array($auction['status'], ['upcoming', 'active'], true) && $bidCount === 0
+                && (float)($auction['start_price'] ?: $auction['current_price']) > 0
+                && !in_array($auctionId, ahgSchemaReady() ? finReservedIds() : [], true);
+
 // ── PAGE META ─────────────────────────────────────────────────
 // Build "Year Make Model" without duplicating parts already inside
 // item_name (bulk-imported rows often start with the year + make)
@@ -588,14 +601,14 @@ $breadcrumbLd = [
                             ['Color',        $auction['color']],
                             ['Body Type',    $auction['body_type'] ?? null],
                             ['Engine',       $auction['engine_size'] ?? null],
-                            ['VIN / Reg',    $auction['vin_number'] ?? null],
+                            ['VIN',          $vinVisible ? ($auction['vin_number'] ?? null) : '__vin_policy__'],
                         ];
                         foreach ($specs as [$label, $value]):
                             if (!$value) continue;
                         ?>
                         <tr class="specs-row">
                             <th class="specs-label" scope="row"><?= e($label) ?></th>
-                            <td class="specs-value"><?= e($value) ?></td>
+                            <td class="specs-value"><?php if ($value === '__vin_policy__'): ?>On request &middot; <a href="vin-policy.php?id=<?= $auctionId ?>#request">why we don't publish VINs</a><?php else: ?><?= e($value) ?><?php endif; ?></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if ($auction['condition_grade']): ?>
@@ -1094,6 +1107,17 @@ $breadcrumbLd = [
             <?php if (!$isClosed): ?>
                 <?= watchButton($auctionId, isset(watchedAuctionIds(isset($currentUser['sub']) ? (int)$currentUser['sub'] : null)[$auctionId]), 'panel') ?>
                 <p class="watch-hint">We'll alert you when it goes live and an hour before it ends.</p>
+            <?php endif; ?>
+            <?php if ($canBuyBefore): ?>
+            <!-- Other ways to buy: only while the lot has no bids -->
+            <div class="buy-before" style="margin-top:1rem;border-top:1px solid rgba(0,0,0,.08);padding-top:1rem">
+                <p style="font-weight:700;color:#003f73;margin:0 0 .5rem;font-size:.92rem"><i class="fas fa-bolt" aria-hidden="true"></i> No bids yet — buy it before the auction</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="justify-content:center"><i class="fas fa-handshake" aria-hidden="true"></i> In-house finance</a>
+                    <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="justify-content:center"><i class="fas fa-key" aria-hidden="true"></i> Reserve (Buy Now)</a>
+                </div>
+                <p style="font-size:.78rem;color:#667;margin:.45rem 0 0">Finance from <?= formatRand(finMinDeposit($auction)) ?> deposit, no credit checks · or reserve it with a <?= paRange()[0] ?>–<?= paRange()[1] ?>% commitment. Instant quotation.</p>
+            </div>
             <?php endif; ?>
             <!-- END BID PANEL MAIN CONTENT -->
 
