@@ -1112,9 +1112,9 @@ $breadcrumbLd = [
             <!-- Other ways to buy: only while the lot has no bids -->
             <div class="buy-before" style="margin-top:1.1rem;background:linear-gradient(135deg,#f0f6fc,#e8f4fd);border:1.5px solid #b8d4ee;border-radius:12px;padding:1rem">
                 <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#003f73;font-size:1.05rem;letter-spacing:.02em;margin:0 0 .6rem;text-transform:uppercase"><i class="fas fa-bolt" style="color:#e8a000" aria-hidden="true"></i> No bids yet — secure it before the auction</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
-                    <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-primary btn-sm"><i class="fas fa-key" aria-hidden="true"></i> Pre-Auction Purchase</a>
-                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> In-House Finance</a>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem">
+                    <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-primary btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-key" aria-hidden="true"></i> Pre-Auction Purchase</a>
+                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> In-House Finance</a>
                 </div>
                 <p style="font-size:.78rem;color:#5a6a7a;margin:.55rem 0 0;line-height:1.55">Pre-auction: <?= paRange()[0] ?>–<?= paRange()[1] ?>% commitment fee, Presold under your name. Finance: from <?= formatRand(finMinDeposit($auction)) ?> deposit, no credit checks — instant quote.</p>
             </div>

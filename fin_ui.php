@@ -122,6 +122,34 @@
 .vin-channels .ic { width:42px; height:42px; background:var(--accent); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; margin-bottom:.7rem; }
 .vin-channels strong { display:block; color:#003f73; margin-bottom:.3rem; }
 .vin-channels span { font-size:.85rem; color:#556; line-height:1.6; }
+
+/* ── Phones ─────────────────────────────────────────────────
+   Site-wide .btn never wraps (white-space:nowrap); long labels here
+   would push cards wider than the screen, so they wrap on these pages. */
+.ap-grid > *, .ap-form > *, .ap-row > * { min-width:0; }
+.ap-section .btn { white-space:normal; text-align:center; line-height:1.3; }
+.ap-rowline .val, .ap-help, .ap-doc a { overflow-wrap:anywhere; }
+.ap-doc input[type=file] { max-width:100%; min-width:0; }
+.ap-section .badge { white-space:normal; line-height:1.35; text-align:left; }
+@media(max-width:900px){ .ap-grid { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:600px){
+  .ap-hero { padding:2.6rem 1rem 2.2rem; }
+  .ap-hero p { font-size:.95rem; }
+  .ap-chips span { font-size:.75rem; padding:.35rem .65rem; }
+  .ap-section { padding:1.75rem .85rem 3rem; }
+  .ap-card-body { padding:1.1rem; }
+  .ap-card-head { padding:.85rem 1.1rem; font-size:1.05rem; }
+  .ap-steps { grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem; }
+  .ap-steps li { padding:.75rem .35rem .65rem; }
+  .ap-steps li .n { width:36px; height:36px; font-size:.85rem; }
+  .ap-steps li b { font-size:.7rem; }
+  .ap-rowline { font-size:.86rem; }
+  .ap-row .btn { flex:1 1 auto; }
+  .ap-veh img { width:96px; height:68px; }
+  .ap-pass-body, .ap-pass-head { padding-left:1rem; padding-right:1rem; }
+  .ap-notice { padding:.85rem .9rem; gap:.7rem; }
+  .vin-channels { grid-template-columns:minmax(0,1fr) !important; }
+}
 </style>
 <?php
 /** AHG page hero (as financing.php / preauction.php). */

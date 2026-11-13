@@ -60,8 +60,14 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
 .fa2-filters { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; padding:1rem 1.25rem; }
 .fa2-filters a.chip { padding:.38rem .9rem; border-radius:50px; border:1.5px solid #d0dce8; color:#445566; text-decoration:none; font-size:.8rem; font-weight:700; }
 .fa2-filters a.chip.on { background:linear-gradient(135deg,#005BA1,#003f73); color:#fff; border-color:#003f73; }
-.fa2-grid { display:grid; grid-template-columns:1.35fr 1fr; gap:1.25rem; align-items:start; }
-@media(max-width:1000px){ .fa2-grid { grid-template-columns:1fr; } }
+.fa2-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:1.25rem; align-items:start; }
+@media(max-width:1000px){ .fa2-grid { grid-template-columns:minmax(0,1fr); } }
+.fa2-grid > * { min-width:0; }
+.fa2-row .val { overflow-wrap:anywhere; }
+.fa2-act .form-control, .fa2-act textarea { max-width:100%; }
+.fa2-act .btn, .fa2-body .btn { white-space:normal; }
+.fa2-head .badge, .fa2-table .badge { white-space:normal; line-height:1.35; }
+@media(max-width:600px){ .fa2-body { padding:1rem; } .fa2-table th, .fa2-table td { padding:.6rem .7rem; } .fa2-act label { width:100%; } .fa2-act label .form-control, .fa2-act label textarea { width:100% !important; } .fa2-stat { min-width:calc(50% - .5rem); padding:.8rem; } }
 .fa2-head { background:linear-gradient(135deg,#003f73,#005BA1); padding:1rem 1.4rem; color:#fff; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; }
 .fa2-head h4, .fa2-head h4 i { margin:0; font-size:1.05rem; font-weight:700; color:#fff !important; }
 .fa2-head .badge { background:#fff !important; }

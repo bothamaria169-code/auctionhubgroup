@@ -4619,6 +4619,7 @@ textarea.form-control {
     border: 1px solid var(--border-color);
     transition: var(--transition);
     max-width: 40%;
+    min-width: 0;   /* lets the title ellipsis instead of pushing past the screen */
 }
 
 .vehicle-nav-btn:hover {
@@ -4669,7 +4670,7 @@ textarea.form-control {
 .vehicle-nav-center:hover { color: var(--blue-primary); }
 
 /* ── §1 MISSING: AUCTION DETAIL PAGE ────────────────────────  */
-.auction-layout  { display: grid; grid-template-columns: 1fr 360px; gap: 2rem; align-items: start; }
+.auction-layout  { display: grid; grid-template-columns: minmax(0,1fr) 360px; gap: 2rem; align-items: start; }
 .auction-left-col  { min-width: 0; }
 .auction-right-col { position: sticky; top: calc(var(--nav-height) + 1rem); }
 
@@ -5552,7 +5553,7 @@ textarea.form-control {
     .auth-card { max-width: 540px; }
     .auth-eft-note { max-width: 540px; }
     .form-row-2 { grid-template-columns: 1fr; }
-    .auction-layout { grid-template-columns: 1fr; }
+    .auction-layout { grid-template-columns: minmax(0,1fr); }  /* minmax: never wider than the phone */
     .auction-right-col { position: static; }
     /* Admin: fixed mobile nav replaces sidebar */
     .admin-mobile-nav { display: block; }       /* show the fixed bar */

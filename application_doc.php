@@ -108,12 +108,12 @@ header('X-Robots-Tag: noindex, nofollow');
   .code small{ display:block; font-size:7pt; font-weight:800; color:#667; letter-spacing:.16em; text-transform:uppercase; }
   .code b{ font-size:22pt; font-weight:900; color:#002a5c; letter-spacing:.06em; }
   .box{ background:var(--soft); border-left:4px solid var(--blue); padding:9px 12px; font-size:8.5pt; color:#3f4a58; margin:8px 0; border-radius:0 6px 6px 0; }
-  .sign{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-top:26px; }
-  .sign .line{ border-top:1.4px solid var(--ink); width:180px; margin-bottom:3px; }
+  .sign{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px 24px; margin-top:26px; flex-wrap:wrap; }
+  .sign .line{ border-top:1.4px solid var(--ink); width:180px; max-width:100%; margin-bottom:3px; }
   .sign .sl{ font-size:7pt; font-weight:700; color:#5b6b7f; text-transform:uppercase; letter-spacing:.06em; }
   .sign .thanks{ text-align:right; font-size:8pt; color:var(--muted); }
   .sign .thanks b{ color:var(--navy); }
-  @media(max-width:700px){ .sheet{ padding:16px; min-height:0; margin:0; } .head,.info-row,.pay{ flex-direction:column; } .doc-title{ text-align:left; } .meta,.note{ flex:none; width:100%; } .veh{ flex-direction:column; align-items:flex-start; } }
+  @media(max-width:700px){ .sheet{ padding:16px; min-height:0; margin:0; } .head,.info-row,.pay{ flex-direction:column; } .doc-title{ text-align:left; } .meta,.note{ flex:none; width:100%; } .veh{ flex-direction:column; align-items:flex-start; } .veh img{ width:100%; height:auto; aspect-ratio:3/2; } .totals table{ width:100%; } table.items th, table.items td{ padding:7px 8px; } .toolbar{ position:static; } .toolbar h2{ font-size:.85rem; } .brand img{ width:52px; height:52px; } .co-name{ font-size:13pt; } .doc-title .tag{ font-size:14pt; } .bank-grid{ grid-template-columns:minmax(0,auto) minmax(0,1fr); } .bank-grid .bv{ overflow-wrap:anywhere; } }
   @media print{ body{ background:#fff; } .toolbar{ display:none; } .sheet{ box-shadow:none; margin:0; width:auto; min-height:0; padding:0; } @page{ size:A4; margin:12mm; } }
 </style>
 </head>

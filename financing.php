@@ -63,7 +63,7 @@ require_once __DIR__ . '/header.php';
 <div class="container" style="max-width:1080px;margin:0 auto;">
 
     <!-- ═══════════ WHO QUALIFIES + DEPOSIT + TERMS GRID ═══════════ -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-bottom:2.5rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:1.5rem;margin-bottom:2.5rem;">
 
         <!-- WHO QUALIFIES -->
         <div style="background:#fff;border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-top:4px solid #25D366;">
@@ -133,7 +133,7 @@ require_once __DIR__ . '/header.php';
         <p style="color:#777;font-size:.88rem;margin-bottom:2rem;">Enter any vehicle price and deposit to see your estimated monthly instalments across all repayment terms.</p>
 
         <!-- INPUT ROW -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.25rem;margin-bottom:1.5rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:1.25rem;margin-bottom:1.5rem;">
             <!-- Vehicle Price -->
             <div>
                 <label for="fc-price" style="display:block;color:#003f73;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Vehicle Price (R)</label>
@@ -237,7 +237,7 @@ require_once __DIR__ . '/header.php';
                 <i class="fas fa-circle-check" style="font-size:1.3rem;color:#6eff9e;"></i>
                 <h3 style="font-size:1.05rem;margin:0;">Your Selected Plan</h3>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:1.25rem;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:1rem;margin-bottom:1.25rem;">
                 <div>
                     <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);margin-bottom:.2rem;">Vehicle Price</div>
                     <div id="fc-s-price" style="font-size:1.15rem;font-weight:700;">—</div>
@@ -431,7 +431,7 @@ require_once __DIR__ . '/header.php';
             <i class="fas fa-route" style="color:#005BA1;"></i> How Our Finance Works
         </h2>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:1.5rem;">
             <?php
             $finSteps = [
                 ['01','fa-message-dots','Get in Touch','Call or email us to get started. Tell us which vehicle you\'re interested in and we\'ll walk you through the process.','#005BA1'],
@@ -454,7 +454,7 @@ require_once __DIR__ . '/header.php';
     </div>
 
     <!-- ═══════════ DOCUMENTS REQUIRED ═══════════ -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:2.5rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:1.5rem;margin-bottom:2.5rem;">
 
         <!-- Documents -->
         <div style="background:#fff;border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-left:5px solid #005BA1;">
@@ -510,7 +510,7 @@ require_once __DIR__ . '/header.php';
         </h2>
         <p style="color:#888;font-size:.88rem;margin-bottom:1.5rem;">Prefer to pay another way? We also accept these methods for auction purchases.</p>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:1rem;">
             <?php
             $otherOptions = [
                 ['fa-piggy-bank','Cash Purchase','Pay the full amount directly and avoid any interest charges. The fastest, simplest way to own your vehicle.','#e6f9ee','#155724','#b7e2c5'],
