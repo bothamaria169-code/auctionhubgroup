@@ -442,6 +442,17 @@ function e(?string $str): string {
 }
 
 /**
+ * Repairs announcement-ticker text whose emoji or dash was lost when it was
+ * imported through a non-UTF-8 connection: a lost emoji is saved as "??",
+ * and an em dash as "ù" (cp850). Drops the "??" and puts the dash back.
+ */
+function cleanTickerText(?string $s): string {
+    $s = preg_replace('/\s*\?{2,}\s*/u', ' ', (string)$s);
+    $s = str_replace(' ù ', ' — ', $s);
+    return trim(preg_replace('/\s{2,}/u', ' ', $s));
+}
+
+/**
  * Safely format a nullable datetime string — PHP 8.4 compatible.
  * Replaces date('fmt', strtotime($maybeNull)) patterns throughout the codebase.
  *

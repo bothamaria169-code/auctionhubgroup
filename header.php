@@ -85,7 +85,7 @@ try {
         ORDER BY sort_order ASC, created_at DESC
         LIMIT 10
     ");
-    $tickerMessages = $tickerStmt->fetchAll(PDO::FETCH_COLUMN);
+    $tickerMessages = array_values(array_filter(array_map('cleanTickerText', $tickerStmt->fetchAll(PDO::FETCH_COLUMN))));
 } catch (Exception $e) {
     // Silently fail — ticker is non-critical
 }

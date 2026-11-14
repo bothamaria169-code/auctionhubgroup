@@ -398,7 +398,7 @@ switch ($action) {
             LIMIT 8
         ");
         foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $msg) {
-            $items[] = $msg;
+            if (($msg = cleanTickerText($msg)) !== '') $items[] = $msg;
         }
 
         if (empty($items)) {
@@ -419,7 +419,7 @@ switch ($action) {
             WHERE is_active = 1
             ORDER BY sort_order ASC
         ");
-        ok(['announcements' => $stmt->fetchAll()]);
+        ok(['announcements' => array_map(fn($r) => ['message' => cleanTickerText($r['message'])] + $r, $stmt->fetchAll())]);
     }
 
 // ════════════════════════════════════════════════════════════
