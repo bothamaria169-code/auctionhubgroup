@@ -138,14 +138,15 @@ define('GA_MEASUREMENT_ID', 'G-STZ00ZTE9Y');
 // 3. Each conversion action gives you a send_to label like 'AW-123456789/AbC-D_efG'.
 //    Paste ONLY the part after the slash into the matching constant below.
 // The tags render on production only, and only once GOOGLE_ADS_ID is real.
-define('GOOGLE_ADS_ID', 'AW-3636429749');
+// New Google Ads account (Nov 2026). The old account's tag was AW-3636429749.
+define('GOOGLE_ADS_ID', 'AW-18573287866');
 
 // Primary conversion — a new bidder account is created (this is the one you bid to).
-define('GADS_LABEL_REGISTRATION', 'XXXXXXXXXXXXXXXXXX');
+define('GADS_LABEL_REGISTRATION', '37H3CIe-srgdELrDt5hF');
 // Secondary conversion — visitor taps the WhatsApp float / a WhatsApp CTA.
-define('GADS_LABEL_WHATSAPP',     'XXXXXXXXXXXXXXXXXX');
+define('GADS_LABEL_WHATSAPP',     'j33rCN3GtLgdELrDt5hF');
 // Secondary conversion — visitor taps a click-to-call number.
-define('GADS_LABEL_CALL',         'XXXXXXXXXXXXXXXXXX');
+define('GADS_LABEL_CALL',         'VwzSCM7atLgdELrDt5hF');
 // Value assigned to one bidder registration for Smart Bidding (in ZAR).
 // This is NOT the R10,000 deposit — it is what an average signup is worth to you.
 define('GADS_REGISTRATION_VALUE', 350);
