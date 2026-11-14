@@ -262,8 +262,8 @@ function readingTime(string $content): string {
         <form method="GET" style="max-width:480px;margin:0 auto;display:flex;gap:.5rem;">
             <input type="search" name="q" value="<?= htmlspecialchars($search) ?>"
                    placeholder="Search articles..."
-                   style="flex:1;padding:.75rem 1.25rem;border-radius:50px;border:none;font-size:.95rem;background:rgba(255,255,255,.95);color:#001F5C;outline:none;">
-            <button type="submit" style="background:#ffd54f;color:#001F5C;border:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:700;cursor:pointer;font-size:.9rem;white-space:nowrap;">
+                   style="flex:1;min-width:0;padding:.75rem 1.25rem;border-radius:50px;border:none;font-size:.95rem;background:rgba(255,255,255,.95);color:#001F5C;outline:none;">
+            <button type="submit" style="background:#ffd54f;color:#001F5C;border:none;padding:.75rem clamp(.9rem,4vw,1.5rem);border-radius:50px;font-weight:700;cursor:pointer;font-size:.9rem;white-space:nowrap;">
                 <i class="fas fa-search"></i> Search
             </button>
         </form>
@@ -476,7 +476,7 @@ function readingTime(string $content): string {
             <input type="hidden" name="action" value="newsletter_subscribe">
             <input type="email" name="email" required placeholder="Your email address"
                    style="flex:1;min-width:200px;padding:.75rem 1.25rem;border-radius:50px;border:none;font-size:.92rem;color:#001F5C;background:rgba(255,255,255,.95);outline:none;">
-            <button type="submit" style="background:#ffd54f;color:#001F5C;border:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:700;font-size:.88rem;cursor:pointer;white-space:nowrap;transition:opacity .2s;" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">
+            <button type="submit" style="background:#ffd54f;color:#001F5C;border:none;padding:.75rem clamp(.9rem,4vw,1.5rem);border-radius:50px;font-weight:700;font-size:.88rem;cursor:pointer;white-space:nowrap;transition:opacity .2s;" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">
                 Subscribe
             </button>
         </form>

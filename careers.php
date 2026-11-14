@@ -156,7 +156,7 @@ require_once __DIR__ . '/header.php';
         foreach ($steps as $i => $label):
             $n = $i + 1;
         ?>
-        <div id="prog<?= $n ?>" style="flex:1;text-align:center;padding:.65rem .5rem;font-size:.8rem;font-weight:600;background:<?= $n===1?'#005BA1':'#f8fafc' ?>;color:<?= $n===1?'#fff':'#999' ?>;border-right:<?= $n<3?'1px solid #e5eaf0':'none' ?>;transition:background .3s,color .3s;cursor:pointer;" onclick="goStep(<?= $n ?>)">
+        <div id="prog<?= $n ?>" style="flex:1;min-width:0;overflow-wrap:anywhere;line-height:1.3;text-align:center;padding:.65rem .4rem;font-size:clamp(.68rem,2.6vw,.8rem);font-weight:600;background:<?= $n===1?'#005BA1':'#f8fafc' ?>;color:<?= $n===1?'#fff':'#999' ?>;border-right:<?= $n<3?'1px solid #e5eaf0':'none' ?>;transition:background .3s,color .3s;cursor:pointer;" onclick="goStep(<?= $n ?>)">
             <?= $label ?>
         </div>
         <?php endforeach; ?>
