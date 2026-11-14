@@ -1353,7 +1353,7 @@ require_once 'header.php';
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">
         <div style="flex:1 1 300px;">
           <h3 style="margin:0;color:#2e7d32;"><i class="fas fa-broadcast-tower" style="color:#43a047;"></i> Go Live — Put All Vehicles Live</h3>
-          <p class="text-muted" style="margin:.25rem 0 0;font-size:.88rem;">One click puts every eligible vehicle <strong>Live</strong> for the period you choose. Sold vehicles, vehicles reserved for finance / pre-auction clients and ended lots with bids are never touched.</p>
+          <p class="text-muted" style="margin:.25rem 0 0;font-size:.88rem;">One click puts <strong>every unsold listing Live</strong> for the period you choose — upcoming, live, closed and expired. Only sold vehicles and vehicles reserved for an approved finance / pre-auction client are left alone.</p>
         </div>
         <button type="button" class="btn btn-success" id="goLiveBtn" onclick="goLiveAll()"
                 style="background:#2e7d32;border-color:#2e7d32;font-size:1rem;padding:.65rem 1.5rem;">
@@ -1403,11 +1403,12 @@ require_once 'header.php';
       <div style="display:flex;gap:1.25rem;flex-wrap:wrap;margin-top:.9rem;font-size:.86rem;">
         <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncUpcoming" checked onchange="goLivePreview()"> Upcoming vehicles</label>
         <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncLive" checked onchange="goLivePreview()"> Vehicles already live (reset their timer)</label>
-        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncExpired" checked onchange="goLivePreview()"> Expired vehicles with no bids</label>
+        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncExpired" checked onchange="goLivePreview()"> Closed / expired with no bids</label>
+        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncBids" checked onchange="goLivePreview()"> Closed / expired that got bids but didn't sell (relisted fresh)</label>
         <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLivePhotoOnly" onchange="goLivePreview()"> Only vehicles with a photo</label>
       </div>
       <p id="goLiveSummary" style="margin:.85rem 0 0;font-size:.88rem;font-weight:600;color:#2e7d32;"><i class="fas fa-spinner fa-spin"></i> Counting vehicles…</p>
-      <p class="text-muted" style="margin:.35rem 0 0;font-size:.8rem;"><i class="fas fa-info-circle"></i> Bids already placed on live vehicles are kept. Expired lots that got bids are not included — use <a href="#relistExpiredCard">Relist Expired Vehicles</a> for those. A future start puts them in Upcoming until that time.</p>
+      <p class="text-muted" style="margin:.35rem 0 0;font-size:.8rem;"><i class="fas fa-info-circle"></i> Bids on vehicles that are live now are kept. Ended lots whose bid met the reserve are closed as sales first; the rest that got bids restart at their starting price (old bids are kept in the change log). A future start puts them in Upcoming until that time.</p>
     </div>
 
     <!-- Bulk Action Bar (appears when checkboxes are selected) -->
@@ -9270,6 +9271,7 @@ function goLiveFields(dry) {
         inc_upcoming: document.getElementById('goLiveIncUpcoming').checked ? 1 : '',
         inc_live: document.getElementById('goLiveIncLive').checked ? 1 : '',
         inc_expired: document.getElementById('goLiveIncExpired').checked ? 1 : '',
+        inc_bids: document.getElementById('goLiveIncBids').checked ? 1 : '',
         photo_only: document.getElementById('goLivePhotoOnly').checked ? 1 : '',
     };
     if (mode === 'custom') f.start = document.getElementById('goLiveStart').value.replace('T', ' ') + ':00';
@@ -9303,7 +9305,9 @@ window.goLivePreview = function () {
             out.style.color = '#2e7d32';
             out.innerHTML = `<i class="fas fa-circle-check"></i> <strong>${d.count}</strong> vehicle(s) will be live from <strong>${escHtml(d.start)}</strong> until <strong>${escHtml(d.end)}</strong>`
                 + (d.last !== d.end ? ` (last lot closes ${escHtml(d.last)})` : '') + '.'
-                + (d.skipped ? ` <span class="text-muted">${d.skipped} reserved for finance / pre-auction clients skipped.</span>` : '');
+                + `<br><span class="text-muted" style="font-weight:500">Unsold listings: ${d.unsold} — upcoming ${d.groups.upcoming}, live ${d.groups.live}, closed/expired ${d.groups.ended}, closed/expired with bids ${d.groups.ended_bids}`
+                + (d.groups.unticked ? `, not ticked ${d.groups.unticked}` : '')
+                + (d.groups.reserved ? `, reserved for clients ${d.groups.reserved} (left alone)` : '') + '.</span>';
             document.getElementById('goLiveBtn').disabled = d.count === 0;
         } catch { out.textContent = 'Could not count vehicles.'; }
     }, 250);

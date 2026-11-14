@@ -2620,14 +2620,18 @@ switch ($action) {
         ok(['message' => "Status changed to '$status' for $count auction(s)."]);
     }
 
-    // ── GO LIVE: put every eligible vehicle live for N days ───
+    // ── GO LIVE: put every unsold listing live for N days ─────
     // Admin → Auctions → "Go Live" card (and Overview quick action).
     // Options: days (1–90), start (now / tomorrow 09:00 / custom), closing time
     // (HH:MM, or 'exact' = start + N×24h), stagger (minutes between lots, so they
-    // close one by one), and which lots: upcoming · already live (timer reset) ·
-    // expired without bids. Sold lots, lots with bids that have ended, and lots
+    // close one by one), photo_only, and which unsold lots (all ticked by default):
+    //   upcoming · live (timer reset, bids kept) · ended or closed without bids ·
+    //   ended or closed WITH bids (reserve not met: relisted fresh via relistLots,
+    //   old bids copied to the change log first).
+    // Ended lots still open with bids are closed the normal way first, so a bid that
+    // met the reserve becomes a sale instead of being wiped. Sold lots and lots
     // reserved by an approved finance / Presold pre-auction client are never touched.
-    // dry_run=1 returns the counts only.
+    // dry_run=1 returns the counts per group only.
     case 'go_live_all': {
         $admin = adminOnly();
         $days = (int)($_POST['days'] ?? 10);
@@ -2643,50 +2647,76 @@ switch ($action) {
         else fail('Choose a closing time.');
         if ($endTs <= max(time(), $startTs)) fail('The closing time must be in the future.');
         $stagger = max(0, min(30, (int)($_POST['stagger'] ?? 0)));
+        $dry = !empty($_POST['dry_run']);
+        $want = ['upcoming' => !empty($_POST['inc_upcoming']), 'live' => !empty($_POST['inc_live']),
+                 'ended' => !empty($_POST['inc_expired']), 'ended_bids' => !empty($_POST['inc_bids'])];
+        if (!array_filter($want)) fail('Tick at least one group of vehicles.');
 
-        $scopes = [];
-        if (!empty($_POST['inc_upcoming'])) $scopes[] = "a.status = 'upcoming' AND (a.end_time IS NULL OR a.end_time > NOW())";
-        if (!empty($_POST['inc_live']))     $scopes[] = "a.status = 'active' AND (a.end_time IS NULL OR a.end_time > NOW())";
-        if (!empty($_POST['inc_expired']))  $scopes[] = "(a.end_time IS NOT NULL AND a.end_time <= NOW()) AND NOT EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id)";
-        if (!$scopes) fail('Tick at least one group of vehicles.');
-        $where = "COALESCE(a.is_sold, 0) = 0 AND ((" . implode(') OR (', $scopes) . "))";
-        if (!empty($_POST['photo_only'])) $where .= " AND COALESCE(a.image_url, '') <> ''";
-        $ids = array_map('intval', $pdo->query("SELECT a.id FROM auctions a WHERE $where ORDER BY a.id")->fetchAll(PDO::FETCH_COLUMN));
+        // Every unsold listing, sorted into one group each
+        $groupSql = "SELECT a.id, CASE
+                WHEN a.status <> 'closed' AND (a.end_time IS NULL OR a.end_time > NOW()) THEN IF(a.status = 'active', 'live', 'upcoming')
+                WHEN EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id) THEN 'ended_bids'
+                ELSE 'ended' END AS grp,
+                a.status, (a.end_time IS NOT NULL AND a.end_time <= NOW()) AS past
+            FROM auctions a WHERE COALESCE(a.is_sold, 0) = 0"
+            . (!empty($_POST['photo_only']) ? " AND COALESCE(a.image_url, '') <> ''" : '') . " ORDER BY a.id";
 
-        // Reserved for an approved finance / Presold pre-auction client
+        // Close ended lots that are still open with bids, so a met reserve becomes a sale
+        if (!$dry && $want['ended_bids']) {
+            foreach ($pdo->query($groupSql)->fetchAll() as $r) {
+                if ($r['grp'] === 'ended_bids' && $r['status'] !== 'closed' && $r['past']) {
+                    try { closeAuction((int)$r['id']); } catch (Throwable $e) { error_log('[AHG go_live] close ' . $r['id'] . ': ' . $e->getMessage()); }
+                }
+            }
+        }
+        $rows = $pdo->query($groupSql)->fetchAll();
+
         $reserved = [];
         try {
-            $reserved = array_map('intval', $pdo->query("SELECT DISTINCT auction_id FROM client_applications
-                WHERE auction_id IS NOT NULL AND status IN ('approved','paid','completed')")->fetchAll(PDO::FETCH_COLUMN));
+            $reserved = array_flip(array_map('intval', $pdo->query("SELECT DISTINCT auction_id FROM client_applications
+                WHERE auction_id IS NOT NULL AND status IN ('approved','paid','completed')")->fetchAll(PDO::FETCH_COLUMN)));
         } catch (Throwable $e) { /* no applications table yet */ }
-        $skipped = count(array_intersect($ids, $reserved));
-        $ids = array_values(array_diff($ids, $reserved));
 
-        $first = date('D d M Y, H:i', $endTs);
-        $last  = date('D d M Y, H:i', $endTs + max(0, count($ids) - 1) * $stagger * 60);
-        if (!empty($_POST['dry_run'])) {
-            ok(['count' => count($ids), 'skipped' => $skipped, 'start' => date('D d M Y, H:i', $startTs), 'end' => $first, 'last' => $last]);
+        $counts = ['upcoming' => 0, 'live' => 0, 'ended' => 0, 'ended_bids' => 0, 'reserved' => 0, 'unticked' => 0];
+        $plain = []; $relist = [];
+        foreach ($rows as $r) {
+            $id = (int)$r['id'];
+            if (isset($reserved[$id]))  { $counts['reserved']++; continue; }
+            if (!$want[$r['grp']])      { $counts['unticked']++; continue; }
+            $counts[$r['grp']]++;
+            if ($r['grp'] === 'ended_bids') $relist[] = $id; else $plain[] = $id;
         }
-        if (!$ids) fail('No vehicles match — nothing was changed.');
+        $total = count($plain) + count($relist);
+        $first = date('D d M Y, H:i', $endTs);
+        $last  = date('D d M Y, H:i', $endTs + max(0, $total - 1) * $stagger * 60);
+        if ($dry) {
+            ok(['count' => $total, 'unsold' => count($rows), 'groups' => $counts, 'skipped' => $counts['reserved'],
+                'start' => date('D d M Y, H:i', $startTs), 'end' => $first, 'last' => $last]);
+        }
+        if (!$total) fail('No vehicles match — nothing was changed.');
 
-        $start = date('Y-m-d H:i:s', $startTs);
+        $start  = date('Y-m-d H:i:s', $startTs);
         $status = $startTs > time() + 60 ? 'upcoming' : 'active';   // a future start goes live on its start time
+        $endFor = fn(int $i) => date('Y-m-d H:i:s', $endTs + $i * $stagger * 60);
+        $order  = array_merge($plain, $relist);
         $upd = $pdo->prepare("UPDATE auctions SET status = ?, start_time = ?, end_time = ? WHERE id = ? AND COALESCE(is_sold, 0) = 0");
         $pdo->beginTransaction();
         try {
-            foreach ($ids as $i => $id) {
-                $upd->execute([$status, $start, date('Y-m-d H:i:s', $endTs + $i * $stagger * 60), $id]);
-            }
+            foreach ($plain as $i => $id) $upd->execute([$status, $start, $endFor($i), $id]);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
             fail('Go Live failed: ' . $e->getMessage());
         }
-        logAdminAction($admin, 'go_live', null, ['count' => count($ids), 'days' => $days, 'start' => $start,
-            'end' => date('Y-m-d H:i:s', $endTs), 'stagger' => $stagger, 'ids' => $ids]);
-        ok(['message' => count($ids) . ' vehicle(s) ' . ($status === 'active' ? 'are Live now' : 'go Live on ' . date('D d M, H:i', $startTs))
-            . ' until ' . $first . ($stagger && count($ids) > 1 ? ' (last lot closes ' . $last . ')' : '') . '.'
-            . ($skipped ? " $skipped reserved for finance / pre-auction clients skipped." : ''), 'count' => count($ids)]);
+        // Lots that ended with bids start fresh at their starting price (bids kept in the change log)
+        foreach ($relist as $j => $id) relistLots($admin, [$id], $start, $endFor(count($plain) + $j), $status);
+
+        logAdminAction($admin, 'go_live', null, ['count' => $total, 'groups' => $counts, 'days' => $days, 'start' => $start,
+            'end' => date('Y-m-d H:i:s', $endTs), 'stagger' => $stagger, 'ids' => $order]);
+        ok(['message' => $total . ' vehicle(s) ' . ($status === 'active' ? 'are Live now' : 'go Live on ' . date('D d M, H:i', $startTs))
+            . ' until ' . $first . ($stagger && $total > 1 ? ' (last lot closes ' . $last . ')' : '') . '.'
+            . ($relist ? ' ' . count($relist) . ' that ended with bids were relisted fresh (old bids kept in the change log).' : '')
+            . ($counts['reserved'] ? ' ' . $counts['reserved'] . ' reserved for finance / pre-auction clients left as they are.' : ''), 'count' => $total]);
     }
 
     // ── SET ALL AUCTION STATUS (make all live / upcoming) ─────
