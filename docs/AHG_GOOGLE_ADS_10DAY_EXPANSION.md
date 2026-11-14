@@ -22,8 +22,9 @@ Three of these stop the test from telling you anything. Do them first, in this o
 AHG | Expansion | Search   (R100/day, Max clicks R8 cap, KZN/EC/FS/WC, Gauteng excluded)
 ├── A  Bank repossessed vehicles   → /register-to-bid.php
 ├── B  Toyota Hilux & bakkies      → /auctions.php?search=hilux
-└── C  Toyota Quantum & minibuses  → /auctions.php?search=quantum
-    6 shared negative lists on all three
+├── C  Toyota Quantum & minibuses  → /auctions.php?search=quantum
+└── D  VW Polo & Polo Vivo         → /auctions.php?search=polo   (added 14 Nov: 85 lots)
+    6 shared negative lists on all four
 ```
 
 | Setting | Value |
@@ -32,8 +33,8 @@ AHG | Expansion | Search   (R100/day, Max clicks R8 cap, KZN/EC/FS/WC, Gauteng e
 | Budget | R100 a day for 10 days = R1,000 |
 | Bidding | Maximise clicks, max cost per click R8 |
 | Where | KwaZulu-Natal, Eastern Cape, Free State, Western Cape. Gauteng excluded |
-| Ad groups | 3: Bank repossessed vehicles, Toyota Hilux & bakkies, Toyota Quantum & minibuses |
-| Keywords | 52, exact and phrase match only |
+| Ad groups | 4: Bank repossessed vehicles, Toyota Hilux & bakkies, Toyota Quantum & minibuses, VW Polo & Polo Vivo |
+| Keywords | 70, exact and phrase match only |
 | Negatives | 6 shared lists plus cross-group rules |
 | Goal | Bidder registration (a new account), valued at R350 |
 
@@ -68,7 +69,7 @@ Don't promise viewing at a branch in the ads. The ads say you can bid online and
 11. **Start and end dates**: end date = launch day + 9, so the campaign stops by itself after 10 days.
 12. **Budget**: if Google offers **Campaign total budget**, choose R1,000 over the dates. Otherwise set **R100 daily**. A daily budget can spend up to twice that on a busy day and less on a quiet one, so the 10-day total lands near R1,000, not on it exactly.
 13. **Ad groups**: create A, B and C from section 5, each with its own keywords and final URL.
-14. **Ads**: one responsive search ad per group from section 7. Display paths: A `Repossessed/Cars`, B `Toyota/Hilux`, C `Toyota/Quantum`.
+14. **Ads**: one responsive search ad per group from section 7. Display paths: A `Repossessed/Cars`, B `Toyota/Hilux`, C `Toyota/Quantum`, D `VW/Polo`.
 15. **Assets**: add the sitelinks, callouts, structured snippets and call asset from section 8.
 16. **Shared negative lists**: Tools → **Shared library** → **Negative keyword lists**. Build the six lists from section 6 and apply all six to this campaign.
 17. **Publish**. Ads are reviewed in a few hours. Status should read *Eligible*.
@@ -161,11 +162,37 @@ Six Quantums are live. Minibus buyers in KZN and the Eastern Cape search for rep
 "minibus auction"
 ```
 
+### D — VW Polo & Polo Vivo → `/auctions.php?search=polo`
+
+Added 14 November, when Polo stock rose from 2 to **85 live lots** (20 of them Polo Vivo, plus Polo TSI Comfortline and Highline and Polo GTI, 2013–2022). The Polo and Polo Vivo are among South Africa's most-searched used cars, and this is now your deepest model.
+
+```
+[repossessed polo]
+[repossessed vw polo]
+[repossessed volkswagen polo]
+[bank repossessed polo]
+[repossessed polo for sale]
+[polo auction]
+[vw polo auction]
+[polo on auction]
+[repossessed polo vivo]
+[repossessed polo vivo for sale]
+[polo vivo auction]
+[polo gti auction]
+[polo for sale] (watch)
+[used polo for sale] (watch)
+[polo vivo for sale] (watch)
+"repossessed polo"
+"polo auction"
+"polo vivo auction"
+```
+
+Group-only negatives (phrase), because "polo" also means shirts and a sport: `shirt`, `shirts`, `t-shirt`, `golf shirt`, `ralph lauren`, `water polo`, `horse`, `horses`, `club`, `mints`.
+
 ### Switch these on when their page has 10+ lots
 
 | Model | Landing page | Starter keywords |
 |---|---|---|
-| VW Polo / Polo Vivo | `/auctions.php?search=polo` | [repossessed polo], [polo vivo auction], "repossessed polo" |
 | Ford Ranger | `/auctions.php?search=ranger` | [repossessed ford ranger], [ranger auction], "repossessed ranger" |
 | Toyota Corolla | `/auctions.php?search=corolla` | [repossessed corolla], [corolla auction] |
 | Toyota Fortuner | `/auctions.php?search=fortuner` | [repossessed fortuner], [fortuner auction] |
@@ -217,9 +244,10 @@ finance, financing, on finance, no deposit, payment plan, monthly instalment, in
 
 | Add to | Negative (phrase) | Why |
 |---|---|---|
-| Group A | "hilux", "ranger", "bakkie", "quantum", "taxi", "minibus" | Sends model searches to the page that shows that model |
-| Group B | "quantum", "taxi", "minibus" | Sends minibus searches to group C |
-| Group C | "hilux", "ranger", "bakkie" | Sends bakkie searches to group B |
+| Group A | "hilux", "ranger", "bakkie", "quantum", "taxi", "minibus", "polo", "vivo" | Sends model searches to the page that shows that model |
+| Group B | "quantum", "taxi", "minibus", "polo", "vivo" | Sends minibus and Polo searches to groups C and D |
+| Group C | "hilux", "ranger", "bakkie", "polo", "vivo" | Sends bakkie and Polo searches to groups B and D |
+| Group D | "hilux", "ranger", "bakkie", "quantum", "taxi", "minibus" | Sends bakkie and minibus searches to groups B and C |
 | Whole campaign | "auction hub", "auctionhub", "park village" | People searching your name find you for free in the organic results |
 
 ### Never add these as negatives
@@ -329,6 +357,37 @@ No buyer's commission. Hammer price plus R2,600 admin and VAT. Nationwide delive
 R10,000 deposit is fully refundable if you don't buy. Verified in 1-2 business days.  (84)
 ```
 
+### Group D — VW Polo & Polo Vivo
+
+Headlines (★ = pin to position 1):
+
+```
+Polo at Auction Prices          22  ★
+Repossessed VW Polo             19  ★
+VW Polo & Vivo on Auction       25
+Bank Repo Polo for Sale         23
+Polos Live on Auction Now       25
+Polo TSI, Vivo and GTI          22
+Bid at the Bank's Price         23
+Every Polo DEKRA Inspected      26
+No Buyer's Commission           21
+Register Free to Bid            20
+Bid Online via Live Webcast     27
+Nationwide Delivery Available   29
+R10,000 Refundable Deposit      26
+Verified in 1-2 Business Days   29
+Auction Hub Group               17
+```
+
+Descriptions:
+
+```
+Browse every repossessed VW Polo and Polo Vivo on auction now, with year and mileage.  (85)
+Bank stock priced at the outstanding balance, not retail. No buyer's commission payable.  (88)
+Every Polo DEKRA inspected with a full condition report. Bid online via live webcast.  (85)
+R10,000 deposit is fully refundable if you don't buy. Nationwide delivery available.  (84)
+```
+
 ## 8. Sitelinks, callouts and other assets
 
 ### Sitelinks
@@ -416,14 +475,14 @@ WHERE br.status = 'approved'
 
 > These are planning estimates, not quotes. Clicks outside Gauteng are usually cheaper because fewer auction houses bid there, but 10 days and R1,000 is a small sample. Judge keywords by their search terms and click-through rate as much as by registrations.
 
-Maximise clicks spreads one budget across all three groups. Group A will probably take the most. If it takes over 70% by day 5, lower its keywords' share by pausing its weakest city keywords, not by raising the budget.
+Maximise clicks spreads one budget across all four groups. Group A will probably take the most. If it takes over 70% by day 5, lower its keywords' share by pausing its weakest city keywords, not by raising the budget.
 
 ## 11. The 10 days
 
 Tick each step as you go. Ticks are saved in this browser only.
 
 - [ ] **Day 0** — Conversion labels pasted and `config.php` deployed. Six negative lists built. Hilux and Quantum pages checked for stock. Western Cape delivery confirmed or Western Cape removed.
-- [ ] **Day 1** — Launch all three groups. Check that every ad reads *Eligible* within a few hours and that Locations shows only the four provinces.
+- [ ] **Day 1** — Launch all four groups. Check that every ad reads *Eligible* within a few hours and that Locations shows only the four provinces.
 - [ ] **Day 2** — Search terms report (Insights and reports → Search terms). Add every irrelevant term to the right shared list.
 - [ ] **Day 3** — Test conversion: open `/register-to-bid.php?gclid=test123` on your phone, register a test bidder, and check that Bidder registration shows *Recording conversions* within 3 hours. Then delete the test user.
 - [ ] **Day 4** — Search terms and negatives. Check average CPC against the R8 cap and *Impression share lost (budget)*.
