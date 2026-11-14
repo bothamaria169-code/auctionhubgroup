@@ -156,12 +156,13 @@ const UF_PREF_COLUMNS = [
     'outbid'       => 'outbid_emails',
     'watch'        => 'watch_emails',
     'saved_search' => 'saved_search_emails',
+    'tips'         => 'tips_emails',
 ];
 
 /** A user's email switches, creating the row (and unsubscribe token) on first use */
 function emailPrefs(int $userId): array {
     global $pdo;
-    $all = ['outbid_emails' => 1, 'watch_emails' => 1, 'saved_search_emails' => 1, 'unsubscribe_token' => ''];
+    $all = ['outbid_emails' => 1, 'watch_emails' => 1, 'saved_search_emails' => 1, 'tips_emails' => 1, 'unsubscribe_token' => ''];
     if (!ufReady() || $userId <= 0) return $all;
     try {
         $st = $pdo->prepare("SELECT * FROM user_email_prefs WHERE user_id = ?");

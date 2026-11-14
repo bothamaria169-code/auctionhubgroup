@@ -3,7 +3,7 @@
 // AUCTION HUB GROUP — admin_applications_tab.php
 // Admin → Finance & Pre-Auction (tab=applications), included by
 // admin_dashboard.php. Same layout as the Refunds tab.
-//   In-house finance: approve deposit / suggest a higher one / decline,
+//   Finance: approve deposit / suggest a higher one / decline,
 //     review documents, verify deposit → Buyer Code, confirm test drive.
 //   Pre-auction:      issue the proforma invoice (→ preauction_invoices,
 //     the same invoices as the Deal Builder), approve the POP → Buyer Code
@@ -18,8 +18,8 @@ $faKind = in_array($_GET['kind'] ?? '', ['finance', 'preauction'], true) ? $_GET
 $faQ    = trim((string)($_GET['q'] ?? ''));
 $faCsrf = e(finCsrfToken());
 $faOne  = !empty($_GET['app']) ? finGet((int)$_GET['app']) : null;
-$faOpen = ['quoted', 'chosen', 'invoiced', 'approved', 'requested', 'pop_uploaded', 'expired', 'paid'];
-$faTodo = ['chosen', 'requested', 'pop_uploaded', 'expired'];
+$faOpen = ['review', 'quoted', 'chosen', 'invoiced', 'approved', 'requested', 'pop_uploaded', 'expired', 'paid'];
+$faTodo = ['review', 'chosen', 'requested', 'pop_uploaded', 'expired'];
 
 $faRows = [];
 $faCounts = array_fill_keys(['todo', 'open', 'finance', 'preauction', 'done'], 0);
@@ -87,7 +87,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
 <div class="dashboard-header">
   <div>
     <h1><i class="fas fa-handshake"></i> Finance &amp; Pre-Auction</h1>
-    <p class="text-muted">Online in-house finance applications and pre-auction purchase requests. Pre-auction invoices are the same ones as in the <a href="invoice_generator.php">Deal Builder</a>.</p>
+    <p class="text-muted">Online finance applications and pre-auction purchase requests. Pre-auction invoices are the same ones as in the <a href="invoice_generator.php">Deal Builder</a>.</p>
   </div>
   <div style="display:flex;gap:.5rem;flex-wrap:wrap">
     <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/finance_apply.php" target="_blank"><i class="fas fa-up-right-from-square"></i> Finance form</a>
@@ -102,7 +102,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
     <div class="fa2-head"><h4><i class="fas fa-sliders"></i> Finance &amp; Pre-Auction Settings</h4></div>
     <div class="fa2-body">
       <input type="hidden" name="csrf" value="<?= $faCsrf ?>"><input type="hidden" name="action" value="settings">
-      <h5 style="color:#003f73">In-House Finance</h5>
+      <h5 style="color:#003f73">Finance</h5>
       <div class="fa2-act">
         <label>Min deposit — cars &amp; bakkies (R)<br><input class="form-control" name="fin_min_deposit" value="<?= e(finSetting('fin_min_deposit', '10500')) ?>"></label>
         <label>Min deposit — trucks &amp; plant (R)<br><input class="form-control" name="fin_min_deposit_heavy" value="<?= e(finSetting('fin_min_deposit_heavy', '50000')) ?>"></label>
@@ -113,11 +113,34 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <label><?= $m ?> months (% p/m)<br><input class="form-control" name="fin_rate_<?= $m ?>" value="<?= e((string)$r) ?>" style="width:100px"></label>
         <?php endforeach; ?>
       </div>
+      <h5 style="color:#003f73;margin-top:1rem">Credit &amp; Affordability Assessment</h5>
+      <p class="text-muted" style="font-size:.85rem">Each application is scored out of 100 (affordability 30, credit profile 25, employment 20, deposit 15, stability 10). Grade A gets the normal minimum deposit; B, C and D need a start-up deposit of a share of the price. The start-up deposit is also raised so the instalment on the longest term fits the client's budget.</p>
+      <?php $ru = finRules(); ?>
+      <div class="fa2-act">
+        <label>Grade A from (score)<br><input class="form-control" name="fin_score_a" value="<?= e((string)$ru['score_a']) ?>" style="width:100px"></label>
+        <label>Grade B from<br><input class="form-control" name="fin_score_b" value="<?= e((string)$ru['score_b']) ?>" style="width:100px"></label>
+        <label>Grade C from<br><input class="form-control" name="fin_score_c" value="<?= e((string)$ru['score_c']) ?>" style="width:100px"></label>
+      </div>
+      <div class="fa2-act">
+        <label>Start-up deposit B (% of price)<br><input class="form-control" name="fin_startup_b" value="<?= e((string)$ru['startup_b']) ?>" style="width:120px"></label>
+        <label>Start-up deposit C (%)<br><input class="form-control" name="fin_startup_c" value="<?= e((string)$ru['startup_c']) ?>" style="width:120px"></label>
+        <label>Start-up deposit D (%)<br><input class="form-control" name="fin_startup_d" value="<?= e((string)$ru['startup_d']) ?>" style="width:120px"></label>
+      </div>
+      <div class="fa2-act">
+        <label>Max instalment (% of income)<br><input class="form-control" name="fin_afford_pct" value="<?= e((string)$ru['afford_pct']) ?>" style="width:120px"></label>
+        <label>Usable share of money left over (%)<br><input class="form-control" name="fin_buffer_pct" value="<?= e((string)$ru['buffer_pct']) ?>" style="width:120px"></label>
+        <label>Min monthly income (R)<br><input class="form-control" name="fin_min_income" value="<?= e((string)$ru['min_income']) ?>" style="width:120px"></label>
+        <label>Living-cost norm (R)<br><input class="form-control" name="fin_norm_base" value="<?= e((string)$ru['norm_base']) ?>" style="width:110px"></label>
+        <label>+ per dependant (R)<br><input class="form-control" name="fin_norm_dependant" value="<?= e((string)$ru['norm_dep']) ?>" style="width:110px"></label>
+        <label>Refer applicants older than<br><input class="form-control" name="fin_max_age" value="<?= e((string)$ru['max_age']) ?>" style="width:90px"></label>
+      </div>
+      <div class="alert alert-info" style="font-size:.84rem"><i class="fas fa-circle-info"></i> <span><strong>Credit bureau checks:</strong> automatic checks need an account with a registered credit bureau (TransUnion, Experian, XDS or Compuscan) and NCR registration as a credit provider. Until an API is connected, pull the client's report on the bureau's portal (the client consented on the form) and enter the score on the application — the result, start-up deposit and quote update automatically.</span></div>
       <h5 style="color:#003f73;margin-top:1rem">Pre-Auction Commitment Fee</h5>
+      <p class="text-muted" style="font-size:.85rem">Clients no longer choose a percentage — you set it when you issue the proforma invoice, within this range.</p>
       <div class="fa2-act">
         <label>Lowest %<br><input class="form-control" name="pa_min_percent" value="<?= $mn ?>" style="width:90px"></label>
         <label>Highest %<br><input class="form-control" name="pa_max_percent" value="<?= $mx ?>" style="width:90px"></label>
-        <label>Default %<br><input class="form-control" name="pa_default_percent" value="<?= $df ?>" style="width:90px"></label>
+        <label>Pre-filled %<br><input class="form-control" name="pa_default_percent" value="<?= $df ?>" style="width:90px"></label>
       </div>
       <div style="margin-top:1rem"><button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Settings</button> <a class="btn btn-outline" href="?tab=applications">Back</a></div>
     </div>
@@ -128,7 +151,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
   <div class="fa2-grid">
     <div>
       <div class="card" style="overflow:visible;margin-bottom:1.25rem">
-        <div class="fa2-head"><h4><?= $isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance' : '<i class="fas fa-key"></i> Pre-Auction Purchase' ?> · <?= e(finRef($a)) ?></h4><?= finBadge($a) ?></div>
+        <div class="fa2-head"><h4><?= $isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance' : '<i class="fas fa-key"></i> Pre-Auction Purchase' ?> · <?= e(finRef($a)) ?></h4><?= finBadge($a) ?></div>
         <div class="fa2-body">
           <div class="fa2-row"><span class="lbl">Client</span><span class="val"><?= e($a['name']) ?></span></div>
           <div class="fa2-row"><span class="lbl">Phone</span><span class="val"><a href="tel:<?= e($a['phone']) ?>"><?= e($a['phone']) ?></a></span></div>
@@ -143,9 +166,22 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <?php if ($isFin): ?>
             <div class="fa2-row"><span class="lbl">Deposit</span><span class="val"><?= formatRand((float)$a['amount']) ?><?= !empty($d['quote']['counter']) ? ' (our suggestion)' : '' ?></span></div>
             <div class="fa2-row"><span class="lbl">Term</span><span class="val"><?= $plan ? (int)$plan['months'] . ' months × ' . formatRand($plan['monthly']) : '— not chosen yet' ?></span></div>
-            <div class="fa2-row"><span class="lbl">Employment</span><span class="val"><?= e($d['employment'] ?? '—') ?><?= !empty($d['income']) ? ' · ' . formatRand((float)$d['income']) . '/mo' : '' ?></span></div>
+            <?php if (!empty($d['applicant'])): $ap = $d['applicant']; $wk = $d['work'] ?? []; ?>
+              <div class="fa2-row"><span class="lbl">ID / passport</span><span class="val"><?= e(($ap['id_type'] ?? 'sa') === 'passport' ? 'Passport ' : 'SA ID ') ?><?= e($ap['id_number'] ?? '—') ?><?= isset($ap['age']) ? ' · age ' . (int)$ap['age'] : '' ?></span></div>
+              <div class="fa2-row"><span class="lbl">Personal</span><span class="val"><?= e(trim(($ap['title'] ?? '') . ' ' . ($ap['first_names'] ?? '') . ' ' . ($ap['surname'] ?? ''))) ?> · <?= e(FIN_MARITAL[$ap['marital'] ?? ''] ?? '—') ?> · <?= (int)($ap['dependants'] ?? 0) ?> dependant(s)</span></div>
+              <div class="fa2-row"><span class="lbl">Address</span><span class="val"><?= e($d['address'] ?? '—') ?> · <?= e(FIN_RESIDENCE[$ap['residence'] ?? ''] ?? '') ?>, <?= e((string)($ap['years_address'] ?? 0)) ?> yrs</span></div>
+              <div class="fa2-row"><span class="lbl">Employment</span><span class="val"><?= e(FIN_EMPLOYMENT[$wk['employment'] ?? ''] ?? ($d['employment'] ?? '—')) ?><?= !empty($wk['employer']) ? ' · ' . e($wk['employer']) : '' ?><?= !empty($wk['job_title']) ? ' (' . e($wk['job_title']) . ')' : '' ?><?= isset($wk['months_employed']) ? ' · ' . (int)$wk['months_employed'] . ' months' : '' ?><?= !empty($wk['employer_phone']) ? ' · ' . e($wk['employer_phone']) : '' ?></span></div>
+              <div class="fa2-row"><span class="lbl">Income</span><span class="val">Gross <?= formatRand((float)($wk['gross_income'] ?? 0)) ?> · net <?= formatRand((float)($wk['net_income'] ?? 0)) ?><?= !empty($wk['other_income']) ? ' · other ' . formatRand((float)$wk['other_income']) : '' ?> · paid <?= e($wk['pay_day'] ?? '—') ?></span></div>
+              <?php $fi = $d['finances'] ?? []; ?>
+              <div class="fa2-row"><span class="lbl">Expenses</span><span class="val">Housing <?= formatRand((float)($fi['exp_housing'] ?? 0)) ?> · living <?= formatRand((float)($fi['exp_living'] ?? 0)) ?> · debt <?= formatRand((float)($fi['exp_debt'] ?? 0)) ?> · other <?= formatRand((float)($fi['exp_other'] ?? 0)) ?></span></div>
+              <div class="fa2-row"><span class="lbl">Credit (declared)</span><span class="val"><?= e(FIN_CREDIT_BANDS[$fi['credit_band'] ?? 'unknown'][0] ?? '—') ?><?= !empty($fi['credit_score']) ? ' · ' . (int)$fi['credit_score'] : '' ?><?= !empty($fi['debt_review']) ? ' · DEBT REVIEW' : '' ?><?= !empty($fi['judgments']) ? ' · JUDGMENTS' : '' ?></span></div>
+              <div class="fa2-row"><span class="lbl">Bank</span><span class="val"><?= e($d['bank']['name'] ?? '—') ?> · <?= e((string)($d['bank']['years'] ?? 0)) ?> yrs</span></div>
+              <div class="fa2-row"><span class="lbl">Consent</span><span class="val"><?= !empty($d['consent']['credit_check']) ? 'Credit check, POPIA &amp; terms accepted ' . safeDate('d M Y H:i', $d['consent']['at']) : '—' ?></span></div>
+            <?php else: ?>
+              <div class="fa2-row"><span class="lbl">Employment</span><span class="val"><?= e($d['employment'] ?? '—') ?><?= !empty($d['income']) ? ' · ' . formatRand((float)$d['income']) . '/mo' : '' ?></span></div>
+            <?php endif; ?>
           <?php else: ?>
-            <div class="fa2-row"><span class="lbl">Commitment fee</span><span class="val"><?= paPercent($a) ?>% = <?= formatRand($inv ? (float)$inv['commitment_fee_amount'] : paCommitment($a)) ?></span></div>
+            <div class="fa2-row"><span class="lbl">Commitment fee</span><span class="val"><?= paPercent($a) > 0 ? paPercent($a) . '% = ' . formatRand($inv ? (float)$inv['commitment_fee_amount'] : paCommitment($a)) : 'Not set yet — you set it on the proforma invoice' ?></span></div>
             <div class="fa2-row"><span class="lbl">Alternative</span><span class="val"><?= e($d['alt']['title'] ?? '—') ?></span></div>
             <div class="fa2-row"><span class="lbl">Mechanic</span><span class="val"><?= !empty($d['mechanic']) ? 'Yes' : 'No' ?></span></div>
             <div class="fa2-row"><span class="lbl">Invoice</span><span class="val"><?= $inv ? e($inv['invoice_number']) . ' · ' . e($inv['status']) . ' · expires ' . safeDate('d M H:i', $inv['expires_at']) : '— not issued' ?></span></div>
@@ -172,7 +208,9 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
       <?php if (!finClosed($a)): ?>
       <div class="fa2-next">
         <h5><i class="fas fa-bolt"></i> Next Step</h5>
-        <?php if ($isFin && $a['status'] === 'quoted'): ?>
+        <?php if ($isFin && $a['status'] === 'review'): ?>
+          <p style="font-size:.88rem">The assessment <strong>referred</strong> this application: <?= e(implode(' ', $d['assessment']['reasons'] ?? [])) ?> Call the client — then enter a bureau score below, suggest a deposit (this opens the terms to the client), or decline.</p>
+        <?php elseif ($isFin && $a['status'] === 'quoted'): ?>
           <p class="text-muted" style="font-size:.86rem">Waiting for the client to choose a term.</p>
           <?= $faForm($id, 'resend', '<input type="hidden" name="what" value="quote">', '<i class="fas fa-paper-plane"></i> Email the quote again', 'btn-outline') ?>
         <?php elseif ($isFin && $a['status'] === 'chosen'): ?>
@@ -185,14 +223,13 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <?= $faForm($id, 'viewing', '<label>Test-drive day<br><input class="form-control" type="date" name="date" required value="' . e($d['viewing']['date'] ?? '') . '"></label><label>Time<br><input class="form-control" type="time" name="time" required value="' . e($d['viewing']['time'] ?? '10:00') . '"></label><label>Note<br><input class="form-control" name="note" style="width:180px"></label>', '<i class="fas fa-calendar-check"></i> Confirm Test Drive') ?>
           <?= $faForm($id, 'complete', '<label>Note<br><input class="form-control" name="note" placeholder="Agreement signed" style="width:220px"></label>', '<i class="fas fa-flag-checkered"></i> Signed &amp; Driven Away', 'btn-success', 'Mark this completed?') ?>
         <?php endif; ?>
-        <?php if ($isFin && in_array($a['status'], ['quoted', 'chosen'], true)): ?>
+        <?php if ($isFin && in_array($a['status'], ['review', 'quoted', 'chosen'], true)): ?>
           <?= $faForm($id, 'counter_deposit', '<label>Suggest deposit (R)<br><input class="form-control" name="deposit" required style="width:130px"></label><label>Note to client<br><input class="form-control" name="note" style="width:220px"></label>', 'Suggest Higher Deposit', 'btn-outline') ?>
         <?php endif; ?>
 
-        <?php if (!$isFin && in_array($a['status'], ['requested', 'expired'], true)): [$mn, $mx] = paRange();
-          $opts = ''; for ($p = $mn; $p <= $mx; $p += 5) $opts .= '<option value="' . $p . '"' . ($p === paPercent($a) ? ' selected' : '') . '>' . $p . '%</option>'; ?>
-          <p style="font-size:.88rem"><?= $a['status'] === 'expired' ? 'The 24-hour window closed without payment. Re-issue if the vehicle is still available, or decline.' : 'Client asked for <strong>' . (int)$a['percent'] . '%</strong>. Issue the proforma invoice — it goes into the Deal Builder\'s pre-auction invoices and is emailed to the client (valid 24 hours).' ?></p>
-          <?= $faForm($id, 'pa_invoice', '<label>Commitment fee<br><select class="form-control" name="percent">' . $opts . '</select></label><label>Note on the invoice email<br><input class="form-control" name="note" style="width:240px"></label>', '<i class="fas fa-file-invoice-dollar"></i> ' . ($a['status'] === 'expired' ? 'Re-issue' : 'Issue') . ' Proforma Invoice', 'btn-success') ?>
+        <?php if (!$isFin && in_array($a['status'], ['requested', 'expired'], true)): [$mn, $mx, $df] = paRange(); $cur = paPercent($a) ?: $df; ?>
+          <p style="font-size:.88rem"><?= $a['status'] === 'expired' ? 'The 24-hour window closed without payment. Re-issue if the vehicle is still available, or decline.' : 'Decide the <strong>commitment fee</strong> (' . $mn . '–' . $mx . '% of ' . formatRand((float)$a['price']) . ') and issue the proforma invoice — it goes into the Deal Builder\'s pre-auction invoices and is emailed to the client (valid 24 hours).' ?></p>
+          <?= $faForm($id, 'pa_invoice', '<label>Commitment fee (%)<br><input class="form-control" type="number" name="percent" min="' . $mn . '" max="' . $mx . '" step="1" value="' . $cur . '" required style="width:100px" oninput="var f=this.form.querySelector(\'.pa-fee\');if(f)f.textContent=\'= R\'+Math.round(' . (float)$a['price'] . '*this.value/100).toLocaleString(\'en-ZA\')"> <small class="pa-fee" style="font-weight:700;color:#003f73">= ' . formatRand(round((float)$a['price'] * $cur / 100)) . '</small></label><label>Note on the invoice email<br><input class="form-control" name="note" style="width:240px"></label>', '<i class="fas fa-file-invoice-dollar"></i> ' . ($a['status'] === 'expired' ? 'Re-issue' : 'Issue') . ' Proforma Invoice', 'btn-success') ?>
         <?php elseif (!$isFin && in_array($a['status'], ['invoiced', 'pop_uploaded'], true)): ?>
           <p style="font-size:.88rem"><?= $a['status'] === 'pop_uploaded' ? 'Proof of payment uploaded — verify it with the bank, then approve.' : 'Waiting for the commitment fee (invoice expires ' . e(safeDate('d M H:i', $inv['expires_at'] ?? '')) . ').' ?></p>
           <?= $faForm($id, 'pa_approve', '<label>Note in the Buyer Code email<br><input class="form-control" name="note" style="width:240px"></label>', '<i class="fas fa-id-badge"></i> Approve &amp; Send Buyer Code', 'btn-success', 'Has the commitment fee been verified?') ?>
@@ -229,11 +266,39 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
     </div>
 
     <div>
+      <?php if ($isFin && !empty($d['assessment'])): $as = $d['assessment']; $gc = finGradeColour($as['grade']); ?>
+      <div class="card" style="overflow:visible;margin-bottom:1.25rem">
+        <div class="fa2-head"><h4><i class="fas fa-chart-simple"></i> Assessment</h4><span class="badge" style="color:<?= $gc ?>;font-weight:800"><?= (int)$as['score'] ?>/100 · <?= $as['grade'] === 'R' ? 'Referred' : 'Grade ' . e($as['grade']) ?></span></div>
+        <div class="fa2-body">
+          <p style="margin:0 0 .6rem;font-weight:700;color:<?= $gc ?>"><?= e($as['label']) ?></p>
+          <?php foreach ($as['points'] as [$l, $p, $m, $n]): ?>
+            <div style="margin:.35rem 0"><div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:700"><span><?= e($l) ?></span><span><?= (int)$p ?> / <?= (int)$m ?></span></div>
+              <div style="height:6px;background:#e5ecf4;border-radius:6px;overflow:hidden;margin:.15rem 0"><i style="display:block;height:100%;width:<?= round($p / max(1, $m) * 100) ?>%;background:<?= $gc ?>"></i></div>
+              <div style="font-size:.74rem;color:#778"><?= e($n) ?></div></div>
+          <?php endforeach; ?>
+          <?php foreach ($as['reasons'] as $why): ?><p style="font-size:.82rem;color:#a30000;margin:.4rem 0 0"><i class="fas fa-triangle-exclamation"></i> <?= e($why) ?></p><?php endforeach; ?>
+          <div style="margin-top:.75rem">
+            <div class="fa2-row"><span class="lbl">Income</span><span class="val"><?= formatRand($as['income']) ?></span></div>
+            <div class="fa2-row"><span class="lbl">Expenses (norm <?= formatRand($as['living_norm']) ?>)</span><span class="val"><?= formatRand($as['expenses']) ?></span></div>
+            <div class="fa2-row"><span class="lbl">Left over</span><span class="val" style="color:<?= $as['free'] > 0 ? '#1a9e4e' : '#a30000' ?>"><?= formatRand($as['free']) ?></span></div>
+            <div class="fa2-row"><span class="lbl">Max instalment</span><span class="val"><?= formatRand($as['max_instalment']) ?></span></div>
+            <div class="fa2-row"><span class="lbl">Max to lend (<?= (int)$as['longest'] ?> m)</span><span class="val"><?= formatRand($as['max_lend']) ?></span></div>
+            <div class="fa2-row"><span class="lbl">Deposit offered → quoted</span><span class="val"><?= formatRand((float)($d['quote']['offered'] ?? $a['amount'])) ?> → <?= formatRand((float)($d['quote']['deposit'] ?? $a['amount'])) ?><?= !empty($d['quote']['startup']) ? ' (start-up)' : '' ?></span></div>
+            <div class="fa2-row"><span class="lbl">Credit score source</span><span class="val"><?= $as['credit_source'] === 'bureau' ? 'Bureau — ' . (int)($d['bureau']['score'] ?? 0) . (!empty($d['bureau']['bureau']) ? ' (' . e($d['bureau']['bureau']) . ')' : '') : 'Client\'s own estimate' ?></span></div>
+          </div>
+          <?php if (in_array($a['status'], ['review', 'quoted', 'chosen'], true)): ?>
+            <h5 style="color:#003f73;margin:1rem 0 .3rem;font-size:.9rem"><i class="fas fa-magnifying-glass-chart"></i> Enter the credit bureau score</h5>
+            <p class="text-muted" style="font-size:.8rem;margin:0 0 .3rem">The client consented to a bureau enquiry. Pull the report, enter the score — the result is re-scored; if it needs a higher start-up deposit, a new quote is emailed.</p>
+            <?= $faForm($id, 'bureau', '<label>Score (0–999)<br><input class="form-control" type="number" name="score" min="0" max="999" required style="width:100px" value="' . e((string)($d['bureau']['score'] ?? '')) . '"></label><label>Bureau<br><select class="form-control" name="bureau"><option>TransUnion</option><option>Experian</option><option>XDS</option><option>Compuscan</option><option>Other</option></select></label><label style="display:flex;gap:.3rem;align-items:center;margin-bottom:.4rem"><input type="checkbox" name="debt_review" value="1"' . (!empty($d['finances']['debt_review']) ? ' checked' : '') . '> Debt review</label><label style="display:flex;gap:.3rem;align-items:center;margin-bottom:.4rem"><input type="checkbox" name="judgments" value="1"' . (!empty($d['finances']['judgments']) ? ' checked' : '') . '> Judgments</label><label>Note<br><input class="form-control" name="note" style="width:180px"></label>', '<i class="fas fa-rotate"></i> Re-score', 'btn-primary') ?>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
       <?php if ($isFin && !empty($d['quote'])): ?>
       <div class="card" style="overflow:visible;margin-bottom:1.25rem">
         <div class="fa2-head"><h4>Quote <?= e($d['quote']['number']) ?></h4></div>
         <table class="fa2-table"><thead><tr><th>Term</th><th>p/m</th><th>Monthly</th></tr></thead><tbody>
-          <?php foreach ($d['quote']['plans'] as $p): ?><tr style="cursor:default<?= $plan && $plan['months'] === $p['months'] ? ';background:#f1fbf5;font-weight:700' : '' ?>"><td><?= $p['months'] ?> months</td><td><?= $p['rate'] ?>%</td><td><?= formatRand($p['monthly']) ?></td></tr><?php endforeach; ?>
+          <?php foreach ($d['quote']['plans'] as $p): ?><tr style="cursor:default<?= $plan && $plan['months'] === $p['months'] ? ';background:#f1fbf5;font-weight:700' : '' ?><?= finPlanAllowed($p) ? '' : ';opacity:.5' ?>"><td><?= $p['months'] ?> months<?= finPlanAllowed($p) ? '' : ' <small>(over budget)</small>' ?></td><td><?= $p['rate'] ?>%</td><td><?= formatRand($p['monthly']) ?></td></tr><?php endforeach; ?>
         </tbody></table>
       </div>
       <?php endif; ?>
@@ -280,7 +345,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <td><a href="?tab=applications&amp;app=<?= (int)$a['id'] ?>"><strong><?= e(finRef($a)) ?></strong></a><br><small class="text-muted"><?= $a['kind'] === 'finance' ? 'Finance' : 'Pre-auction' ?></small></td>
           <td><strong><?= e($a['name']) ?></strong><br><small class="text-muted"><?= e($a['phone']) ?></small></td>
           <td><?= e($a['vehicle']) ?><br><small class="text-muted"><?= formatRand((float)$a['price']) ?></small></td>
-          <td><?= $a['kind'] === 'finance' ? 'Deposit ' . formatRand((float)$a['amount']) . ($a['months'] ? '<br><small class="text-muted">' . (int)$a['months'] . ' months</small>' : '') : paPercent($a) . '% = ' . formatRand(paCommitment($a)) ?></td>
+          <td><?= $a['kind'] === 'finance' ? 'Deposit ' . formatRand((float)$a['amount']) . ($a['months'] ? '<br><small class="text-muted">' . (int)$a['months'] . ' months</small>' : '') . (isset($a['details']['assessment']['score']) ? '<br><small style="font-weight:700;color:' . finGradeColour($a['details']['assessment']['grade']) . '">Score ' . (int)$a['details']['assessment']['score'] . ' · ' . ($a['details']['assessment']['grade'] === 'R' ? 'referred' : 'grade ' . e($a['details']['assessment']['grade'])) . '</small>' : '') : (paPercent($a) > 0 ? paPercent($a) . '% = ' . formatRand(paCommitment($a)) : '<small class="text-muted">Fee to set</small>') ?></td>
           <td><?= finBadge($a) ?><?= $a['buyer_code'] ? '<br><small class="text-muted">' . e($a['buyer_code']) . '</small>' : '' ?></td>
           <td><small class="text-muted"><?= safeDate('d M H:i', $a['updated_at']) ?></small></td>
         </tr>

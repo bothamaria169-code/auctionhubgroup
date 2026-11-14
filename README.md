@@ -24,6 +24,11 @@ open items in [TODO.md](TODO.md).
 person with Call / WhatsApp / Email / Log call and call scripts), Admin → **Email & WA Templates**, and a
 "Waiting on you" bar on the Overview. How to use them: [docs/LEADS-GUIDE.md](docs/LEADS-GUIDE.md).
 
+**Google Ads (13 Nov 2026):** a R1,000, 10-day Search test for KZN, Eastern Cape, Free State and Western Cape
+(Gauteng excluded): [docs/AHG_GOOGLE_ADS_10DAY_EXPANSION.md](docs/AHG_GOOGLE_ADS_10DAY_EXPANSION.md), with a
+web version and a tickable checklist at https://claude.ai/artifact/7VWJjXV4eTsYKAYYN3G3sT. Fill in the
+`GADS_LABEL_*` conversion labels in `config.php` before launching.
+
 ---
 
 ## Table of Contents

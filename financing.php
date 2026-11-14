@@ -1,599 +1,338 @@
 <?php
 // ============================================================
 // AUCTION HUB GROUP — financing.php
-// In-House Vehicle Finance — Everyone Qualifies
+// Vehicle Finance: how we assess you (score out of 100, grades
+// A–D, start-up deposit), a "Do I qualify?" pre-check (finance_check.php,
+// same rules as the real assessment), a repayment calculator, free credit
+// score checks, documents, key terms and FAQ → finance_apply.php.
+// All figures come from Admin → Finance & Pre-Auction → Settings.
 // ============================================================
-$pageTitle       = 'In-House Vehicle Finance — No Credit Checks';
-$pageDescription = 'Auction Hub Group offers in-house vehicle finance with no credit checks, no ITC, and no bureau inquiries. Blacklisted? Low credit score? Everyone qualifies. R10,500 deposit.';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/finance_helper.php';
+
+$rules   = finRules();
+$minStd  = (float)finSetting('fin_min_deposit', '10500');
+$minHvy  = (float)finSetting('fin_min_deposit_heavy', '50000');
+$tiers   = finTiers();
+$tiersH  = finTiers(['body_type' => 'truck']);
+$maxTerm = max(array_keys($tiersH));
+$lots    = [];
+try { $lots = finEligibleLots(); } catch (Throwable $e) { /* table not ready: the price field still works */ }
+$R = fn($n) => formatRand((float)$n);
+
+$pageTitle       = 'Vehicle Finance — Check If You Qualify';
+$pageDescription = 'Auction Hub Group vehicle finance: see your finance score in minutes. Strong score? Approved from ' . formatRand($minStd) . ' deposit. Low score or blacklisted? Qualify with a start-up deposit. Terms 6–' . $maxTerm . ' months.';
 $bodyClass       = 'page-financing';
 require_once __DIR__ . '/header.php';
+require __DIR__ . '/fin_ui.php';
+
+finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Your Next Vehicle With Us',
+    'One application, an instant <strong style="color:#fff">finance score out of 100</strong> and a clear answer. A strong score is approved from ' . e($R($minStd)) . ' deposit — a low score, debt review or blacklisting can still qualify with a <strong style="color:#fff">start-up deposit</strong>.',
+    'Finance',
+    ['Instant score & quote', 'From ' . e($R($minStd)) . ' deposit', 'Terms 6–' . $maxTerm . ' months', 'Blacklisted? Ask about a start-up deposit']);
 ?>
-
-<!-- ═══════════ HERO ═══════════ -->
-<section style="background:linear-gradient(135deg,#003f73 0%,#005BA1 50%,#0078d7 100%);padding:5rem 1.5rem 4rem;text-align:center;position:relative;overflow:hidden;">
-    <div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.05) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;"></div>
-    <div class="container" style="position:relative;z-index:1;">
-        <div style="display:inline-block;background:rgba(37,211,102,.15);border:1px solid rgba(37,211,102,.4);border-radius:50px;padding:.4rem 1.25rem;margin-bottom:1.25rem;">
-            <span style="color:#6eff9e;font-size:.82rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">
-                <i class="fas fa-check-circle"></i> Everyone Qualifies
-            </span>
-        </div>
-        <h1 style="color:#fff;font-size:clamp(2.2rem,5vw,3.6rem);line-height:1.1;margin-bottom:1.25rem;">In-House Vehicle Finance</h1>
-        <p style="color:rgba(255,255,255,.85);font-size:1.15rem;max-width:680px;margin:0 auto 1.5rem;line-height:1.7;">
-            Blacklisted? Low credit score? Rejected by the bank? <strong style="color:#fff;">That's not a problem here.</strong>
-            We believe everyone deserves a second chance at driving their own vehicle &mdash; and we back that belief with a finance solution that works <em>for you</em>, not against you.
-        </p>
-        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;margin-bottom:2rem;">
-            <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:.5rem 1rem;color:#fff;font-size:.85rem;font-weight:600;">
-                <i class="fas fa-xmark" style="color:#ff6b6b;margin-right:.3rem;"></i> No Credit Checks
-            </span>
-            <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:.5rem 1rem;color:#fff;font-size:.85rem;font-weight:600;">
-                <i class="fas fa-xmark" style="color:#ff6b6b;margin-right:.3rem;"></i> No ITC
-            </span>
-            <span style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:.5rem 1rem;color:#fff;font-size:.85rem;font-weight:600;">
-                <i class="fas fa-xmark" style="color:#ff6b6b;margin-right:.3rem;"></i> No Bureau Inquiries
-            </span>
-            <span style="background:rgba(37,211,102,.2);border:1px solid rgba(37,211,102,.4);border-radius:8px;padding:.5rem 1rem;color:#6eff9e;font-size:.85rem;font-weight:600;">
-                <i class="fas fa-check" style="margin-right:.3rem;"></i> Blacklisted Welcome
-            </span>
-        </div>
-        <nav aria-label="Breadcrumb" style="color:rgba(255,255,255,.5);font-size:.87rem;">
-            <a href="<?= APP_URL ?>/index.php" style="color:rgba(255,255,255,.6);text-decoration:none;">Home</a>
-            <span style="margin:0 .5rem;">/</span>
-            <span style="color:#fff;">In-House Finance</span>
-        </nav>
-    </div>
-</section>
-
-<!-- ═══════════ FULL-WIDTH FINANCE BANNER ═══════════ -->
-<div style="width:100%;overflow:hidden;line-height:0;background:#001F5C;">
-    <img src="<?= APP_URL ?>/assets/images/finance.jpg"
-         alt="In-House Finance — Latest Clients Are Welcome — Auction Hub Group"
-         class="ahg-finance-banner"
-         style="width:100%;height:auto;display:block;object-fit:cover;object-position:center;"
-         loading="lazy">
-</div>
 <style>
-@media (min-width:768px){
-  .ahg-finance-banner { height:560px; }
-}
+.fp-cta { display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap; margin:-1.6rem auto 0; position:relative; z-index:2; }
+.fp-cta .btn { box-shadow:0 8px 24px rgba(0,40,100,.25); }
+.fp-block { margin-bottom:2.75rem; }
+.fp-head { text-align:center; max-width:760px; margin:0 auto 1.5rem; }
+.fp-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr)); gap:1rem; }
+.fp-card { background:#fff; border-radius:14px; padding:1.4rem; box-shadow:0 2px 16px rgba(0,0,0,.06); border-top:4px solid var(--c,#005BA1); }
+.fp-card .ic { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:var(--c,#005BA1); color:#fff; margin-bottom:.8rem; font-size:1.1rem; }
+.fp-card h3 { font-family:'Barlow Condensed',sans-serif; font-size:1.25rem; color:#003f73; margin:0 0 .35rem; }
+.fp-card p { font-size:.88rem; color:#556; line-height:1.65; margin:0; }
+.fp-grades { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); gap:1rem; margin-top:1.25rem; }
+.fp-grade { background:#fff; border-radius:14px; padding:1.2rem; box-shadow:0 2px 16px rgba(0,0,0,.06); display:flex; gap:.9rem; align-items:flex-start; }
+.fp-grade .g { width:52px; height:52px; border-radius:50%; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:1.7rem; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.fp-grade strong { display:block; color:#003f73; }
+.fp-grade small { color:#667; font-size:.82rem; line-height:1.55; display:block; margin-top:.15rem; }
+.fp-weights { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.5rem; margin-top:1.25rem; }
+.fp-weights div { background:#fff; border-radius:12px; padding:.9rem .5rem; text-align:center; box-shadow:0 2px 12px rgba(0,0,0,.05); }
+.fp-weights b { display:block; font-family:'Barlow Condensed',sans-serif; font-size:1.8rem; color:#005BA1; line-height:1; }
+.fp-weights span { font-size:.75rem; color:#556; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+@media(max-width:700px){ .fp-weights { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.fp-calc table { width:100%; border-collapse:collapse; font-size:.9rem; }
+.fp-calc th { background:#003f73; color:#fff; padding:.65rem .8rem; text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; }
+.fp-calc td { padding:.65rem .8rem; border-bottom:1px solid #eef2f7; }
+.fp-calc td.m { font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:800; color:#1a9e4e; }
+.fp-bureaus { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); gap:.75rem; margin:1rem 0; }
+.fp-bureaus a { display:block; background:#f4f8ff; border:1.5px solid #d5e3f3; border-radius:12px; padding:.9rem 1rem; text-decoration:none; color:#003f73; font-weight:700; }
+.fp-bureaus a small { display:block; color:#667; font-weight:500; font-size:.78rem; margin-top:.2rem; }
+.fp-bureaus a:hover { border-color:#005BA1; }
+.fp-bands { width:100%; border-collapse:collapse; font-size:.86rem; }
+.fp-bands td { padding:.5rem .6rem; border-bottom:1px solid #eef2f7; }
+.fp-bands td:first-child { width:12px; padding:0; }
 </style>
 
-<main style="padding:4rem 1.5rem;background:#f5f7fa;">
-<div class="container" style="max-width:1080px;margin:0 auto;">
+<div class="ap-container fp-cta">
+  <a class="btn btn-primary btn-lg" href="#qualify"><i class="fas fa-gauge-high"></i> Do I Qualify?</a>
+  <a class="btn btn-success btn-lg" href="<?= APP_URL ?>/finance_apply.php"><i class="fas fa-file-signature"></i> Apply Now</a>
+</div>
 
-    <!-- ═══════════ WHO QUALIFIES + DEPOSIT + TERMS GRID ═══════════ -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:1.5rem;margin-bottom:2.5rem;">
+<section class="ap-section">
+<div class="ap-container">
 
-        <!-- WHO QUALIFIES -->
-        <div style="background:#fff;border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-top:4px solid #25D366;">
-            <div style="width:48px;height:48px;background:linear-gradient(135deg,#25D366,#20bd5a);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem;">
-                <i class="fas fa-users" style="color:#fff;font-size:1.2rem;"></i>
-            </div>
-            <h3 style="color:#003f73;font-size:1.15rem;margin-bottom:1rem;">We Welcome All Clients</h3>
-            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.65rem;">
-                <?php
-                $clients = [
-                    'Blacklisted clients',
-                    'Low or no credit score',
-                    'Previously declined by banks',
-                    'Clients under debt review',
-                    'First-time buyers',
-                ];
-                foreach ($clients as $c): ?>
-                <li style="display:flex;gap:.6rem;align-items:center;font-size:.92rem;color:#444;">
-                    <i class="fas fa-circle-check" style="color:#25D366;flex-shrink:0;"></i> <?= $c ?>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-
-        <!-- DEPOSIT -->
-        <div style="background:linear-gradient(135deg,#005BA1,#003f73);border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);color:#fff;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;">
-            <p style="text-transform:uppercase;letter-spacing:.12em;font-size:.78rem;font-weight:600;color:rgba(255,255,255,.7);margin-bottom:.75rem;">Minimum Deposit</p>
-            <div style="font-size:3.2rem;font-weight:800;line-height:1;margin-bottom:.5rem;font-family:'Barlow Condensed',sans-serif;">R10,500</div>
-            <p style="color:rgba(255,255,255,.7);font-size:.88rem;margin-bottom:.5rem;">One-time. No credit checks.</p>
-            <p style="color:#6eff9e;font-size:.82rem;font-weight:600;margin-bottom:1.25rem;">Pay any amount above R10,500 to reduce your instalments</p>
-            <a href="<?= APP_URL ?>/finance_apply.php"
-               style="background:#005BA1;color:#fff;padding:.75rem 1.75rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.9rem;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="fas fa-file-signature"></i> Apply Now &mdash; Instant Quote
-            </a>
-        </div>
-
-        <!-- FLEXIBLE TERMS -->
-        <div style="background:#fff;border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-top:4px solid #e8a000;">
-            <div style="width:48px;height:48px;background:linear-gradient(135deg,#e8a000,#f5c842);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem;">
-                <i class="fas fa-calendar-check" style="color:#fff;font-size:1.2rem;"></i>
-            </div>
-            <h3 style="color:#003f73;font-size:1.15rem;margin-bottom:1rem;">Flexible Repayment Plans</h3>
-            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.65rem;">
-                <?php
-                $plans = [
-                    ['6 Months','Lowest total cost'],
-                    ['12 Months','Balanced payments'],
-                    ['24 Months','Comfortable instalments'],
-                    ['36 Months','Lower monthly payments'],
-                    ['48 Months','Maximum flexibility'],
-                ];
-                foreach ($plans as [$term,$label]): ?>
-                <li style="display:flex;gap:.6rem;align-items:center;font-size:.92rem;color:#444;">
-                    <i class="fas fa-circle-check" style="color:#e8a000;flex-shrink:0;"></i>
-                    <span><strong><?= $term ?></strong> &mdash; <?= $label ?></span>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
+  <!-- ═══ HOW WE ASSESS ═══ -->
+  <div class="fp-block">
+    <div class="fp-head">
+      <span class="ap-label"><i class="fas fa-scale-balanced"></i> How Approval Works</span>
+      <h2 class="ap-title">A Real Assessment — and a Clear Answer</h2>
+      <p class="ap-sub">We check every application for affordability and credit, as responsible lending requires. You get a score out of 100 the moment you apply. Your score decides the deposit you need — not whether you are welcome.</p>
     </div>
-
-    <!-- ═══════════ INTERACTIVE FINANCE CALCULATOR ═══════════ -->
-    <div id="pva-finance-calc" style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2.5rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-top:4px solid #005BA1;">
-        <h2 style="color:#003f73;font-size:1.5rem;margin-bottom:.35rem;display:flex;align-items:center;gap:.75rem;">
-            <i class="fas fa-calculator" style="color:#005BA1;"></i> Finance Calculator
-        </h2>
-        <p style="color:#777;font-size:.88rem;margin-bottom:2rem;">Enter any vehicle price and deposit to see your estimated monthly instalments across all repayment terms.</p>
-
-        <!-- INPUT ROW -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:1.25rem;margin-bottom:1.5rem;">
-            <!-- Vehicle Price -->
-            <div>
-                <label for="fc-price" style="display:block;color:#003f73;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Vehicle Price (R)</label>
-                <div style="position:relative;">
-                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#888;font-weight:600;font-size:.95rem;">R</span>
-                    <input type="text" id="fc-price" value="60,000" inputmode="numeric"
-                        style="width:100%;padding:.75rem .75rem .75rem 28px;border:2px solid #d0d8e4;border-radius:10px;font-size:1.05rem;font-weight:600;color:#003f73;outline:none;transition:border-color .2s;box-sizing:border-box;"
-                        onfocus="this.style.borderColor='#005BA1'" onblur="this.style.borderColor='#d0d8e4'">
-                </div>
-            </div>
-            <!-- Deposit -->
-            <div>
-                <label for="fc-deposit" style="display:block;color:#003f73;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Deposit (R) <span style="font-weight:500;color:#888;text-transform:none;letter-spacing:0;">min R10,500 &mdash; increase to lower instalments</span></label>
-                <div style="position:relative;">
-                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#888;font-weight:600;font-size:.95rem;">R</span>
-                    <input type="text" id="fc-deposit" value="10,500" inputmode="numeric"
-                        style="width:100%;padding:.75rem .75rem .75rem 28px;border:2px solid #d0d8e4;border-radius:10px;font-size:1.05rem;font-weight:600;color:#003f73;outline:none;transition:border-color .2s;box-sizing:border-box;"
-                        onfocus="this.style.borderColor='#005BA1'" onblur="this.style.borderColor='#d0d8e4'">
-                </div>
-            </div>
-            <!-- Financed Amount (read-only) -->
-            <div>
-                <label style="display:block;color:#003f73;font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Amount Financed</label>
-                <div id="fc-financed" style="padding:.75rem;border:2px solid #e8f3fc;border-radius:10px;font-size:1.05rem;font-weight:700;color:#005BA1;background:#f0f7ff;box-sizing:border-box;">R49,500</div>
-            </div>
-        </div>
-
-        <!-- QUICK DEPOSIT BUTTONS -->
-        <div style="margin-bottom:1.25rem;">
-            <p style="font-size:.78rem;font-weight:700;color:#003f73;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">
-                <i class="fas fa-bolt" style="color:#e8a000;"></i> Quick Deposit — pay more, save more:
-            </p>
-            <div id="fc-quick-btns" style="display:flex;flex-wrap:wrap;gap:.5rem;">
-                <button type="button" onclick="window._fcSetDeposit(10500)" class="fc-quick-btn fc-quick-active"
-                    style="padding:.45rem 1rem;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:2px solid #005BA1;background:#005BA1;color:#fff;transition:all .2s;">
-                    R10,500 <span style="font-weight:400;opacity:.8;">min</span>
-                </button>
-                <button type="button" onclick="window._fcSetDeposit(15000)" class="fc-quick-btn"
-                    style="padding:.45rem 1rem;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:2px solid #d0d8e4;background:#fff;color:#003f73;transition:all .2s;">
-                    R15,000
-                </button>
-                <button type="button" onclick="window._fcSetDeposit(20000)" class="fc-quick-btn"
-                    style="padding:.45rem 1rem;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:2px solid #d0d8e4;background:#fff;color:#003f73;transition:all .2s;">
-                    R20,000
-                </button>
-                <button type="button" onclick="window._fcSetDeposit(25000)" class="fc-quick-btn"
-                    style="padding:.45rem 1rem;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:2px solid #d0d8e4;background:#fff;color:#003f73;transition:all .2s;">
-                    R25,000
-                </button>
-                <button type="button" onclick="window._fcSetDeposit(30000)" class="fc-quick-btn"
-                    style="padding:.45rem 1rem;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:2px solid #d0d8e4;background:#fff;color:#003f73;transition:all .2s;">
-                    R30,000
-                </button>
-            </div>
-        </div>
-
-        <!-- SAVINGS INDICATOR -->
-        <div id="fc-savings" style="display:none;background:linear-gradient(135deg,#e6f9ee,#f0fff5);border:1px solid #b7e2c5;border-radius:10px;padding:.75rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.75rem;">
-            <div style="width:40px;height:40px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <i class="fas fa-piggy-bank" style="color:#fff;font-size:1rem;"></i>
-            </div>
-            <div>
-                <div style="font-size:.82rem;font-weight:700;color:#155724;">
-                    <i class="fas fa-arrow-down"></i> You save <span id="fc-savings-amount" style="color:#25D366;">R0</span>/month compared to minimum deposit
-                </div>
-                <div style="font-size:.75rem;color:#3d8b5e;" id="fc-savings-total">That's R0 less over the full term</div>
-            </div>
-        </div>
-
-        <!-- DEPOSIT WARNING -->
-        <div id="fc-deposit-warn" style="display:none;background:#fff3cd;border:1px solid #ffe08a;border-radius:8px;padding:.6rem 1rem;margin-bottom:1.25rem;font-size:.84rem;color:#856404;">
-            <i class="fas fa-triangle-exclamation"></i> Minimum deposit is <strong>R10,500</strong>. Amount has been adjusted.
-        </div>
-
-        <!-- RESULTS TABLE -->
-        <div style="overflow-x:auto;">
-            <table id="fc-table" style="width:100%;border-collapse:collapse;min-width:560px;">
-                <thead>
-                    <tr style="background:linear-gradient(135deg,#005BA1,#003f73);">
-                        <th style="padding:.85rem 1rem;text-align:left;color:#fff;font-size:.82rem;font-weight:700;letter-spacing:.04em;border-radius:10px 0 0 0;">Term</th>
-                        <th style="padding:.85rem 1rem;text-align:center;color:#fff;font-size:.82rem;font-weight:700;letter-spacing:.04em;">Rate</th>
-                        <th style="padding:.85rem 1rem;text-align:center;color:#fff;font-size:.82rem;font-weight:700;letter-spacing:.04em;">Monthly Instalment</th>
-                        <th style="padding:.85rem 1rem;text-align:center;color:#fff;font-size:.82rem;font-weight:700;letter-spacing:.04em;">Total Repayable</th>
-                        <th style="padding:.85rem 1rem;text-align:center;color:#fff;font-size:.82rem;font-weight:700;letter-spacing:.04em;">Total Interest</th>
-                        <th style="padding:.85rem 1rem;text-align:center;color:#fff;font-size:.82rem;font-weight:700;letter-spacing:.04em;border-radius:0 10px 0 0;"></th>
-                    </tr>
-                </thead>
-                <tbody id="fc-body">
-                    <!-- Populated by JS -->
-                </tbody>
-            </table>
-        </div>
-
-        <p style="color:#999;font-size:.78rem;margin-top:1rem;font-style:italic;">
-            * Rates shown are indicative only. Your actual rate will be confirmed in your personalised quote.
-        </p>
-
-        <!-- SELECTED PLAN SUMMARY -->
-        <div id="fc-summary" style="display:none;margin-top:1.5rem;background:linear-gradient(135deg,#003f73,#005BA1);border-radius:14px;padding:1.75rem;color:#fff;">
-            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
-                <i class="fas fa-circle-check" style="font-size:1.3rem;color:#6eff9e;"></i>
-                <h3 style="font-size:1.05rem;margin:0;">Your Selected Plan</h3>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:1rem;margin-bottom:1.25rem;">
-                <div>
-                    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);margin-bottom:.2rem;">Vehicle Price</div>
-                    <div id="fc-s-price" style="font-size:1.15rem;font-weight:700;">—</div>
-                </div>
-                <div>
-                    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);margin-bottom:.2rem;">Deposit</div>
-                    <div id="fc-s-deposit" style="font-size:1.15rem;font-weight:700;">—</div>
-                </div>
-                <div>
-                    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);margin-bottom:.2rem;">Term</div>
-                    <div id="fc-s-term" style="font-size:1.15rem;font-weight:700;">—</div>
-                </div>
-                <div>
-                    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);margin-bottom:.2rem;">Monthly Payment</div>
-                    <div id="fc-s-monthly" style="font-size:1.3rem;font-weight:800;color:#6eff9e;">—</div>
-                </div>
-            </div>
-            <a id="fc-s-wa" href="#"
-               style="background:#005BA1;color:#fff;padding:.75rem 1.75rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.9rem;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="fas fa-envelope"></i> Apply for This Plan via Email
-            </a>
-        </div>
+    <div class="fp-weights" aria-label="How the score is made up">
+      <div><b>30</b><span>Affordability</span></div><div><b>25</b><span>Credit profile</span></div><div><b>20</b><span>Employment</span></div><div><b>15</b><span>Deposit</span></div><div><b>10</b><span>Stability</span></div>
     </div>
+    <div class="fp-grades">
+      <?php foreach ([['A', (int)$rules['score_a'] . ' – 100', 'Approved in principle', 'Standard minimum deposit of ' . $R($minStd) . ' (' . $R($minHvy) . ' on trucks & plant).'],
+                      ['B', (int)$rules['score_b'] . ' – ' . ((int)$rules['score_a'] - 1), 'Start-up deposit', 'Approved with a start-up deposit from ' . (int)$rules['startup_b'] . '% of the price.'],
+                      ['C', (int)$rules['score_c'] . ' – ' . ((int)$rules['score_b'] - 1), 'Start-up deposit', 'Approved with a start-up deposit from ' . (int)$rules['startup_c'] . '% of the price.'],
+                      ['D', '0 – ' . ((int)$rules['score_c'] - 1), 'Larger start-up deposit', 'Approved with a start-up deposit from ' . (int)$rules['startup_d'] . '% of the price.']] as [$g, $range, $t, $d]): ?>
+        <div class="fp-grade"><span class="g" style="background:<?= finGradeColour($g) ?>"><?= $g ?></span><div><strong><?= e($t) ?> <span style="font-weight:500;color:#889">· score <?= e($range) ?></span></strong><small><?= e($d) ?></small></div></div>
+      <?php endforeach; ?>
+    </div>
+    <div class="ap-notice"><i class="fas fa-circle-info"></i><div><strong>Every grade must also be affordable.</strong> Your instalment may be at most <?= (int)$rules['afford_pct'] ?>% of your take-home pay and must fit what is left after your expenses. If it does not, the start-up deposit is raised until it does — so you never take on more than you can carry. The start-up deposit is part of the price, never an extra fee.</div></div>
+  </div>
 
-    <script>
-    (function(){
-        const MIN_DEPOSIT = 10500;
-        const TIERS = [
-            { months: 6,  rate: 0.035, label: '6 Months' },
-            { months: 12, rate: 0.030, label: '12 Months', popular: true },
-            { months: 24, rate: 0.028, label: '24 Months' },
-            { months: 36, rate: 0.026, label: '36 Months' },
-            { months: 48, rate: 0.025, label: '48 Months' },
-        ];
-        const $price   = document.getElementById('fc-price');
-        const $deposit = document.getElementById('fc-deposit');
-        const $fin     = document.getElementById('fc-financed');
-        const $body    = document.getElementById('fc-body');
-        const $warn    = document.getElementById('fc-deposit-warn');
-        const $summary = document.getElementById('fc-summary');
+  <!-- ═══ DO I QUALIFY? ═══ -->
+  <div class="fp-block" id="qualify">
+    <div class="fp-head">
+      <span class="ap-label"><i class="fas fa-gauge-high"></i> 2-Minute Pre-Check</span>
+      <h2 class="ap-title">Do I Qualify?</h2>
+      <p class="ap-sub">The same rules our finance team uses. Nothing is saved and there is no credit enquiry — it is just your figures.</p>
+    </div>
+    <div class="ap-grid">
+      <form class="ap-card" id="pc" novalidate>
+        <div class="ap-card-head"><i class="fas fa-calculator"></i> Your Figures</div>
+        <div class="ap-card-body">
+          <div class="ap-form">
+            <div class="full form-group"><label class="form-label" for="pc-vehicle">Vehicle</label>
+              <select class="form-control" id="pc-vehicle" name="auction_id">
+                <option value="">Any vehicle — I will enter a price</option>
+                <?php foreach ($lots as $l): ?><option value="<?= (int)$l['id'] ?>" data-price="<?= (int)round(finPrice($l)) ?>" data-min="<?= (int)finMinDeposit($l) ?>"><?= e(finVehicleTitle($l)) ?> — <?= e($R(finPrice($l))) ?></option><?php endforeach; ?>
+              </select></div>
+            <div class="form-group" id="pc-price-wrap"><label class="form-label" for="pc-price">Vehicle price (R)</label>
+              <input class="form-control" id="pc-price" name="price" inputmode="decimal" value="150000"></div>
+            <div class="form-group"><label class="form-label" for="pc-deposit">Deposit you can pay (R)</label>
+              <input class="form-control" id="pc-deposit" name="deposit" inputmode="decimal" value="<?= (int)$minStd ?>"></div>
+            <div class="form-group"><label class="form-label" for="pc-net">Take-home pay (R / month)</label>
+              <input class="form-control" id="pc-net" name="net_income" inputmode="decimal" required placeholder="After tax & deductions"></div>
+            <div class="form-group"><label class="form-label" for="pc-other">Other income (R / month)</label>
+              <input class="form-control" id="pc-other" name="other_income" inputmode="decimal" value="0"></div>
+            <div class="form-group"><label class="form-label" for="pc-housing">Rent / bond</label>
+              <input class="form-control" id="pc-housing" name="exp_housing" inputmode="decimal" value="0"></div>
+            <div class="form-group"><label class="form-label" for="pc-living">Living costs</label>
+              <input class="form-control" id="pc-living" name="exp_living" inputmode="decimal" required placeholder="Food, transport, school"></div>
+            <div class="form-group"><label class="form-label" for="pc-debt">Loan &amp; account repayments</label>
+              <input class="form-control" id="pc-debt" name="exp_debt" inputmode="decimal" value="0"></div>
+            <div class="form-group"><label class="form-label" for="pc-deps">Dependants</label>
+              <select class="form-control" id="pc-deps" name="dependants"><?php for ($i = 0; $i <= 10; $i++): ?><option><?= $i ?></option><?php endfor; ?></select></div>
+            <div class="form-group"><label class="form-label" for="pc-emp">Employment</label>
+              <select class="form-control" id="pc-emp" name="employment"><?php foreach (FIN_EMPLOYMENT as $k => $l): ?><option value="<?= $k ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
+            <div class="form-group"><label class="form-label" for="pc-years">Years in this job</label>
+              <select class="form-control" id="pc-years" name="emp_years"><?php for ($i = 0; $i <= 30; $i++): ?><option value="<?= $i ?>"<?= $i === 2 ? ' selected' : '' ?>><?= $i ?><?= $i === 30 ? '+' : '' ?></option><?php endfor; ?></select></div>
+            <div class="form-group"><label class="form-label" for="pc-band">Your credit score</label>
+              <select class="form-control" id="pc-band" name="credit_band"><?php foreach (FIN_CREDIT_BANDS as $k => $b): ?><option value="<?= $k ?>"<?= $k === 'unknown' ? ' selected' : '' ?>><?= e($b[0]) ?></option><?php endforeach; ?></select></div>
+            <div class="form-group"><label class="form-label" for="pc-res">Where you live</label>
+              <select class="form-control" id="pc-res" name="residence"><?php foreach (FIN_RESIDENCE as $k => $l): ?><option value="<?= $k ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
+            <div class="form-group"><label class="ap-check"><input type="checkbox" name="debt_review" value="yes"><span>I am under debt review</span></label>
+              <label class="ap-check"><input type="checkbox" name="judgments" value="yes"><span>I have judgments / I am blacklisted</span></label></div>
+          </div>
+          <input type="hidden" name="years_address" value="2"><input type="hidden" name="bank_years" value="2">
+          <button class="btn btn-primary btn-lg btn-block" type="submit" id="pc-go"><i class="fas fa-gauge-high"></i> Check My Result</button>
+          <p class="ap-help" style="text-align:center">The full application also looks at time at your address and bank — your final score may differ slightly.</p>
+        </div>
+      </form>
+      <div>
+        <div class="ap-card" id="pc-result-card">
+          <div class="ap-card-head green"><i class="fas fa-chart-simple"></i> Your Result</div>
+          <div class="ap-card-body" id="pc-result">
+            <p class="ap-help" style="margin:0"><i class="fas fa-arrow-left"></i> Enter your figures and press <strong>Check My Result</strong> to see your score, the deposit you need and the terms that fit your budget.</p>
+          </div>
+        </div>
+        <a class="btn btn-success btn-lg btn-block" id="pc-apply" href="<?= APP_URL ?>/finance_apply.php" style="display:none"><i class="fas fa-file-signature"></i> Continue to My Full Application</a>
+      </div>
+    </div>
+  </div>
 
-        function num(v){ return parseFloat(String(v).replace(/[^0-9.]/g,'')) || 0; }
-        function R(v){ return 'R' + v.toLocaleString('en-ZA',{minimumFractionDigits:0,maximumFractionDigits:0}); }
-        function fmtInput(el){
-            const v = num(el.value);
-            if(v > 0) el.value = v.toLocaleString('en-ZA',{maximumFractionDigits:0});
-        }
+  <!-- ═══ CALCULATOR ═══ -->
+  <div class="fp-block">
+    <div class="fp-head">
+      <span class="ap-label"><i class="fas fa-calculator"></i> Repayment Calculator</span>
+      <h2 class="ap-title">What Would My Instalment Be?</h2>
+    </div>
+    <div class="ap-card fp-calc">
+      <div class="ap-card-body">
+        <div class="ap-form" style="grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr))">
+          <div class="form-group"><label class="form-label" for="fc-price">Vehicle price (R)</label><input class="form-control" id="fc-price" inputmode="decimal" value="150000"></div>
+          <div class="form-group"><label class="form-label" for="fc-dep">Deposit (R)</label><input class="form-control" id="fc-dep" inputmode="decimal" value="<?= (int)$minStd ?>"></div>
+          <div class="form-group"><label class="form-label" for="fc-type">Vehicle type</label><select class="form-control" id="fc-type"><option value="car">Car / bakkie (to <?= max(array_keys($tiers)) ?> months)</option><option value="heavy">Truck / plant (to <?= $maxTerm ?> months)</option></select></div>
+        </div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Term</th><th>Rate p/m</th><th>Monthly</th><th>Total repayable</th></tr></thead><tbody id="fc-body"></tbody></table></div>
+        <p class="ap-help">Financed amount × (1 + monthly rate × months) ÷ months. Indicative — your quote confirms it. Which terms you can take depends on your assessment.</p>
+      </div>
+    </div>
+  </div>
 
-        function calc(){
-            let price = num($price.value);
-            let deposit = num($deposit.value);
-
-            if(price < MIN_DEPOSIT + 1000) price = MIN_DEPOSIT + 1000;
-
-            // enforce min deposit
-            if(deposit < MIN_DEPOSIT){
-                deposit = MIN_DEPOSIT;
-                $deposit.value = MIN_DEPOSIT.toLocaleString('en-ZA');
-                $warn.style.display = 'block';
-            } else {
-                $warn.style.display = 'none';
-            }
-
-            // cap deposit at price - 1000
-            if(deposit >= price){
-                deposit = price - 1000;
-                if(deposit < MIN_DEPOSIT) deposit = MIN_DEPOSIT;
-                $deposit.value = deposit.toLocaleString('en-ZA');
-            }
-
-            const financed = price - deposit;
-            $fin.textContent = R(financed);
-
-            let html = '';
-            TIERS.forEach(function(t, i){
-                const monthly   = (financed * (1 + t.rate * t.months)) / t.months;
-                const total     = monthly * t.months + deposit;
-                const interest  = total - price;
-                const bg        = t.popular ? '#eef6ff' : (i % 2 === 0 ? '#f8fafc' : '#fff');
-                const fw        = t.popular ? 'font-weight:600;' : '';
-
-                html += '<tr style="background:'+bg+';'+fw+'cursor:pointer;transition:background .15s;" '
-                      + 'onmouseover="this.style.background=\'#e0edff\'" '
-                      + 'onmouseout="this.style.background=\''+bg+'\'" '
-                      + 'onclick="window._fcSelect('+i+')">'
-                      + '<td style="padding:.8rem 1rem;border-bottom:1px solid #eef1f5;color:#003f73;font-weight:600;font-size:.9rem;">'
-                      +   t.label
-                      +   (t.popular ? ' <span style="background:#005BA1;color:#fff;font-size:.62rem;padding:.12rem .45rem;border-radius:4px;margin-left:.4rem;vertical-align:middle;font-weight:700;">POPULAR</span>' : '')
-                      + '</td>'
-                      + '<td style="padding:.8rem 1rem;text-align:center;border-bottom:1px solid #eef1f5;color:#555;font-size:.9rem;">'+(t.rate*100).toFixed(1)+'% p/m</td>'
-                      + '<td style="padding:.8rem 1rem;text-align:center;border-bottom:1px solid #eef1f5;color:#005BA1;font-weight:700;font-size:.95rem;">'+R(Math.round(monthly))+'</td>'
-                      + '<td style="padding:.8rem 1rem;text-align:center;border-bottom:1px solid #eef1f5;color:#555;font-size:.9rem;">'+R(Math.round(total))+'</td>'
-                      + '<td style="padding:.8rem 1rem;text-align:center;border-bottom:1px solid #eef1f5;color:#888;font-size:.9rem;">'+R(Math.round(interest))+'</td>'
-                      + '<td style="padding:.8rem 1rem;text-align:center;border-bottom:1px solid #eef1f5;">'
-                      +   '<span style="color:#005BA1;font-size:.8rem;font-weight:600;cursor:pointer;"><i class="fas fa-hand-pointer"></i> Select</span>'
-                      + '</td></tr>';
-            });
-            $body.innerHTML = html;
-        }
-
-        window._fcSelect = function(idx){
-            const t = TIERS[idx];
-            const price = num($price.value);
-            const deposit = num($deposit.value);
-            const financed = price - deposit;
-            const monthly = (financed * (1 + t.rate * t.months)) / t.months;
-
-            document.getElementById('fc-s-price').textContent   = R(Math.round(price));
-            document.getElementById('fc-s-deposit').textContent = R(Math.round(deposit));
-            document.getElementById('fc-s-term').textContent    = t.label;
-            document.getElementById('fc-s-monthly').textContent = R(Math.round(monthly)) + '/mo';
-
-            const msg = 'Hi AHG, I used your finance calculator and I am interested in the following plan:\n'
-                      + '- Vehicle Price: '+R(Math.round(price))+'\n'
-                      + '- Deposit: '+R(Math.round(deposit))+'\n'
-                      + '- Term: '+t.label+'\n'
-                      + '- Est. Monthly: '+R(Math.round(monthly))+'\n'
-                      + 'Please help me get started with in-house finance.';
-            document.getElementById('fc-s-wa').href = 'mailto:<?= COMPANY_EMAIL ?>?subject='+encodeURIComponent('In-House Finance Application — '+t.label)+'&body='+encodeURIComponent(msg);
-
-            $summary.style.display = 'block';
-            $summary.scrollIntoView({behavior:'smooth', block:'nearest'});
-        };
-
-        const $savings     = document.getElementById('fc-savings');
-        const $savingsAmt  = document.getElementById('fc-savings-amount');
-        const $savingsTot  = document.getElementById('fc-savings-total');
-        const quickBtns    = document.querySelectorAll('.fc-quick-btn');
-
-        function updateSavings(){
-            const price   = num($price.value);
-            const deposit = num($deposit.value);
-            if(deposit <= MIN_DEPOSIT || price <= deposit){
-                $savings.style.display = 'none';
-                return;
-            }
-            // Compare monthly at min deposit vs current deposit (using 12-month popular tier)
-            const tier = TIERS[1]; // 12 months
-            const finMin = price - MIN_DEPOSIT;
-            const finCur = price - deposit;
-            const monthlyMin = (finMin * (1 + tier.rate * tier.months)) / tier.months;
-            const monthlyCur = (finCur * (1 + tier.rate * tier.months)) / tier.months;
-            const savedMonthly = Math.round(monthlyMin - monthlyCur);
-            const savedTotal   = savedMonthly * tier.months;
-            if(savedMonthly > 0){
-                $savings.style.display = 'flex';
-                $savingsAmt.textContent = R(savedMonthly);
-                $savingsTot.textContent  = 'That\'s '+R(savedTotal)+' less over '+tier.label;
-            } else {
-                $savings.style.display = 'none';
-            }
-        }
-
-        // Quick deposit button handler
-        window._fcSetDeposit = function(amount){
-            $deposit.value = amount.toLocaleString('en-ZA');
-            quickBtns.forEach(function(b){
-                b.style.background = '#fff';
-                b.style.color = '#003f73';
-                b.style.borderColor = '#d0d8e4';
-            });
-            // Highlight the clicked button
-            quickBtns.forEach(function(b){
-                var btnVal = parseInt(b.textContent.replace(/[^0-9]/g,''));
-                if(btnVal === amount){
-                    b.style.background = '#005BA1';
-                    b.style.color = '#fff';
-                    b.style.borderColor = '#005BA1';
-                }
-            });
-            calc();
-            updateSavings();
-        };
-
-        var origCalc = calc;
-        var _calcWrap = function(){ origCalc(); updateSavings(); };
-
-        $price.addEventListener('input', function(){ _calcWrap(); });
-        $deposit.addEventListener('input', function(){ _calcWrap(); });
-        $price.addEventListener('blur', function(){ fmtInput(this); _calcWrap(); });
-        $deposit.addEventListener('blur', function(){ fmtInput(this); _calcWrap(); });
-
-        calc();
-        updateSavings();
-    })();
-    </script>
-
-    <!-- ═══════════ HOW IT WORKS ═══════════ -->
-    <div style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2.5rem;box-shadow:0 2px 20px rgba(0,0,0,.06);">
-        <h2 style="color:#003f73;font-size:1.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:.75rem;">
-            <i class="fas fa-route" style="color:#005BA1;"></i> How Our Finance Works
-        </h2>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:1.5rem;">
-            <?php
-            $finSteps = [
-                ['01','fa-message-dots','Get in Touch','Call or email us to get started. Tell us which vehicle you\'re interested in and we\'ll walk you through the process.','#005BA1'],
-                ['02','fa-file-signature','Submit Your Documents','Provide your SA ID, proof of address, 3 months\' bank statements, and a recent payslip or proof of income.','#0078d7'],
-                ['03','fa-hand-holding-dollar','Pay Your Deposit','Your minimum deposit of R10,500 secures the vehicle and activates your finance agreement. Pay any amount above R10,500 to lower your monthly instalments. No credit checks. No ITC. No bureau inquiries.','#e8a000'],
-                ['04','fa-car-side','Drive Away','Choose your repayment term (6&ndash;48 months), sign your agreement, and drive away in your vehicle. It\'s that simple.','#25D366'],
-            ];
-            foreach ($finSteps as [$num,$icon,$title,$desc,$color]):
-            ?>
-            <div style="text-align:center;padding:1.5rem 1rem;">
-                <div style="width:56px;height:56px;background:<?= $color ?>;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;position:relative;">
-                    <i class="fas <?= $icon ?>" style="color:#fff;font-size:1.2rem;"></i>
-                    <span style="position:absolute;top:-6px;right:-6px;background:#003f73;color:#fff;font-size:.65rem;font-weight:800;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;"><?= $num ?></span>
-                </div>
-                <h4 style="color:#003f73;font-size:1rem;margin-bottom:.5rem;"><?= $title ?></h4>
-                <p style="color:#666;font-size:.88rem;line-height:1.65;"><?= $desc ?></p>
-            </div>
+  <!-- ═══ CREDIT SCORE ═══ -->
+  <div class="fp-block" id="credit-score">
+    <div class="ap-grid">
+      <div class="ap-card">
+        <div class="ap-card-head"><i class="fas fa-magnifying-glass-chart"></i> Check Your Credit Score — Free</div>
+        <div class="ap-card-body">
+          <p class="ap-sub" style="margin-bottom:.5rem">Under the National Credit Act you are entitled to <strong>one free credit report a year from each credit bureau</strong>. Checking your own score never lowers it. Know your score before you apply — and put the exact figure on your application.</p>
+          <div class="fp-bureaus">
+            <a href="https://www.transunion.co.za" target="_blank" rel="noopener nofollow">TransUnion<small>Free annual credit report</small></a>
+            <a href="https://www.experian.co.za" target="_blank" rel="noopener nofollow">Experian<small>Free annual credit report</small></a>
+            <a href="https://www.xds.co.za" target="_blank" rel="noopener nofollow">XDS<small>Free annual credit report</small></a>
+            <a href="https://www.clearscore.com/za" target="_blank" rel="noopener nofollow">ClearScore<small>Free score, updated monthly</small></a>
+          </div>
+          <p class="ap-help">When you apply you give consent for us to check your credit with a registered bureau. A bureau score replaces your own estimate and can raise or lower your result.</p>
+        </div>
+      </div>
+      <div class="ap-card">
+        <div class="ap-card-head gold"><i class="fas fa-ranking-star"></i> What Your Score Means Here</div>
+        <div class="ap-card-body">
+          <table class="fp-bands">
+            <?php foreach (FIN_CREDIT_BANDS as $k => [$label, $pts]): if ($k === 'unknown') continue; ?>
+              <tr><td style="background:<?= ['excellent' => '#1a9e4e', 'good' => '#4caf50', 'fair' => '#e8a000', 'poor' => '#ef6c00', 'very_poor' => '#c62828'][$k] ?>"></td><td><strong><?= e($label) ?></strong></td><td style="text-align:right"><?= $pts ?> / 25 pts</td></tr>
             <?php endforeach; ?>
+            <tr><td style="background:#a30000"></td><td>Debt review / judgments</td><td style="text-align:right">− 8 / − 6 pts</td></tr>
+          </table>
+          <p class="ap-help" style="margin-top:.8rem"><strong>Improve your result:</strong> a bigger deposit (up to 15 points), paying down store cards and loans (frees up budget), and keeping accounts up to date.</p>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- ═══════════ DOCUMENTS REQUIRED ═══════════ -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:1.5rem;margin-bottom:2.5rem;">
-
-        <!-- Documents -->
-        <div style="background:#fff;border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-left:5px solid #005BA1;">
-            <h3 style="color:#003f73;font-size:1.15rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.65rem;">
-                <i class="fas fa-folder-open" style="color:#005BA1;"></i> Documents Required
-            </h3>
-            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.85rem;">
-                <?php
-                $docs = [
-                    ['fa-id-card','Copy of valid South African ID document'],
-                    ['fa-house','Proof of residential address (not older than 3 months)'],
-                    ['fa-building-columns','3 months\' bank statements'],
-                    ['fa-file-invoice','Recent payslip or proof of income'],
-                ];
-                foreach ($docs as [$icon,$doc]): ?>
-                <li style="display:flex;gap:.75rem;align-items:flex-start;font-size:.92rem;color:#444;line-height:1.5;">
-                    <i class="fas <?= $icon ?>" style="color:#005BA1;margin-top:.15rem;flex-shrink:0;width:18px;text-align:center;"></i>
-                    <?= $doc ?>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-
-        <!-- Why Choose Us -->
-        <div style="background:#fff;border-radius:16px;padding:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-left:5px solid #25D366;">
-            <h3 style="color:#003f73;font-size:1.15rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.65rem;">
-                <i class="fas fa-shield-halved" style="color:#25D366;"></i> Why Our Finance?
-            </h3>
-            <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.85rem;">
-                <?php
-                $reasons = [
-                    'No credit checks, ITC checks, or bureau inquiries of any kind',
-                    'Blacklisted and debt-review clients welcome',
-                    'Flexible terms from 6 to 48 months &mdash; you choose',
-                    'Low minimum deposit of R10,500 &mdash; pay more to reduce instalments',
-                    'DEKRA-inspected vehicles &mdash; total peace of mind',
-                    'Trusted auctioneering excellence since 2016',
-                ];
-                foreach ($reasons as $r): ?>
-                <li style="display:flex;gap:.65rem;align-items:flex-start;font-size:.92rem;color:#444;line-height:1.5;">
-                    <i class="fas fa-check" style="color:#25D366;margin-top:.15rem;flex-shrink:0;"></i>
-                    <?= $r ?>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
+  <!-- ═══ PROCESS ═══ -->
+  <div class="fp-block">
+    <div class="fp-head">
+      <span class="ap-label"><i class="fas fa-route"></i> From Application to Driving Away</span>
+      <h2 class="ap-title">Six Steps, All Online Until You Collect</h2>
     </div>
-
-    <!-- ═══════════ OTHER PAYMENT OPTIONS ═══════════ -->
-    <div style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2.5rem;box-shadow:0 2px 20px rgba(0,0,0,.06);">
-        <h2 style="color:#003f73;font-size:1.35rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;">
-            <i class="fas fa-credit-card" style="color:#005BA1;"></i> Other Payment Options
-        </h2>
-        <p style="color:#888;font-size:.88rem;margin-bottom:1.5rem;">Prefer to pay another way? We also accept these methods for auction purchases.</p>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:1rem;">
-            <?php
-            $otherOptions = [
-                ['fa-piggy-bank','Cash Purchase','Pay the full amount directly and avoid any interest charges. The fastest, simplest way to own your vehicle.','#e6f9ee','#155724','#b7e2c5'],
-                ['fa-landmark','Bank Finance (Pre-Approved)','Approach your bank for a pre-approved vehicle finance offer before auction day. Know your budget before you bid.','#ebf4ff','#003f73','#c5d9f0'],
-                ['fa-handshake','Third-Party Finance Broker','Independent brokers can shop multiple lenders on your behalf for competitive rates.','#f3f0ff','#3d0066','#d6ceff'],
-            ];
-            foreach ($otherOptions as [$icon,$title,$desc,$bg,$col,$border]):
-            ?>
-            <div style="background:<?= $bg ?>;border:1px solid <?= $border ?>;border-radius:12px;padding:1.25rem;display:flex;gap:1rem;align-items:flex-start;">
-                <div style="width:40px;height:40px;background:<?= $col ?>;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas <?= $icon ?>" style="color:#fff;font-size:.9rem;"></i>
-                </div>
-                <div>
-                    <h4 style="color:<?= $col ?>;font-size:.95rem;margin-bottom:.35rem;"><?= $title ?></h4>
-                    <p style="color:#555;font-size:.85rem;line-height:1.65;"><?= $desc ?></p>
-                </div>
-            </div>
-            <?php endforeach; ?>
-        </div>
+    <div class="fp-cards">
+      <?php foreach ([['fa-file-signature', '#005BA1', '1. Apply & get your score', 'Complete the application — vehicle, details, income, expenses and credit. Your score, grade and quote appear instantly.'],
+                      ['fa-calendar-days', '#0078d7', '2. Choose your term', 'Pick any repayment term that fits your budget, from 6 to ' . $maxTerm . ' months.'],
+                      ['fa-file-arrow-up', '#8b5cf6', '3. Documents & credit check', 'Upload your documents on your application page. With your consent we confirm your score with a credit bureau.'],
+                      ['fa-coins', '#e8a000', '4. Pay your (start-up) deposit', 'Your deposit invoice comes by email. Once it reflects, your finance is approved and the vehicle is reserved.'],
+                      ['fa-id-badge', '#25D366', '5. Buyer Code & test drive', 'Your Buyer Code is your access pass. Book your test drive at head office.'],
+                      ['fa-key', '#ef4444', '6. Sign & drive away', 'Sign your instalment sale agreement, set up your debit order and drive away.']] as [$ic, $c, $t, $d]): ?>
+        <div class="fp-card" style="--c:<?= $c ?>"><div class="ic"><i class="fas <?= $ic ?>"></i></div><h3><?= e($t) ?></h3><p><?= e($d) ?></p></div>
+      <?php endforeach; ?>
     </div>
+  </div>
 
-    <!-- ═══════════ FAQ MINI ═══════════ -->
-    <div style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2.5rem;box-shadow:0 2px 20px rgba(0,0,0,.06);">
-        <h2 style="color:#003f73;font-size:1.35rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.75rem;">
-            <i class="fas fa-circle-question" style="color:#e8a000;"></i> Finance FAQ
-        </h2>
-        <div style="display:flex;flex-direction:column;gap:1rem;">
-            <?php
-            $faqItems = [
-                ['Do I need a good credit score?','Absolutely not. Our in-house finance requires NO credit checks, NO ITC checks, and NO bureau inquiries of any kind. Blacklisted clients, clients under debt review, and first-time buyers are all welcome.'],
-                ['What deposit do I need?','A minimum deposit of R10,500 is required. You can pay any amount above R10,500 to reduce your monthly instalments. This is not linked to any credit assessment.'],
-                ['What repayment terms are available?','Choose from 6, 12, 24, 36, or 48 months. Shorter terms have lower total costs, while longer terms offer lower monthly payments for greater flexibility.'],
-                ['What documents do I need?','A valid SA ID, proof of residential address (not older than 3 months), 3 months\' bank statements, and a recent payslip or proof of income.'],
-                ['Are the vehicles inspected?','Yes. Every vehicle sold through Auction Hub Group undergoes a professional DEKRA inspection. You receive a full condition report and you are welcome to bring your own mechanic or inspector for additional peace of mind.'],
-            ];
-            foreach ($faqItems as [$q,$a]):
-            ?>
-            <div style="background:#f8fafc;border-radius:12px;padding:1.25rem 1.5rem;border:1px solid #e5eaf0;">
-                <h4 style="color:#003f73;font-size:.95rem;margin-bottom:.5rem;display:flex;align-items:flex-start;gap:.6rem;">
-                    <i class="fas fa-q" style="color:#005BA1;font-size:.8rem;margin-top:.2rem;flex-shrink:0;"></i> <?= $q ?>
-                </h4>
-                <p style="color:#555;font-size:.88rem;line-height:1.7;padding-left:1.35rem;"><?= $a ?></p>
-            </div>
-            <?php endforeach; ?>
+  <!-- ═══ DOCUMENTS + TERMS ═══ -->
+  <div class="fp-block">
+    <div class="ap-grid">
+      <div class="ap-card">
+        <div class="ap-card-head"><i class="fas fa-folder-open"></i> Documents You Need</div>
+        <div class="ap-card-body">
+          <ol class="ap-mini-steps">
+            <?php foreach (FIN_DOCS as $k => [$label, $hint]): if ($k === 'payment') continue; ?><li><strong><?= e($label) ?></strong> — <?= e($hint) ?></li><?php endforeach; ?>
+            <li><strong>Proof of deposit payment</strong> — after your deposit invoice</li>
+          </ol>
         </div>
-        <div style="text-align:center;margin-top:1.5rem;">
-            <a href="<?= APP_URL ?>/faq.php" style="color:#005BA1;font-size:.9rem;font-weight:600;text-decoration:none;">
-                View All FAQs <i class="fas fa-arrow-right" style="font-size:.8rem;"></i>
-            </a>
+      </div>
+      <div class="ap-card">
+        <div class="ap-card-head gold"><i class="fas fa-file-contract"></i> Key Terms</div>
+        <div class="ap-card-body">
+          <ul style="margin:0;padding-left:1.1rem;font-size:.87rem;color:#445;line-height:1.75">
+            <li>Every application is assessed for affordability and credit (National Credit Act).</li>
+            <li>Approval may require a start-up deposit — it is part of the price, not a fee.</li>
+            <li>Instalment at most <?= (int)$rules['afford_pct'] ?>% of take-home pay; only terms that fit your budget are offered.</li>
+            <li>Quotes are valid 7 days, while the vehicle has no auction bid.</li>
+            <li>Instalment sale: the vehicle is ours until paid in full; comprehensive insurance is required.</li>
+            <li>Debit order on your pay day. Settle early any time.</li>
+            <li>Your information is protected under POPIA.</li>
+          </ul>
+          <p class="ap-help">The full terms are shown in the application and in your signed agreement.</p>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- ═══════════ CTA ═══════════ -->
-    <div style="background:linear-gradient(135deg,#003f73 0%,#005BA1 100%);border-radius:16px;padding:3rem 2.5rem;color:#fff;text-align:center;position:relative;overflow:hidden;">
-        <div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:22px 22px;pointer-events:none;"></div>
-        <div style="position:relative;z-index:1;">
-            <h2 style="font-size:clamp(1.5rem,3vw,2rem);margin-bottom:.75rem;">Ready to Drive Away?</h2>
-            <p style="color:rgba(255,255,255,.8);margin-bottom:.5rem;max-width:520px;margin-left:auto;margin-right:auto;font-size:1rem;line-height:1.7;">
-                Don't let a credit score decide your future. Contact us today and get behind the wheel of your next vehicle with our hassle-free in-house finance.
-            </p>
-            <p style="color:rgba(255,255,255,.5);font-size:.85rem;margin-bottom:2rem;">No credit checks. No ITC. No bureau inquiries. From R10,500 deposit &mdash; pay more to lower your instalments.</p>
-            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem;">
-                <a href="<?= APP_URL ?>/finance_apply.php"
-                   style="background:#005BA1;color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
-                    <i class="fas fa-file-signature"></i> Apply Online
-                </a>
-                <a href="tel:<?= COMPANY_PHONE ?>"
-                   style="background:rgba(255,255,255,.15);color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(255,255,255,.3);display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
-                    <i class="fas fa-phone"></i> Call Us Now
-                </a>
-                <a href="<?= APP_URL ?>/auctions.php"
-                   style="background:#fff;color:#005BA1;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
-                    <i class="fas fa-gavel"></i> Browse Vehicles
-                </a>
-                <a href="<?= APP_URL ?>/my_applications.php"
-                   style="background:rgba(255,255,255,.15);color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;border:1px solid rgba(255,255,255,.3);display:inline-flex;align-items:center;gap:.5rem;font-size:.95rem;">
-                    <i class="fas fa-route"></i> Track my application
-                </a>
-            </div>
-        </div>
+  <!-- ═══ FAQ ═══ -->
+  <div class="fp-block ap-faq" style="max-width:860px;margin-left:auto;margin-right:auto">
+    <div class="fp-head"><span class="ap-label"><i class="fas fa-circle-question"></i> Finance FAQ</span></div>
+    <?php foreach ([
+        ['I am blacklisted / under debt review — can I still get finance?', 'You can apply. Judgments and debt review lower your credit-profile points, which usually means a start-up deposit for approval. The pre-check above shows you the amount before you apply.'],
+        ['What is a start-up deposit?', 'When your score is below grade A, or the instalment at the minimum deposit does not fit your budget, approval is conditional on a larger deposit — the start-up deposit. It comes off the price, so you finance less and pay lower instalments.'],
+        ['Do you check my credit?', 'Yes — with your consent on the application, we confirm your score with a registered credit bureau. That bureau score replaces the estimate you gave us.'],
+        ['How is affordability worked out?', 'Take-home pay plus other income, less rent / bond, living costs (at least ' . $R($rules['norm_base']) . ' plus ' . $R($rules['norm_dep']) . ' per dependant), loan repayments and other fixed costs. Your instalment may be at most ' . (int)$rules['afford_pct'] . '% of income and must fit in what is left.'],
+        ['Can I improve my result after applying?', 'Yes. Offer a bigger deposit, or send us a better bureau report — our team re-scores your application and emails a new quote.'],
+        ['What if the vehicle receives a bid?', 'Finance applies until a vehicle\'s first auction bid. After that it goes to the auction floor — you can register and bid, or choose another vehicle.'],
+        ['Is the deposit refundable?', 'Your deposit secures the vehicle once your finance is approved. If we decline your application after you paid, it is refunded in full.'],
+    ] as [$q, $a]): ?>
+      <details><summary><?= e($q) ?></summary><p><?= e($a) ?></p></details>
+    <?php endforeach; ?>
+  </div>
+
+  <div class="ap-card" style="text-align:center">
+    <div class="ap-card-body" style="padding:2.2rem 1.4rem">
+      <h2 class="ap-title">Ready When You Are</h2>
+      <p class="ap-sub" style="max-width:620px;margin:0 auto 1.2rem">About 7 minutes online. Your score, start-up deposit (if any) and quote appear instantly — and you can follow every step on your own application page.</p>
+      <div class="ap-row" style="justify-content:center">
+        <a class="btn btn-success btn-lg" href="<?= APP_URL ?>/finance_apply.php"><i class="fas fa-file-signature"></i> Apply for Finance</a>
+        <a class="btn btn-outline btn-lg" href="https://wa.me/<?= e(preg_replace('/\D/', '', COMPANY_WHATSAPP)) ?>?text=<?= rawurlencode('Hi AHG, I have a question about finance.') ?>" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> Ask on WhatsApp</a>
+      </div>
+      <p class="ap-help">Paying cash? <a href="<?= APP_URL ?>/preauction.php">Secure a vehicle before the auction</a>.</p>
     </div>
+  </div>
 
 </div>
-</main>
+</section>
+<script src="<?= APP_URL ?>/assets/js/fin-result.js"></script>
+<script>
+(function () {
+  var R = function (v) { return 'R' + Math.round(v).toLocaleString('en-ZA', {maximumFractionDigits: 0}); };
+  var num = function (el) { return +String(el.value).replace(/[^\d.]/g, '') || 0; };
 
+  // Calculator
+  var TIERS = <?= json_encode($tiers) ?>, TIERS_H = <?= json_encode($tiersH) ?>;
+  var MIN = <?= (int)$minStd ?>, MIN_H = <?= (int)$minHvy ?>;
+  var fp = document.getElementById('fc-price'), fd = document.getElementById('fc-dep'), ft = document.getElementById('fc-type');
+  function calc() {
+    var heavy = ft.value === 'heavy', t = heavy ? TIERS_H : TIERS, price = num(fp), dep = Math.max(num(fd), heavy ? MIN_H : MIN);
+    var fin = Math.max(0, price - dep), h = '';
+    Object.keys(t).forEach(function (m) { var mo = fin * (1 + t[m] / 100 * m) / m; h += '<tr><td>' + m + ' months</td><td>' + t[m] + '%</td><td class="m">' + R(mo) + '</td><td>' + R(mo * m) + '</td></tr>'; });
+    document.getElementById('fc-body').innerHTML = fin > 0 ? h : '<tr><td colspan="4">Your deposit covers the price.</td></tr>';
+  }
+  [fp, fd, ft].forEach(function (el) { el.addEventListener('input', calc); el.addEventListener('change', calc); }); calc();
+
+  // Pre-check
+  var form = document.getElementById('pc'), veh = document.getElementById('pc-vehicle'), out = document.getElementById('pc-result');
+  function vehUi() {
+    var o = veh.options[veh.selectedIndex];
+    document.getElementById('pc-price-wrap').style.display = veh.value ? 'none' : '';
+    if (veh.value && num(document.getElementById('pc-deposit')) < +o.dataset.min) document.getElementById('pc-deposit').value = o.dataset.min;
+  }
+  veh.addEventListener('change', vehUi); vehUi();
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!num(document.getElementById('pc-net'))) { document.getElementById('pc-net').focus(); out.innerHTML = '<div class="alert alert-warning" style="margin:0"><i class="fas fa-triangle-exclamation"></i><span>Enter your take-home pay.</span></div>'; return; }
+    if (!num(document.getElementById('pc-living'))) { document.getElementById('pc-living').focus(); out.innerHTML = '<div class="alert alert-warning" style="margin:0"><i class="fas fa-triangle-exclamation"></i><span>Enter your monthly living costs.</span></div>'; return; }
+    var btn = document.getElementById('pc-go'); btn.disabled = true;
+    out.innerHTML = '<div class="fr-loading"><i class="fas fa-spinner fa-spin"></i> Working out your result…</div>';
+    var data = new FormData(form);
+    if (data.get('debt_review') !== 'yes') data.set('debt_review', 'no');
+    if (data.get('judgments') !== 'yes') data.set('judgments', 'no');
+    fetch('<?= APP_URL ?>/finance_check.php', {method: 'POST', body: data, credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        btn.disabled = false;
+        if (!d.ok) { out.innerHTML = '<div class="alert alert-warning" style="margin:0"><i class="fas fa-triangle-exclamation"></i><span>' + (d.error || 'Please check your figures.').replace(/</g, '&lt;') + '</span></div>'; return; }
+        out.innerHTML = window.ahgFinResult(d, 'Indicative, based on your own figures. The full application, your documents and a credit bureau check confirm it.');
+        // Carry the figures to the application (this browser tab only)
+        var keep = {}; data.forEach(function (v, k) { if (['price', 'years_address', 'bank_years'].indexOf(k) < 0) keep[k] = v; });
+        try { sessionStorage.setItem('ahgFinPrecheck', JSON.stringify(keep)); } catch (x) {}
+        var a = document.getElementById('pc-apply');
+        a.href = '<?= APP_URL ?>/finance_apply.php' + (veh.value ? '?id=' + encodeURIComponent(veh.value) : '');
+        a.style.display = d.grade === 'R' ? 'none' : '';
+        document.getElementById('pc-result-card').scrollIntoView({behavior: 'smooth', block: 'start'});
+      })
+      .catch(function () { btn.disabled = false; out.innerHTML = '<p class="ap-help">We could not check right now — please try again, or go straight to the application.</p>'; });
+  });
+})();
+</script>
 <?php require_once __DIR__ . '/footer.php'; ?>

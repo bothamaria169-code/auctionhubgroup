@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($apps) {
             $list = '';
             foreach ($apps as $a) {
-                $list .= '<p><strong>' . e(($a['kind'] === 'finance' ? 'In-House Finance' : 'Pre-Auction Purchase') . ' — ' . $a['vehicle']) . '</strong><br>'
+                $list .= '<p><strong>' . e(($a['kind'] === 'finance' ? 'Finance' : 'Pre-Auction Purchase') . ' — ' . $a['vehicle']) . '</strong><br>'
                        . e(finRef($a) . ' · ' . finStatusLabel($a)) . '<br><a href="' . e(finLink($a)) . '">View this application</a></p>';
             }
             try {
@@ -47,11 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pageTitle = 'Track My Application — Finance & Pre-Auction';
-$pageDescription = 'Track your Auction Hub Group in-house finance application or pre-auction purchase.';
+$pageDescription = 'Track your Auction Hub Group finance application or pre-auction purchase.';
 $noIndex = true;
 require_once __DIR__ . '/header.php';
 require __DIR__ . '/fin_ui.php';
-finHero('<i class="fas fa-route"></i> Your Applications', 'Track My Application', 'In-house finance applications and pre-auction purchases — see exactly where each one stands.', 'Track My Application');
+finHero('<i class="fas fa-route"></i> Your Applications', 'Track My Application', 'Finance applications and pre-auction purchases — see exactly where each one stands.', 'Track My Application');
 ?>
 <section class="ap-section"><div class="ap-container" style="max-width:820px">
   <?= finFlashHtml() ?>
@@ -59,7 +59,7 @@ finHero('<i class="fas fa-route"></i> Your Applications', 'Track My Application'
     <div class="ap-card"><div class="ap-card-head"><i class="fas fa-list-check"></i> Your Applications</div><div class="ap-card-body">
       <?php foreach ($mine as $a): ?>
         <div class="ap-doc"><div class="ap-doc-head">
-          <div><strong><?= e($a['vehicle']) ?></strong><div class="ap-help" style="margin:0"><?= $a['kind'] === 'finance' ? 'In-House Finance' : 'Pre-Auction Purchase' ?> · <?= e(finRef($a)) ?> · <?= safeDate('j M Y', $a['created_at']) ?></div>
+          <div><strong><?= e($a['vehicle']) ?></strong><div class="ap-help" style="margin:0"><?= $a['kind'] === 'finance' ? 'Finance' : 'Pre-Auction Purchase' ?> · <?= e(finRef($a)) ?> · <?= safeDate('j M Y', $a['created_at']) ?></div>
             <div style="margin-top:.35rem"><?= finBadge($a) ?></div></div>
           <a class="btn btn-primary btn-sm" href="<?= e(finLink($a)) ?>">Open <i class="fas fa-arrow-right"></i></a></div></div>
       <?php endforeach; ?>

@@ -108,7 +108,7 @@ if ($topicCount === 0) {
 $linkMenu = [
     'Browse current vehicles'          => 'auctions.php',
     'Pre-auction fixed-price purchase' => 'preauction.php',
-    'In-house vehicle finance'         => 'financing.php',
+    'Vehicle finance'         => 'financing.php',
     'How auctions work / guide'        => 'auction-guide.php',
     'Recently sold vehicles'           => 'sold_vehicles.php',
     'Register as a bidder'             => 'login.php?tab=register',
@@ -255,7 +255,7 @@ $system =
     "You are a senior automotive SEO writer for Auction Hub Group (auctionhubgroup.co.za), " .
     "a South African vehicle auction house selling bank-repossessed and bank-consigned cars, " .
     "every vehicle DEKRA-inspected, with weekly live/online auctions, a fixed-price pre-auction " .
-    "programme (0% buyer's commission), and in-house finance. Audience: South African car buyers. " .
+    "programme (0% buyer's commission), and finance. Audience: South African car buyers. " .
     "Use South African English and the rand (R). Be accurate, helpful and original — never invent " .
     "fake statistics, prices or quotes. Write in clean semantic HTML using <h2>, <h3>, <p>, <ul>, " .
     "<li>, <strong>. Do NOT include <h1>, <html>, <head> or <body> tags. " .

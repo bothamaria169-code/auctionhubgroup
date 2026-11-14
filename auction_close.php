@@ -12,6 +12,10 @@
 // Needs attention, where staff sell or relist it by hand.
 const AHG_AUTO_SELL_MAX_DAYS = 3;
 
+// Unsold lots whose end time has passed: live, upcoming or closed, never drafts.
+// Used by Admin → Auctions → "Relist expired vehicles". Alias the table as a.
+const EXPIRED_UNSOLD_SQL = "a.is_sold = 0 AND a.status IN ('active','upcoming','closed') AND a.end_time IS NOT NULL AND a.end_time < NOW()";
+
 /**
  * Close an auction: mark as sold, create purchase request, notify winner.
  * Safe to call multiple times — idempotent on already-closed auctions.

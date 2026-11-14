@@ -122,7 +122,7 @@ try {
             ('Auction News','auction-news','Updates and announcements from Auction Hub Group','#001F5C','fa-gavel',2),
             ('Industry News','industry-news','South African automotive industry news and trends','#e8a000','fa-newspaper',3),
             ('Buying Guides','buying-guides','Tips, advice and guides for buying repossessed vehicles','#4caf50','fa-book-open',4),
-            ('Finance Tips','finance-tips','Vehicle finance advice and in-house finance updates','#9c27b0','fa-piggy-bank',5)
+            ('Finance Tips','finance-tips','Vehicle finance advice and finance updates','#9c27b0','fa-piggy-bank',5)
         ");
     }
 

@@ -717,7 +717,7 @@ function displayPrice(array $auction): string {
 
 
 <!-- ══════════════════════════════════════════════════════════
-     IN-HOUSE FINANCE — TEASER STRIP
+     FINANCE — TEASER STRIP
      ══════════════════════════════════════════════════════════ -->
 <section style="background:linear-gradient(135deg,#001432,#003f73);padding:2.25rem 1.5rem;" id="finance-teaser">
     <div class="container">
@@ -727,15 +727,15 @@ function displayPrice(array $auction): string {
                     <i class="fas fa-hand-holding-dollar" style="color:#6eff9e;font-size:1.2rem;"></i>
                 </div>
                 <div>
-                    <div style="color:#6eff9e;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.2rem;">In-House Vehicle Finance</div>
-                    <h3 style="color:#fff;font-size:1rem;font-weight:800;margin:0;line-height:1.4;">No Credit Checks &bull; No ITC &bull; Blacklisted Welcome &bull; R10,500 Deposit</h3>
+                    <div style="color:#6eff9e;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.2rem;">Vehicle Finance</div>
+                    <h3 style="color:#fff;font-size:1rem;font-weight:800;margin:0;line-height:1.4;">Instant Finance Score &bull; Low Score? Start-Up Deposit &bull; From R10,500 Deposit</h3>
                 </div>
             </div>
             <div style="display:flex;gap:.65rem;flex-wrap:wrap;flex-shrink:0;">
                 <a href="<?= APP_URL ?>/financing.php" style="background:#fff;color:#005BA1;padding:.75rem 1.5rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.88rem;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;">
                     <i class="fas fa-hand-holding-dollar"></i> Explore Finance
                 </a>
-                <a href="mailto:<?= COMPANY_EMAIL ?>?subject=In-House%20Finance%20Enquiry"
+                <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Finance%20Enquiry"
                    style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;padding:.75rem 1.5rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.88rem;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;">
                     <i class="fas fa-envelope"></i> Enquire
                 </a>
@@ -785,9 +785,9 @@ function displayPrice(array $auction): string {
                 <div class="why-card-icon why-icon-blue">
                     <i class="fas fa-hand-holding-dollar" aria-hidden="true"></i>
                 </div>
-                <h3>In-House Finance</h3>
+                <h3>Finance</h3>
                 <p>
-                    No credit checks. No ITC. Blacklisted clients welcome.
+                    Instant finance score. Low score or blacklisted? Qualify with a start-up deposit.
                     From R10,500 deposit — pay more to lower instalments. Flexible terms from 6 to 48 months.
                 </p>
             </div>

@@ -123,6 +123,43 @@ function logAdminAction(array $admin, string $action, ?int $auctionId, array $de
 }
 
 // IDs posted as a JSON array → unique positive ints (max 500 per request)
+/**
+ * Puts unsold lots back up for auction: old bids are copied into the change log,
+ * then cleared, so each lot starts fresh at its starting price. Refused (fail())
+ * if the log can't be written, so no bids are ever lost.
+ */
+function relistLots(array $admin, array $ids, string $start, string $end, string $status): void {
+    global $pdo;
+    $bidsQ = $pdo->prepare("
+        SELECT bidder_number, bidder_name, user_id, COALESCE(bid_amount, amount) AS amount,
+               COALESCE(bid_time, created_at) AS at
+        FROM bids WHERE auction_id = ? ORDER BY id
+    ");
+    $del = $pdo->prepare("DELETE FROM bids WHERE auction_id = ?");
+    $upd = $pdo->prepare("
+        UPDATE auctions SET status = ?, start_time = ?, end_time = ?, current_price = start_price,
+               is_sold = 0, final_price = NULL, sold_date = NULL, sold_to = NULL, sold_to_user_id = NULL
+        WHERE id = ? AND is_sold = 0
+    ");
+    $pdo->beginTransaction();
+    try {
+        foreach ($ids as $id) {
+            $bidsQ->execute([$id]);
+            $bids = $bidsQ->fetchAll();
+            logAdminAction($admin, 'relist', $id, ['start' => $start, 'end' => $end, 'cleared_bids' => $bids], true);
+            if ($bids) $del->execute([$id]);
+            $upd->execute([$status, $start, $end, $id]);
+        }
+        $pdo->commit();
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        if (str_contains($e->getMessage(), 'admin_activity_log')) {
+            fail('Relist needs the change-log table first: run sql/ahg_admin_activity_log.sql in phpMyAdmin.');
+        }
+        fail('Relist failed: ' . $e->getMessage());
+    }
+}
+
 function postedIds(string $field = 'auction_ids'): array {
     $ids = json_decode($_POST[$field] ?? '[]', true);
     if (!is_array($ids)) return [];
@@ -2583,6 +2620,75 @@ switch ($action) {
         ok(['message' => "Status changed to '$status' for $count auction(s)."]);
     }
 
+    // ── GO LIVE: put every eligible vehicle live for N days ───
+    // Admin → Auctions → "Go Live" card (and Overview quick action).
+    // Options: days (1–90), start (now / tomorrow 09:00 / custom), closing time
+    // (HH:MM, or 'exact' = start + N×24h), stagger (minutes between lots, so they
+    // close one by one), and which lots: upcoming · already live (timer reset) ·
+    // expired without bids. Sold lots, lots with bids that have ended, and lots
+    // reserved by an approved finance / Presold pre-auction client are never touched.
+    // dry_run=1 returns the counts only.
+    case 'go_live_all': {
+        $admin = adminOnly();
+        $days = (int)($_POST['days'] ?? 10);
+        if ($days < 1 || $days > 90) fail('Choose between 1 and 90 days.');
+        $mode = (string)($_POST['start_mode'] ?? 'now');
+        if ($mode === 'tomorrow')    $startTs = strtotime('tomorrow 09:00');
+        elseif ($mode === 'custom')  $startTs = strtotime((string)($_POST['start'] ?? ''));
+        else                         $startTs = time();
+        if (!$startTs) fail('Choose a valid start date and time.');
+        $close = (string)($_POST['close_time'] ?? '18:00');
+        if ($close === 'exact') $endTs = $startTs + $days * 86400;
+        elseif (preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $close)) $endTs = strtotime(date('Y-m-d', $startTs + $days * 86400) . ' ' . $close);
+        else fail('Choose a closing time.');
+        if ($endTs <= max(time(), $startTs)) fail('The closing time must be in the future.');
+        $stagger = max(0, min(30, (int)($_POST['stagger'] ?? 0)));
+
+        $scopes = [];
+        if (!empty($_POST['inc_upcoming'])) $scopes[] = "a.status = 'upcoming' AND (a.end_time IS NULL OR a.end_time > NOW())";
+        if (!empty($_POST['inc_live']))     $scopes[] = "a.status = 'active' AND (a.end_time IS NULL OR a.end_time > NOW())";
+        if (!empty($_POST['inc_expired']))  $scopes[] = "(a.end_time IS NOT NULL AND a.end_time <= NOW()) AND NOT EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id)";
+        if (!$scopes) fail('Tick at least one group of vehicles.');
+        $where = "COALESCE(a.is_sold, 0) = 0 AND ((" . implode(') OR (', $scopes) . "))";
+        if (!empty($_POST['photo_only'])) $where .= " AND COALESCE(a.image_url, '') <> ''";
+        $ids = array_map('intval', $pdo->query("SELECT a.id FROM auctions a WHERE $where ORDER BY a.id")->fetchAll(PDO::FETCH_COLUMN));
+
+        // Reserved for an approved finance / Presold pre-auction client
+        $reserved = [];
+        try {
+            $reserved = array_map('intval', $pdo->query("SELECT DISTINCT auction_id FROM client_applications
+                WHERE auction_id IS NOT NULL AND status IN ('approved','paid','completed')")->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Throwable $e) { /* no applications table yet */ }
+        $skipped = count(array_intersect($ids, $reserved));
+        $ids = array_values(array_diff($ids, $reserved));
+
+        $first = date('D d M Y, H:i', $endTs);
+        $last  = date('D d M Y, H:i', $endTs + max(0, count($ids) - 1) * $stagger * 60);
+        if (!empty($_POST['dry_run'])) {
+            ok(['count' => count($ids), 'skipped' => $skipped, 'start' => date('D d M Y, H:i', $startTs), 'end' => $first, 'last' => $last]);
+        }
+        if (!$ids) fail('No vehicles match — nothing was changed.');
+
+        $start = date('Y-m-d H:i:s', $startTs);
+        $status = $startTs > time() + 60 ? 'upcoming' : 'active';   // a future start goes live on its start time
+        $upd = $pdo->prepare("UPDATE auctions SET status = ?, start_time = ?, end_time = ? WHERE id = ? AND COALESCE(is_sold, 0) = 0");
+        $pdo->beginTransaction();
+        try {
+            foreach ($ids as $i => $id) {
+                $upd->execute([$status, $start, date('Y-m-d H:i:s', $endTs + $i * $stagger * 60), $id]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            fail('Go Live failed: ' . $e->getMessage());
+        }
+        logAdminAction($admin, 'go_live', null, ['count' => count($ids), 'days' => $days, 'start' => $start,
+            'end' => date('Y-m-d H:i:s', $endTs), 'stagger' => $stagger, 'ids' => $ids]);
+        ok(['message' => count($ids) . ' vehicle(s) ' . ($status === 'active' ? 'are Live now' : 'go Live on ' . date('D d M, H:i', $startTs))
+            . ' until ' . $first . ($stagger && count($ids) > 1 ? ' (last lot closes ' . $last . ')' : '') . '.'
+            . ($skipped ? " $skipped reserved for finance / pre-auction clients skipped." : ''), 'count' => count($ids)]);
+    }
+
     // ── SET ALL AUCTION STATUS (make all live / upcoming) ─────
     case 'set_all_auction_status': {
         adminOnly();
@@ -2854,7 +2960,7 @@ switch ($action) {
             [3, 'Bank repossessions and estate vehicles at unbeatable prices'],
             [4, 'All vehicles are DEKRA Certified - total transparency'],
             [5, 'Nationwide delivery available - contact us for details'],
-            [6, 'In-House Finance available - no credit checks, blacklisted welcome'],
+            [6, 'Finance - instant score, low score? qualify with a start-up deposit'],
             [7, 'SAIA, NAA, JCCI, IEASA member - Level 2 BBBEE certified'],
             [8, 'Call us: ' . COMPANY_PHONE . ' - ' . COMPANY_EMAIL],
         ];
@@ -3480,8 +3586,8 @@ switch ($action) {
         $vals = [];
         foreach (UF_PREF_COLUMNS as $kind => $col) $vals[] = !empty($_POST[$kind]) ? 1 : 0;
         $vals[] = $user['sub'];
-        $pdo->prepare("UPDATE user_email_prefs SET outbid_emails = ?, watch_emails = ?, saved_search_emails = ? WHERE user_id = ?")
-            ->execute($vals);
+        $sets = implode(', ', array_map(fn($c) => "$c = ?", array_values(UF_PREF_COLUMNS)));
+        $pdo->prepare("UPDATE user_email_prefs SET $sets WHERE user_id = ?")->execute($vals);
         ok(['message' => 'Email settings saved.']);
     }
 
@@ -4179,35 +4285,43 @@ switch ($action) {
         $skipped = count($ids) - count($unsold);
         if (!$unsold) fail('All selected lots are sold — undo the sale first to relist them.');
 
-        $bidsQ = $pdo->prepare("
-            SELECT bidder_number, bidder_name, user_id, COALESCE(bid_amount, amount) AS amount,
-                   COALESCE(bid_time, created_at) AS at
-            FROM bids WHERE auction_id = ? ORDER BY id
-        ");
-        $pdo->beginTransaction();
-        try {
-            foreach ($unsold as $id) {
-                $bidsQ->execute([$id]);
-                $bids = $bidsQ->fetchAll();
-                logAdminAction($admin, 'relist', $id, ['start' => $start, 'end' => $end, 'cleared_bids' => $bids], true);
-                $pdo->prepare("DELETE FROM bids WHERE auction_id = ?")->execute([$id]);
-                $pdo->prepare("
-                    UPDATE auctions SET status = ?, start_time = ?, end_time = ?, current_price = start_price,
-                           is_sold = 0, final_price = NULL, sold_date = NULL, sold_to = NULL, sold_to_user_id = NULL
-                    WHERE id = ?
-                ")->execute([$status, $start, $end, $id]);
-            }
-            $pdo->commit();
-        } catch (PDOException $e) {
-            $pdo->rollBack();
-            if (str_contains($e->getMessage(), 'admin_activity_log')) {
-                fail('Relist needs the change-log table first: run sql/ahg_admin_activity_log.sql in phpMyAdmin.');
-            }
-            fail('Relist failed: ' . $e->getMessage());
-        }
+        relistLots($admin, $unsold, $start, $end, $status);
         $msg = count($unsold) . ' lot(s) relisted as ' . ($status === 'active' ? 'Live' : 'Upcoming') . '.';
         if ($skipped) $msg .= " $skipped sold lot(s) skipped.";
         ok(['message' => $msg]);
+    }
+
+    // One click: every unsold lot whose end time has passed goes Live again,
+    // from now until N days ahead (the admin's preferred period, remembered).
+    // Lots that got bids (reserve not met) are only included when asked.
+    case 'relist_expired': {
+        $admin = adminOnly();
+        $days  = (int)($_POST['days'] ?? 7);
+        if ($days < 1 || $days > 60) fail('Choose a period between 1 and 60 days.');
+        $withBids = !empty($_POST['include_bid_lots']);
+
+        // Lots still marked live/upcoming that ended WITH bids haven't been closed yet
+        // (cron not run). Close them the normal way first, so a winning bid becomes a
+        // sale instead of being wiped by the relist.
+        $open = $pdo->query("SELECT a.id FROM auctions a WHERE " . EXPIRED_UNSOLD_SQL . "
+                             AND a.status <> 'closed' AND EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id)")
+                    ->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($open as $oid) closeAuction((int)$oid);
+
+        $ids =array_map('intval', $pdo->query("
+            SELECT a.id FROM auctions a
+            WHERE " . EXPIRED_UNSOLD_SQL . ($withBids ? '' : " AND NOT EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id)")
+        )->fetchAll(PDO::FETCH_COLUMN));
+        if (!$ids) fail('There are no expired vehicles to relist.');
+
+        $start = date('Y-m-d H:i:s');
+        $end   = date('Y-m-d 18:00:00', strtotime("+$days days"));
+        relistLots($admin, $ids, $start, $end, 'active');
+        try {
+            $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('relist_days', ?)
+                           ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)")->execute([(string)$days]);
+        } catch (Throwable $e) { /* no settings table: the period just isn't remembered */ }
+        ok(['message' => count($ids) . ' vehicle(s) are Live again until ' . date('D d M Y, 18:00', strtotime($end)) . '.']);
     }
 
     case 'bulk_delete_auctions': {

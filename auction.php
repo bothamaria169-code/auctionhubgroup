@@ -205,7 +205,7 @@ $vinVisible = vinVisibleToVisitor($currentUser);
 if (!$vinVisible) {
     $auction['description'] = vinScrub($auction['description'] ?? '');
 }
-// No bids yet and not Presold: pre-auction purchase and in-house finance are open.
+// No bids yet and not Presold: pre-auction purchase and finance are open.
 $canBuyBefore = !$isSold && in_array($auction['status'], ['upcoming', 'active'], true) && $bidCount === 0
                 && (float)($auction['current_price'] ?: $auction['start_price']) > 0
                 && !in_array($auctionId, ahgSchemaReady() ? finReservedIds() : [], true);
@@ -1114,9 +1114,9 @@ $breadcrumbLd = [
                 <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#003f73;font-size:1.05rem;letter-spacing:.02em;margin:0 0 .6rem;text-transform:uppercase"><i class="fas fa-bolt" style="color:#e8a000" aria-hidden="true"></i> No bids yet — secure it before the auction</div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem">
                     <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-primary btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-key" aria-hidden="true"></i> Pre-Auction Purchase</a>
-                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> In-House Finance</a>
+                    <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> Finance</a>
                 </div>
-                <p style="font-size:.78rem;color:#5a6a7a;margin:.55rem 0 0;line-height:1.55">Pre-auction: <?= paRange()[0] ?>–<?= paRange()[1] ?>% commitment fee, Presold under your name. Finance: from <?= formatRand(finMinDeposit($auction)) ?> deposit, no credit checks — instant quote.</p>
+                <p style="font-size:.78rem;color:#5a6a7a;margin:.55rem 0 0;line-height:1.55">Pre-auction: commitment fee set on your proforma invoice, Presold under your name. Finance: from <?= formatRand(finMinDeposit($auction)) ?> deposit — instant score and quote.</p>
             </div>
             <?php endif; ?>
             <!-- END BID PANEL MAIN CONTENT -->

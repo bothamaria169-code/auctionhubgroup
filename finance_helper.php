@@ -1,14 +1,17 @@
 <?php
 // ============================================================
 // AUCTION HUB GROUP — finance_helper.php
-// Online applications for In-House Finance and Pre-Auction Purchase.
+// Online applications for Finance and Pre-Auction Purchase.
 // One table: client_applications (db_schema.php). Each client follows
 // their application on a private page (my_application.php?t=…);
 // the office works it in Admin → Finance & Pre-Auction.
 //
-// IN-HOUSE FINANCE (financing.php → finance_apply.php)
-//   1 Quote          vehicle + deposit (min R10,500) → instant quote on every
-//                    term, at the same rates as the financing.php calculator.
+// FINANCE (financing.php → finance_apply.php)
+//   1 Assessment &   full application (ID, employment, income & expenses,
+//     quote          credit profile, consent) → scored out of 100 (finAssess):
+//                    grade A approved in principle; B–D need a start-up deposit;
+//                    R (no room in the budget) referred to the office. Instant
+//                    quote at the required deposit; only affordable terms open.
 //   2 Term           the client chooses 6–48 months (up to 72 on trucks & plant).
 //   3 Documents &    office approves the deposit (deposit invoice), suggests a
 //     deposit        higher one, or declines. Client uploads SA ID, proof of
@@ -53,6 +56,7 @@ const FIN_DOCS = [
 
 const FIN_STATUS_LABELS = [
     'finance' => [
+        'review'    => 'Referred — assess and call the client',
         'quoted'    => 'Quote sent — client to choose a term',
         'chosen'    => 'Term chosen — approve the deposit',
         'invoiced'  => 'Deposit invoice sent — documents & payment',
@@ -203,7 +207,7 @@ function vinVisibleToVisitor(?array $user): bool {
 function vinChannels(): array {
     return [
         ['fa-id-card',      '#005BA1', 'Verified bidders',         'Register and pay your refundable ' . REG_FEE_LABEL . ' deposit — the VIN shows on the vehicle page once your bidder number is active.'],
-        ['fa-hand-holding-dollar', '#e8a000', 'Approved finance clients', 'Once your in-house finance is approved, the VIN is on your application page and approval letter.'],
+        ['fa-hand-holding-dollar', '#e8a000', 'Approved finance clients', 'Once your finance is approved, the VIN is on your application page and approval letter.'],
         ['fa-key',          '#25D366', 'Presold to you',           'Once your pre-auction commitment fee is verified, the VIN is on your application page with your Buyer Code.'],
         ['fa-location-dot', '#8b5cf6', 'On site',                  'Visit us at ' . COMPANY_ADDRESS . ' and our team shows you the VIN on the vehicle itself.'],
     ];
@@ -303,8 +307,8 @@ function finCreate(string $kind, array $person, array $vehicle, float $amount, ?
     try {
         $pdo->prepare("INSERT INTO enquiries (type, name, email, phone, auction_id, message, source_page, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
             ->execute([$kind, $person['name'], $person['email'], $person['phone'], (int)$vehicle['id'],
-                       ($kind === 'finance' ? 'In-house finance application ' . finRef($app) . ' · deposit ' . formatRand($amount)
-                                            : 'Pre-auction purchase request ' . finRef($app) . ' · commitment fee ' . (int)$percent . '%'),
+                       ($kind === 'finance' ? 'Finance application ' . finRef($app) . ' · deposit ' . formatRand($amount)
+                                            : 'Pre-auction purchase request ' . finRef($app) . ' · commitment fee set by the office'),
                        $kind === 'finance' ? 'finance_apply.php' : 'preauction_request.php', $_SERVER['REMOTE_ADDR'] ?? null]);
     } catch (Throwable $e) { error_log('[AHG fin] enquiry row: ' . $e->getMessage()); }
     return $app;
@@ -343,6 +347,319 @@ function finChosenPlan(array $app): ?array {
     $m = (int)($app['details']['choice']['months'] ?? 0);
     foreach ($app['details']['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m) return $p;
     return null;
+}
+
+// ── Credit & affordability assessment ─────────────────────────
+// Every application is scored out of 100 on five things, the same way
+// every time (Admin → Finance & Pre-Auction → Settings sets the cut-offs):
+//   Affordability 30 · Credit profile 25 · Employment 20 · Deposit 15 · Stability 10
+// Grade A  (≥ fin_score_a, 70): approved in principle at the normal minimum deposit.
+// Grade B  (≥ fin_score_b, 55): approved with a start-up deposit of fin_startup_b % of the price.
+// Grade C  (≥ fin_score_c, 40): start-up deposit of fin_startup_c %.
+// Grade D  (below):             start-up deposit of fin_startup_d %.
+// Whatever the grade, the instalment must fit the budget: the most we lend is what
+// the client can repay on the longest term at fin_afford_pct % of their net income
+// (and fin_buffer_pct % of what is left after expenses). Anything above that becomes
+// part of the start-up deposit. No room in the budget at all → referred to the office (R).
+// A credit bureau score entered by the office replaces the client's own estimate.
+
+const FIN_CREDIT_BANDS = [   // key => [label, points out of 25, typical score]
+    'excellent' => ['Excellent (700 and above)', 25, 720],
+    'good'      => ['Good (650 – 699)',          21, 670],
+    'fair'      => ['Fair (600 – 649)',          16, 620],
+    'poor'      => ['Poor (500 – 599)',          10, 550],
+    'very_poor' => ['Very poor (below 500)',      5, 450],
+    'unknown'   => ["I don't know my score",     12, null],
+];
+const FIN_EMPLOYMENT = [
+    'permanent' => 'Permanently employed',
+    'contract'  => 'Contract / temporary',
+    'self'      => 'Self-employed / own business',
+    'pensioner' => 'Pensioner',
+    'other'     => 'Other income (grant, maintenance, rental)',
+];
+const FIN_RESIDENCE = [
+    'own'      => 'I own my home',
+    'rent'     => 'I rent',
+    'family'   => 'I live with family',
+    'employer' => 'Employer-provided housing',
+];
+const FIN_GRADE_LABELS = [
+    'A' => 'Approved in principle',
+    'B' => 'Qualifies with a start-up deposit',
+    'C' => 'Qualifies with a start-up deposit',
+    'D' => 'Qualifies with a larger start-up deposit',
+    'R' => 'Referred to our finance team',
+];
+
+/** All assessment rules, from settings. */
+function finRules(): array {
+    $n = fn(string $k, string $d) => (float)finSetting($k, $d);
+    return [
+        'score_a'    => $n('fin_score_a', '70'),    'score_b'   => $n('fin_score_b', '55'),   'score_c'   => $n('fin_score_c', '40'),
+        'startup_b'  => $n('fin_startup_b', '20'),  'startup_c' => $n('fin_startup_c', '35'), 'startup_d' => $n('fin_startup_d', '50'),
+        'afford_pct' => $n('fin_afford_pct', '30'), 'buffer_pct' => $n('fin_buffer_pct', '90'),
+        'min_income' => $n('fin_min_income', '4000'),
+        'norm_base'  => $n('fin_norm_base', '2500'), 'norm_dep' => $n('fin_norm_dependant', '900'),
+        'max_age'    => $n('fin_max_age', '70'),
+    ];
+}
+
+/** Score band for a bureau / known score (0–999 scale used by SA bureaus). */
+function finBandForScore(int $score): string {
+    return $score >= 700 ? 'excellent' : ($score >= 650 ? 'good' : ($score >= 600 ? 'fair' : ($score >= 500 ? 'poor' : 'very_poor')));
+}
+
+/** SA ID number → ['dob','age','gender','citizen'] or null when it is not valid (date + Luhn check digit). */
+function finSaId(string $id): ?array {
+    $id = preg_replace('/\D/', '', $id);
+    if (strlen($id) !== 13) return null;
+    $sum = 0;
+    for ($i = 0; $i < 13; $i++) {
+        $d = (int)$id[12 - $i];
+        if ($i % 2 === 1) { $d *= 2; if ($d > 9) $d -= 9; }
+        $sum += $d;
+    }
+    if ($sum % 10 !== 0) return null;
+    $yy = (int)substr($id, 0, 2); $mm = (int)substr($id, 2, 2); $dd = (int)substr($id, 4, 2);
+    $year = $yy + ($yy > (int)date('y') ? 1900 : 2000);
+    if (!checkdate($mm, $dd, $year)) return null;
+    $dob = sprintf('%04d-%02d-%02d', $year, $mm, $dd);
+    $age = (int)(new DateTime($dob))->diff(new DateTime('today'))->y;
+    return ['dob' => $dob, 'age' => $age, 'gender' => (int)$id[6] >= 5 ? 'M' : 'F', 'citizen' => $id[10] === '0'];
+}
+
+/** Age from a date of birth (passport applicants). */
+function finAgeFromDob(string $dob): ?int {
+    $t = strtotime($dob);
+    if (!$t || $t > time()) return null;
+    return (int)(new DateTime(date('Y-m-d', $t)))->diff(new DateTime('today'))->y;
+}
+
+/**
+ * Scores an application. $in: age, employment, months_employed, net_income, other_income,
+ * exp_housing, exp_living, exp_debt, exp_other, dependants, residence, years_address,
+ * bank_years, credit_band, credit_score (own estimate), debt_review, judgments,
+ * bureau_score (office). $vehicle needs body_type / item_name (for the term tiers).
+ */
+function finAssess(array $in, float $price, float $deposit, array $vehicle): array {
+    $r = finRules();
+    $num = fn(string $k) => max(0.0, (float)($in[$k] ?? 0));
+    $tiers = finTiers($vehicle);
+    $longest = max(array_keys($tiers));
+    $rate = $tiers[$longest] / 100;
+    $minDep = finMinDeposit($vehicle);
+
+    // Budget
+    $income   = $num('net_income') + $num('other_income');
+    $deps     = (int)min(15, $num('dependants'));
+    $norm     = $r['norm_base'] + $r['norm_dep'] * $deps;
+    $living   = max($num('exp_living'), $norm);
+    $expenses = $num('exp_housing') + $living + $num('exp_debt') + $num('exp_other');
+    $free     = $income - $expenses;
+    $maxInst  = max(0.0, min($income * $r['afford_pct'] / 100, $free * $r['buffer_pct'] / 100));
+    $maxLend  = $maxInst > 0 ? $maxInst * $longest / (1 + $rate * $longest) : 0.0;
+    $instalFor = fn(float $dep) => max(0.0, $price - $dep) * (1 + $rate * $longest) / $longest;
+
+    $pts = [];
+    // 1 Affordability (30): cheapest instalment at the client's deposit vs what fits the budget
+    $need  = $instalFor(max($deposit, $minDep));
+    $ratio = $maxInst > 0 ? $need / $maxInst : 99;
+    $p = $ratio <= .6 ? 30 : ($ratio <= .8 ? 25 : ($ratio <= 1 ? 19 : ($ratio <= 1.3 ? 9 : 0)));
+    $pts['afford'] = ['Affordability', $p, 30, $maxInst > 0
+        ? 'Instalment from ' . formatRand($need) . ' vs ' . formatRand($maxInst) . ' your budget allows'
+        : 'No room in the monthly budget after expenses'];
+
+    // 2 Credit profile (25)
+    $bureau = isset($in['bureau_score']) && $in['bureau_score'] !== '' && $in['bureau_score'] !== null ? (int)$in['bureau_score'] : null;
+    $own    = isset($in['credit_score']) && (int)$in['credit_score'] > 0 ? (int)$in['credit_score'] : null;
+    $band   = $bureau !== null ? finBandForScore($bureau)
+            : ($own !== null ? finBandForScore($own) : (isset(FIN_CREDIT_BANDS[$in['credit_band'] ?? '']) ? $in['credit_band'] : 'unknown'));
+    $p = FIN_CREDIT_BANDS[$band][1];
+    $notes = [($bureau !== null ? 'Bureau score ' . $bureau : ($own !== null ? 'Own estimate ' . $own : 'Own estimate')) . ' — ' . FIN_CREDIT_BANDS[$band][0]];
+    if (!empty($in['debt_review'])) { $p -= 8; $notes[] = 'under debt review'; }
+    if (!empty($in['judgments']))   { $p -= 6; $notes[] = 'judgments / adverse listings'; }
+    $pts['credit'] = ['Credit profile', max(0, $p), 25, implode(', ', $notes)];
+
+    // 3 Employment (20)
+    $emp = isset(FIN_EMPLOYMENT[$in['employment'] ?? '']) ? $in['employment'] : 'other';
+    $mo  = (int)$num('months_employed');
+    $p = match ($emp) {
+        'permanent' => 12 + ($mo >= 24 ? 8 : ($mo >= 12 ? 6 : ($mo >= 6 ? 3 : 0))),
+        'self'      => 8 + ($mo >= 24 ? 6 : ($mo >= 12 ? 4 : 0)),
+        'contract'  => 6 + ($mo >= 12 ? 4 : ($mo >= 6 ? 2 : 0)),
+        'pensioner' => 16,
+        default     => 4,
+    };
+    $pts['employment'] = ['Employment', $p, 20, FIN_EMPLOYMENT[$emp] . (in_array($emp, ['permanent', 'self', 'contract'], true) ? ' · ' . $mo . ' months' : '')];
+
+    // 4 Deposit (15)
+    $pct = $price > 0 ? $deposit / $price * 100 : 0;
+    $p = $pct >= 30 ? 15 : ($pct >= 20 ? 12 : ($pct >= 15 ? 9 : ($pct >= 10 ? 6 : 3)));
+    $pts['deposit'] = ['Deposit', $p, 15, formatRand($deposit) . ' = ' . round($pct) . '% of the price'];
+
+    // 5 Stability (10)
+    $ya = $num('years_address'); $yb = $num('bank_years');
+    $p = ($ya >= 3 ? 5 : ($ya >= 1 ? 3 : 1)) + (['own' => 3, 'rent' => 2, 'employer' => 2, 'family' => 1][$in['residence'] ?? ''] ?? 1)
+       + ($yb >= 2 ? 2 : ($yb >= 1 ? 1 : 0));
+    $yrs = fn(float $v) => rtrim(rtrim(number_format($v, 1), '0'), '.');
+    $pts['stability'] = ['Stability', min(10, $p), 10, $yrs($ya) . ' yrs at address · ' . $yrs($yb) . ' yrs with bank'];
+
+    $score = (int)array_sum(array_column($pts, 1));
+    $grade = $score >= $r['score_a'] ? 'A' : ($score >= $r['score_b'] ? 'B' : ($score >= $r['score_c'] ? 'C' : 'D'));
+    $gradePct = ['A' => 0, 'B' => $r['startup_b'], 'C' => $r['startup_c'], 'D' => $r['startup_d']][$grade];
+
+    $reasons = [];
+    $age = isset($in['age']) && $in['age'] !== '' && $in['age'] !== null ? (int)$in['age'] : null;
+    if ($age !== null && $age < 18)            $reasons[] = 'Applicants must be 18 or older.';
+    if ($age !== null && $age > $r['max_age']) $reasons[] = 'Applicants older than ' . (int)$r['max_age'] . ' are assessed personally by our finance team.';
+    if ($income < $r['min_income'])            $reasons[] = 'Monthly income is below ' . formatRand($r['min_income']) . '.';
+    if ($maxInst <= 0)                         $reasons[] = 'After expenses there is no room in the budget for an instalment.';
+
+    // Start-up deposit: the grade's share of the price, and enough that the rest fits the budget
+    $required = max($minDep, $price * $gradePct / 100, $price - $maxLend);
+    $required = min($price, ceil($required / 500) * 500);
+    if (!$reasons && $required >= $price) $reasons[] = 'The instalment on this vehicle does not fit the budget — a cheaper vehicle, or a cash / pre-auction purchase, may suit better.';
+    if ($reasons) $grade = 'R';
+
+    return [
+        'at' => date('Y-m-d H:i:s'), 'score' => $score, 'grade' => $grade, 'label' => FIN_GRADE_LABELS[$grade],
+        'points' => $pts, 'reasons' => $reasons, 'credit_source' => $bureau !== null ? 'bureau' : 'own',
+        'income' => round($income, 2), 'expenses' => round($expenses, 2), 'living_norm' => $norm, 'free' => round($free, 2),
+        'max_instalment' => round($maxInst, 2), 'max_lend' => round($maxLend, 2), 'longest' => $longest,
+        'min_deposit' => $minDep, 'required_deposit' => $grade === 'R' ? null : (float)$required,
+        'startup' => $grade !== 'R' && $required > $minDep, 'startup_pct' => $gradePct,
+        'qualifies' => $grade !== 'R' && $deposit >= $required,
+    ];
+}
+
+/** Re-scores a stored application (e.g. after the office enters a bureau score) and keeps the result on it. */
+function finReassess(array &$app): array {
+    $vehicle = finVehicle((int)$app['auction_id']) ?: ['body_type' => $app['details']['vehicle']['body'] ?? '', 'item_name' => $app['vehicle']];
+    $in = $app['details']['finances'] ?? [];
+    if (isset($app['details']['bureau']['score'])) $in['bureau_score'] = (int)$app['details']['bureau']['score'];
+    // Scored on the deposit the client offered — the start-up deposit is the outcome, not an input
+    $offered = (float)($app['details']['quote']['offered'] ?? $app['amount']);
+    return $app['details']['assessment'] = finAssess($in, (float)$app['price'], $offered, $vehicle) + ['offered' => $offered];
+}
+
+/** Marks each quoted plan affordable or not against the assessment. */
+function finMarkAffordable(array &$app): void {
+    if (empty($app['details']['quote']['plans']) || empty($app['details']['assessment'])) return;
+    $max = (float)$app['details']['assessment']['max_instalment'];
+    foreach ($app['details']['quote']['plans'] as &$p) $p['affordable'] = $max > 0 && $p['monthly'] <= $max + 0.5;
+    unset($p);
+}
+
+/** True when the client may choose this plan (old applications have no assessment: all plans). */
+function finPlanAllowed(array $plan): bool {
+    return !array_key_exists('affordable', $plan) || $plan['affordable'];
+}
+
+/** Grade colour for badges and the gauge. */
+function finGradeColour(string $g): string {
+    return ['A' => '#1a9e4e', 'B' => '#0078d7', 'C' => '#e8a000', 'D' => '#ef6c00', 'R' => '#a30000'][$g] ?? '#667';
+}
+
+/**
+ * Prices the quote from the assessment: the deposit becomes the start-up deposit when the
+ * client offered less, plans are marked affordable, and the status is quoted (or review
+ * when the assessment refers the application to the office).
+ */
+function finQuoteFromAssessment(array &$app, float $offered, bool $counter = false, string $note = ''): void {
+    $as = $app['details']['assessment'];
+    // The office's own suggestion (counter) is used as is; the client's offer is raised to the start-up deposit
+    $deposit = !$counter && $as['grade'] !== 'R' ? max($offered, (float)$as['required_deposit']) : $offered;
+    if ($counter) $app['details']['quotes_old'][] = $app['details']['quote'];
+    finIssueQuote($app, $deposit, $counter, $note);
+    $app['details']['quote']['offered'] = $counter ? (float)($app['details']['quotes_old'][count($app['details']['quotes_old']) - 1]['offered'] ?? $offered) : $offered;
+    $app['details']['quote']['startup'] = !$counter && $deposit > $offered;
+    finMarkAffordable($app);
+    if ($counter && !array_filter($app['details']['quote']['plans'], 'finPlanAllowed')) {
+        foreach ($app['details']['quote']['plans'] as &$p) unset($p['affordable']);   // office override: every term open
+        unset($p);
+    }
+    $app['status'] = $app['details']['assessment']['grade'] === 'R' ? 'review' : 'quoted';
+}
+
+// ── Application form (finance_apply.php, finance_check.php) ───
+
+const FIN_TITLES   = ['Mr', 'Mrs', 'Ms', 'Miss', 'Dr', 'Prof'];
+const FIN_MARITAL  = ['single' => 'Single', 'married' => 'Married', 'cohabiting' => 'Living together', 'divorced' => 'Divorced', 'widowed' => 'Widowed'];
+const FIN_BANKS    = ['ABSA', 'African Bank', 'Bidvest Bank', 'Capitec', 'Discovery Bank', 'FNB', 'Investec', 'Nedbank', 'Old Mutual', 'Standard Bank', 'TymeBank', 'Other'];
+const FIN_PAY_DAYS = ['25th', 'Last working day', '15th', '1st', 'Weekly', 'Fortnightly', 'Other'];
+
+/**
+ * Reads the application form. Returns [fields, assessment input, errors, error step].
+ * $full = false (finance_check.php pre-check) only needs the money and credit fields.
+ * Steps: 1 vehicle & deposit · 2 about you · 3 work & income · 4 expenses & credit · 5 consent.
+ */
+function finReadForm(array $p, bool $full = true): array {
+    $t = fn(string $k, int $max = 150) => trim(mb_substr((string)($p[$k] ?? ''), 0, $max));
+    $m = fn(string $k) => finMoneyInput((string)($p[$k] ?? ''));
+    $f = [
+        'title' => in_array($p['title'] ?? '', FIN_TITLES, true) ? $p['title'] : '',
+        'first_names' => $t('first_names'), 'surname' => $t('surname'),
+        'id_type' => ($p['id_type'] ?? 'sa') === 'passport' ? 'passport' : 'sa',
+        'id_number' => strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $t('id_number', 30))),
+        'dob' => $t('dob', 10), 'marital' => isset(FIN_MARITAL[$p['marital'] ?? '']) ? $p['marital'] : '',
+        'dependants' => max(0, min(15, (int)($p['dependants'] ?? 0))),
+        'phone' => finCleanPhone((string)($p['phone'] ?? '')), 'email' => $t('email', 190),
+        'address' => $t('address', 300), 'postal_code' => preg_replace('/\D/', '', $t('postal_code', 4)),
+        'residence' => isset(FIN_RESIDENCE[$p['residence'] ?? '']) ? $p['residence'] : '',
+        'years_address' => max(0, min(80, (float)($p['years_address'] ?? 0))),
+        'employment' => isset(FIN_EMPLOYMENT[$p['employment'] ?? '']) ? $p['employment'] : '',
+        'employer' => $t('employer'), 'job_title' => $t('job_title', 100),
+        'employer_phone' => finCleanPhone((string)($p['employer_phone'] ?? '')),
+        'months_employed' => max(0, min(600, (int)($p['emp_years'] ?? 0) * 12 + (int)($p['emp_months'] ?? 0))),
+        'pay_day' => in_array($p['pay_day'] ?? '', FIN_PAY_DAYS, true) ? $p['pay_day'] : '',
+        'gross_income' => $m('gross_income'), 'net_income' => $m('net_income'), 'other_income' => $m('other_income'),
+        'exp_housing' => $m('exp_housing'), 'exp_living' => $m('exp_living'), 'exp_debt' => $m('exp_debt'), 'exp_other' => $m('exp_other'),
+        'bank_name' => in_array($p['bank_name'] ?? '', FIN_BANKS, true) ? $p['bank_name'] : '',
+        'bank_years' => max(0, min(80, (float)($p['bank_years'] ?? 0))),
+        'credit_band' => isset(FIN_CREDIT_BANDS[$p['credit_band'] ?? '']) ? $p['credit_band'] : 'unknown',
+        'credit_score' => ($cs = (int)($p['credit_score'] ?? 0)) >= 100 && $cs <= 999 ? $cs : null,
+        'debt_review' => ($p['debt_review'] ?? '') === 'yes', 'judgments' => ($p['judgments'] ?? '') === 'yes',
+    ];
+    $e = [];
+    $age = null;
+    if ($f['id_type'] === 'sa') {
+        if ($f['id_number'] !== '') {
+            $id = finSaId($f['id_number']);
+            if ($id) { $age = $id['age']; $f['dob'] = $id['dob']; $f['gender'] = $id['gender']; }
+            else $e['id_number'] = [2, 'That is not a valid 13-digit SA ID number — please check it.'];
+        } elseif ($full) $e['id_number'] = [2, 'Please enter your SA ID number.'];
+    } else {
+        if ($full && !preg_match('/^[A-Z0-9]{6,20}$/', $f['id_number'])) $e['id_number'] = [2, 'Please enter your passport number.'];
+        $age = $f['dob'] !== '' ? finAgeFromDob($f['dob']) : null;
+        if ($full && $age === null) $e['dob'] = [2, 'Please enter your date of birth.'];
+    }
+    if ($age !== null && $age < 18) $e['id_number'] = [2, 'You must be 18 or older to apply for finance.'];
+    $f['age'] = $age;
+
+    if ($full) {
+        if ($f['title'] === '')                         $e['title'] = [2, 'Please choose your title.'];
+        if (mb_strlen($f['first_names']) < 2)           $e['first_names'] = [2, 'Please enter your first name(s).'];
+        if (mb_strlen($f['surname']) < 2)               $e['surname'] = [2, 'Please enter your surname.'];
+        if ($f['marital'] === '')                       $e['marital'] = [2, 'Please choose your marital status.'];
+        if (!finValidPhone($f['phone']))                $e['phone'] = [2, 'Please enter a number we can call or WhatsApp.'];
+        if (!filter_var($f['email'], FILTER_VALIDATE_EMAIL)) $e['email'] = [2, 'Please enter a valid email — your result and quote are sent there.'];
+        if (mb_strlen($f['address']) < 8)               $e['address'] = [2, 'Please enter your residential address.'];
+        if ($f['residence'] === '')                     $e['residence'] = [2, 'Please choose where you live.'];
+        if (in_array($f['employment'], ['permanent', 'contract', 'self'], true) && mb_strlen($f['employer']) < 2)
+            $e['employer'] = [3, $f['employment'] === 'self' ? 'Please enter your business name.' : 'Please enter your employer.'];
+        if ($f['pay_day'] === '')                       $e['pay_day'] = [3, 'Please choose when you are paid.'];
+        if ($f['bank_name'] === '')                     $e['bank_name'] = [4, 'Please choose your bank.'];
+    }
+    if ($f['employment'] === '')                        $e['employment'] = [3, 'Please choose your employment status.'];
+    if ($f['net_income'] <= 0)                          $e['net_income'] = [3, 'Please enter your take-home pay (after tax and deductions).'];
+    if ($f['gross_income'] > 0 && $f['net_income'] > $f['gross_income']) $e['net_income'] = [3, 'Take-home pay cannot be more than your gross salary.'];
+    if ($f['exp_living'] <= 0)                          $e['exp_living'] = [4, 'Please enter your monthly living costs (food, transport, school, airtime…).'];
+
+    $in = ['age' => $age] + array_intersect_key($f, array_flip(['employment', 'months_employed', 'net_income', 'other_income', 'exp_housing',
+        'exp_living', 'exp_debt', 'exp_other', 'dependants', 'residence', 'years_address', 'bank_years', 'credit_band', 'credit_score', 'debt_review', 'judgments']));
+    $step = $e ? min(array_map(fn($x) => $x[0], $e)) : 0;
+    return [$f, $in, array_map(fn($x) => $x[1], $e), $step];
 }
 
 // ── Pre-auction: the existing preauction_invoices system ──────
@@ -509,7 +826,7 @@ function finIssueBuyerCode(array &$app): string {
 /** [icon, colour, title] — colours as on financing.php / preauction.php. */
 function finSteps(string $kind): array {
     return $kind === 'finance'
-        ? [['fa-calculator', '#005BA1', 'Your Quote'], ['fa-calendar-days', '#0078d7', 'Choose Your Term'],
+        ? [['fa-calculator', '#005BA1', 'Assessment & Quote'], ['fa-calendar-days', '#0078d7', 'Choose Your Term'],
            ['fa-file-signature', '#8b5cf6', 'Documents & Deposit'], ['fa-id-badge', '#e8a000', 'Buyer Code'],
            ['fa-car-side', '#ef4444', 'Test Drive'], ['fa-key', '#25D366', 'Sign & Drive Away']]
         : [['fa-user-pen', '#005BA1', 'Submit Your Details'], ['fa-file-invoice-dollar', '#8b5cf6', 'Proforma Invoice'],
@@ -521,7 +838,7 @@ function finStepIndex(array $app): int {
     $s = $app['status'];
     if ($app['kind'] === 'finance') {
         return match ($s) {
-            'quoted' => 1, 'chosen', 'invoiced' => 2,
+            'review' => 0, 'quoted' => 1, 'chosen', 'invoiced' => 2,
             'approved' => ($app['details']['viewing']['status'] ?? '') === 'confirmed' ? 4 : 3,
             'completed' => 6, default => 0,
         };
@@ -539,7 +856,7 @@ function finStatusLabel(array $app): string {
 /** AHG badge class for a status. */
 function finBadge(array $app): string {
     $s = $app['status'];
-    $cls = in_array($s, ['chosen', 'requested', 'pop_uploaded', 'invoiced'], true) ? 'badge-pending'
+    $cls = in_array($s, ['chosen', 'requested', 'pop_uploaded', 'invoiced', 'review'], true) ? 'badge-pending'
         : (in_array($s, ['approved', 'paid', 'completed'], true) ? 'badge-approved'
         : (in_array($s, ['declined', 'cancelled', 'refund', 'expired'], true) ? 'badge-rejected' : 'badge-upcoming'));
     return '<span class="badge ' . $cls . '">' . e(finStatusLabel($app)) . '</span>';
@@ -658,7 +975,7 @@ function finMailOffice(array $app, string $what): void {
         $mail = _buildMailer();
         $mail->addAddress(MAIL_ADMIN);
         $mail->addReplyTo($app['email'], $app['name']);
-        $mail->Subject = '🔔 ' . ($app['kind'] === 'finance' ? 'In-House Finance' : 'Pre-Auction') . ': ' . $what . ' — ' . $app['name'] . ' | ' . finRef($app);
+        $mail->Subject = '🔔 ' . ($app['kind'] === 'finance' ? 'Finance' : 'Pre-Auction') . ': ' . $what . ' — ' . $app['name'] . ' | ' . finRef($app);
         $rows = [['Client', $app['name']], ['Phone', $app['phone']], ['Email', $app['email']], ['Vehicle', $app['vehicle']],
                  ['Price', formatRand((float)$app['price'])],
                  [$app['kind'] === 'finance' ? 'Deposit' : 'Commitment fee', $app['kind'] === 'finance' ? formatRand((float)$app['amount']) : paPercent($app) . '% = ' . formatRand(paCommitment($app))],
@@ -678,18 +995,28 @@ function finRecordMail(array &$app, string $what, bool $ok): void {
 
 function finSendQuote(array &$app): bool {
     $q = $app['details']['quote'];
+    $review = $app['status'] === 'review';
     $rows = '';
-    foreach ($q['plans'] as $p) $rows .= '<p><strong>' . $p['months'] . ' months:</strong> ' . formatRand($p['monthly']) . ' / month</p>';
+    foreach ($q['plans'] as $p) if (finPlanAllowed($p)) $rows .= '<p><strong>' . $p['months'] . ' months:</strong> ' . formatRand($p['monthly']) . ' / month</p>';
+    if ($rows === '') $rows = '<p>None of the terms fit your budget at this deposit yet — our finance team will call you.</p>';
     $intro = !empty($q['counter'])
         ? '<p>Thank you for your patience. We are not able to approve a deposit of ' . formatRand((float)(end($app['details']['quotes_old'])['deposit'] ?? 0))
           . ' on this vehicle, but we <strong>can approve a deposit of ' . formatRand($q['deposit']) . '</strong>. Your updated quote is below.</p>'
           . ($q['note'] !== '' ? '<p>' . nl2br(e($q['note'])) . '</p>' : '')
-        : '<p>Thank you for applying for <strong>In-House Vehicle Finance</strong> — no credit checks, no ITC, no bureau inquiries. Everyone qualifies. Here is your personalised quote:</p>';
+        : '<p>Thank you for applying for <strong>Vehicle Finance</strong>. We have assessed your application — here is your result and personalised quote:</p>';
+    if (!empty($app['details']['assessment'])) {
+        $as = $app['details']['assessment'];
+        $intro .= '<div class="highlight-box"><p><strong>Your finance score:</strong> ' . (int)$as['score'] . ' / 100 — ' . e($as['label']) . '</p>'
+            . (!empty($q['startup']) ? '<p><strong>Start-up deposit for approval:</strong> ' . formatRand($q['deposit']) . ' (you offered ' . formatRand((float)$q['offered']) . ')</p>' : '')
+            . '<p><strong>Most your budget allows per month:</strong> ' . formatRand((float)$as['max_instalment']) . '</p></div>';
+    }
     $body = $intro
         . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand($q['price']) . '</p><p><strong>Your deposit:</strong> ' . formatRand($q['deposit']) . '</p><p><strong>Amount financed:</strong> ' . formatRand($q['financed']) . '</p></div>'
         . '<h3 style="color:#005BA1;font-size:16px;">Your monthly options</h3><div class="highlight-box">' . $rows . '</div>'
-        . '<p><strong>Next:</strong> choose your repayment term on your application page. Quote valid until ' . date('j F Y', strtotime($q['valid'])) . '.</p>';
-    $ok = finMailClient($app, !empty($q['counter']) ? 'Your Updated Finance Quote' : 'Your In-House Finance Quote', $body, 'Choose My Term', 'plans');
+        . ($review ? '<p>Our finance team will call you within one business day to talk through your options.</p>'
+                   : '<p><strong>Next:</strong> choose your repayment term on your application page. Quote valid until ' . date('j F Y', strtotime($q['valid'])) . '.</p>');
+    $ok = finMailClient($app, $review ? 'Your Finance Application — We Will Call You' : (!empty($q['counter']) ? 'Your Updated Finance Quote' : 'Your Finance Result & Quote'),
+        $body, $review ? 'View My Application' : 'Choose My Term', $review ? 'result' : 'plans');
     finRecordMail($app, 'Quote ' . $q['number'], $ok);
     return $ok;
 }
@@ -722,9 +1049,14 @@ function finCounterDeposit(array &$app, float $deposit, string $note, string $by
     if ($deposit <= (float)$app['amount']) return 'The suggested deposit should be higher than the client\'s ' . formatRand((float)$app['amount']) . '.';
     if ($deposit >= (float)$app['price']) return 'That covers the whole price — there would be nothing to finance.';
     if ($vehicle && $deposit < finMinDeposit($vehicle)) return 'That is below the minimum deposit for this vehicle.';
-    $app['details']['quotes_old'][] = $app['details']['quote'];
-    finIssueQuote($app, $deposit, true, $note);
-    $app['status'] = 'quoted';
+    if (!empty($app['details']['assessment'])) {
+        finQuoteFromAssessment($app, $deposit, true, $note);
+        if ($app['status'] === 'review') $app['status'] = 'quoted';   // the office decided: let the client choose
+    } else {
+        $app['details']['quotes_old'][] = $app['details']['quote'];
+        finIssueQuote($app, $deposit, true, $note);
+        $app['status'] = 'quoted';
+    }
     finLog($app, 'Suggested a deposit of ' . formatRand($deposit), $by);
     finSendQuote($app);
     return '';
@@ -736,7 +1068,7 @@ function finDecline(array &$app, string $reason, string $by): void {
     $app['details']['declined'] = ['at' => date('Y-m-d H:i:s'), 'reason' => $reason];
     finLog($app, 'Declined' . ($reason !== '' ? ': ' . $reason : ''), $by);
     $isFin = $app['kind'] === 'finance';
-    $ok = finMailClient($app, $isFin ? 'Your In-House Finance Application' : 'Your Pre-Auction Purchase Request',
+    $ok = finMailClient($app, $isFin ? 'Your Finance Application' : 'Your Pre-Auction Purchase Request',
         '<p>Thank you for your trust in Auction Hub Group. We are sorry to let you know that we are <strong>not able to proceed</strong> with your '
         . ($isFin ? 'finance application' : 'pre-auction request') . ' on this vehicle.</p>'
         . ($reason !== '' ? '<div class="highlight-box"><p>' . nl2br(e($reason)) . '</p></div>' : '')
@@ -803,7 +1135,7 @@ function finMoneyInput(string $v): float {
 }
 
 function finWhatsAppUrl(array $app): string {
-    $msg = 'Hi Auction Hub Group, this is ' . $app['name'] . ' — ' . ($app['kind'] === 'finance' ? 'In-House Finance' : 'Pre-Auction') . ' ' . finRef($app) . ' for the ' . $app['vehicle'] . '.';
+    $msg = 'Hi Auction Hub Group, this is ' . $app['name'] . ' — ' . ($app['kind'] === 'finance' ? 'Finance' : 'Pre-Auction') . ' ' . finRef($app) . ' for the ' . $app['vehicle'] . '.';
     return 'https://wa.me/' . COMPANY_WHATSAPP_INTL . '?text=' . rawurlencode($msg);
 }
 

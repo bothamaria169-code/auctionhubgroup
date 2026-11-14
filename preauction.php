@@ -1103,21 +1103,21 @@ function filterByBranch(branchId, btn) {
 
 
 <!-- ══════════════════════════════════════════════════════════
-     IN-HOUSE FINANCE BANNER
+     FINANCE BANNER
 ══════════════════════════════════════════════════════════ -->
 <section style="background:linear-gradient(135deg,#002850,#003f73);padding:3.5rem 1.5rem;">
 <div class="pa-container">
     <div class="pa-finance-grid" style="display:grid;grid-template-columns:1fr auto;gap:2rem;align-items:center;flex-wrap:wrap;">
         <div>
             <span style="display:inline-block;background:rgba(37,211,102,.15);border:1px solid rgba(37,211,102,.35);color:#6eff9e;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.3rem .9rem;border-radius:50px;margin-bottom:.85rem;">
-                <i class="fas fa-check-circle"></i> Everyone Qualifies
+                <i class="fas fa-check-circle"></i> Instant Finance Score
             </span>
             <h2 style="color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:clamp(1.4rem,3vw,2rem);font-weight:800;margin-bottom:.75rem;line-height:1.2;">
                 Don't Have the Full Commitment Fee? <span style="color:#ffd54f;">Our Finance Team Has You Covered.</span>
             </h2>
             <p style="color:rgba(255,255,255,.8);font-size:.92rem;line-height:1.75;max-width:580px;margin-bottom:1rem;">
-                Our in-house finance requires <strong style="color:#fff;">no credit checks, no ITC clearance, and no bureau inquiries.</strong>
-                Blacklisted? Low credit score? We work with you, not against you.
+                Apply once and get your <strong style="color:#fff;">finance score instantly.</strong>
+                Blacklisted? Low credit score? You can still qualify with a start-up deposit.
                 Flexible repayment plans from 6 to 48 months with a deposit from just <strong style="color:#ffd54f;">R10,500</strong>.
             </p>
             <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
@@ -1132,7 +1132,7 @@ function filterByBranch(branchId, btn) {
             </div>
         </div>
         <div style="display:grid;gap:.65rem;min-width:220px;">
-            <?php $financePoints = [['fa-ban','No Credit Checks'],['fa-calendar-check','6–48 Month Terms'],['fa-hand-holding-dollar','From R10,500 Deposit'],['fa-file-slash','No ITC Required']]; ?>
+            <?php $financePoints = [['fa-gauge-high','Instant Finance Score'],['fa-calendar-check','6–48 Month Terms'],['fa-hand-holding-dollar','From R10,500 Deposit'],['fa-coins','Start-Up Deposit Options']]; ?>
             <?php foreach ($financePoints as [$icon, $label]): ?>
             <div style="display:flex;align-items:center;gap:.75rem;background:rgba(255,255,255,.1);border-radius:8px;padding:.65rem 1rem;">
                 <i class="fas <?= $icon ?>" style="color:#ffd54f;width:16px;text-align:center;"></i>

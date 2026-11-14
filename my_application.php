@@ -1,7 +1,7 @@
 <?php
 // ============================================================
 // AUCTION HUB GROUP — my_application.php?t=TOKEN
-// The client's private page for an In-House Finance application or a
+// The client's private page for an Finance application or a
 // Pre-Auction Purchase request: progress, and each step they take.
 //   Finance:     choose a term · upload documents & proof of payment ·
 //                Buyer Code · book the test drive
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isFin && $action === 'choose' && in_array($s, ['quoted', 'chosen'], true)) {
         $m = (int)($_POST['months'] ?? 0);
         $plan = null;
-        foreach ($app['details']['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m) $plan = $p;
+        foreach ($app['details']['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m && finPlanAllowed($p)) $plan = $p;
         if ($plan) {
             $app['details']['choice'] = ['months' => $m, 'at' => date('Y-m-d H:i:s')];
             $app['months'] = $m;
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             finMailOffice($app, "Term chosen: $m months at " . formatRand($plan['monthly']) . ' — approve the deposit');
             finFlash('success', "You chose <strong>$m months at " . e(formatRand($plan['monthly'])) . ' per month</strong>. Our finance team is reviewing your deposit — we email you as soon as it is approved.');
         } else {
-            finFlash('error', 'Please choose one of the terms.');
+            finFlash('error', 'Please choose one of the terms that fit your budget.');
         }
         $to = 'plans';
     } elseif ($isFin && $action === 'upload' && in_array($s, ['invoiced', 'approved'], true)) {
@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'Thank you — our team will contact you to finalise and arrange handover.');
         }
         $to = 'decision';
-    } elseif ($action === 'cancel' && in_array($s, ['quoted', 'chosen', 'invoiced', 'requested', 'expired'], true)) {
+    } elseif ($action === 'cancel' && in_array($s, ['review', 'quoted', 'chosen', 'invoiced', 'requested', 'expired'], true)) {
         $app['status'] = 'cancelled';
         $app['details']['cancelled'] = ['at' => date('Y-m-d H:i:s'), 'reason' => trim(mb_substr((string)($_POST['reason'] ?? ''), 0, 500))];
         finLog($app, 'Cancelled' . ($app['details']['cancelled']['reason'] !== '' ? ': ' . $app['details']['cancelled']['reason'] : ''));
@@ -122,7 +122,7 @@ $noIndex = true;
 require_once __DIR__ . '/header.php';
 require __DIR__ . '/fin_ui.php';
 
-finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance · ' . e(finRef($app)) : '<i class="fas fa-key"></i> Pre-Auction Purchase · ' . e(finRef($app)),
+finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(finRef($app)) : '<i class="fas fa-key"></i> Pre-Auction Purchase · ' . e(finRef($app)),
     'Hi ' . e($first) . ', Here Is Where It Stands', e($app['vehicle']) . ' · ' . $R($app['price']),
     $isFin ? 'My Finance Application' : 'My Pre-Auction Purchase');
 ?>
@@ -156,7 +156,38 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance ·
         <a class="btn btn-primary btn-sm" href="<?= APP_URL ?>/auctions.php">Browse Auctions</a></div></div>
     <?php endif; ?>
 
-    <?php /* ════════ IN-HOUSE FINANCE ════════ */ ?>
+    <?php /* ════════ FINANCE ════════ */ ?>
+    <?php if ($isFin && !empty($d['assessment']) && in_array($s, ['review', 'quoted', 'chosen'], true)): $as = $d['assessment']; $gc = finGradeColour($as['grade']); ?>
+      <div class="ap-card" id="result">
+        <div class="ap-card-head"><i class="fas fa-chart-simple"></i> Your Finance Assessment</div>
+        <div class="ap-card-body">
+          <div style="display:flex;gap:1.25rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem">
+            <div style="width:110px;height:110px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(<?= $gc ?> <?= (int)$as['score'] ?>%,#e5ecf4 0);position:relative">
+              <div style="position:absolute;inset:11px;border-radius:50%;background:#fff"></div>
+              <b style="position:relative;font-family:'Barlow Condensed',sans-serif;font-size:2.1rem;color:#003f73;line-height:1;text-align:center"><?= (int)$as['score'] ?><small style="display:block;font-size:.68rem;color:#889;font-family:'Barlow',sans-serif">/ 100</small></b>
+            </div>
+            <div style="flex:1;min-width:200px">
+              <span style="display:inline-block;background:<?= $gc ?>;color:#fff;font-weight:800;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .75rem;border-radius:50px">Grade <?= $as['grade'] === 'R' ? '—' : e($as['grade']) ?></span>
+              <h4 style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;color:#003f73;margin:.35rem 0 .2rem"><?= e($as['label']) ?></h4>
+              <?php if ($s === 'review'): ?>
+                <p class="ap-help" style="margin:0">Our finance team will call you within one business day to talk through your options — for example a larger start-up deposit or a lower-priced vehicle.</p>
+              <?php elseif (!empty($d['quote']['startup'])): ?>
+                <p class="ap-help" style="margin:0">Approval needs a <strong style="color:#a30000">start-up deposit of <?= $R($d['quote']['deposit']) ?></strong> (you offered <?= $R($d['quote']['offered']) ?>). It is part of the price, so you finance less.</p>
+              <?php else: ?>
+                <p class="ap-help" style="margin:0">No start-up deposit needed — your deposit of <?= $R($app['amount']) ?> stands.</p>
+              <?php endif; ?>
+            </div>
+          </div>
+          <?php foreach ($as['points'] as [$l, $p, $m, $n]): ?>
+            <div style="margin:.45rem 0"><div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:700;color:#334"><span><?= e($l) ?></span><span style="color:#667"><?= (int)$p ?> / <?= (int)$m ?></span></div>
+              <div style="height:7px;background:#e5ecf4;border-radius:6px;overflow:hidden;margin:.2rem 0"><i style="display:block;height:100%;width:<?= round($p / max(1, $m) * 100) ?>%;background:linear-gradient(90deg,#005BA1,#00a3e0)"></i></div>
+              <div style="font-size:.74rem;color:#778"><?= e($n) ?></div></div>
+          <?php endforeach; ?>
+          <?php foreach ($as['reasons'] as $why): ?><div class="ap-notice" style="margin:.6rem 0 0"><i class="fas fa-circle-info"></i><div><?= e($why) ?></div></div><?php endforeach; ?>
+          <p class="ap-help" style="margin-top:.8rem">Most your budget allows per month: <strong><?= $R($as['max_instalment']) ?></strong> · <?= $as['credit_source'] === 'bureau' ? 'credit score verified with a credit bureau' : 'based on the figures you gave — your documents and a credit bureau check confirm it' ?>.</p>
+        </div>
+      </div>
+    <?php endif; ?>
     <?php if ($isFin && !empty($d['quote'])): $q = $d['quote']; ?>
       <?php if (in_array($s, ['quoted', 'chosen'], true)): ?>
       <form class="ap-card" id="plans" method="post">
@@ -168,13 +199,13 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance ·
           <?php endif; ?>
           <div style="margin-bottom:1rem">
             <div class="ap-rowline"><span class="lbl">Vehicle price</span><span class="val"><?= $R($q['price']) ?></span></div>
-            <div class="ap-rowline fee"><span class="lbl">Your deposit</span><span class="val">− <?= $R($q['deposit']) ?></span></div>
+            <div class="ap-rowline fee"><span class="lbl"><?= !empty($q['startup']) ? 'Start-up deposit' : 'Your deposit' ?></span><span class="val">− <?= $R($q['deposit']) ?></span></div>
             <div class="ap-rowline big"><span class="lbl">Amount financed</span><span class="val"><?= $R($q['financed']) ?></span></div>
           </div>
-          <?php foreach ($q['plans'] as $p): $on = (int)($d['choice']['months'] ?? 0) === (int)$p['months']; ?>
-            <label class="ap-plan<?= $on ? ' chosen' : '' ?>">
-              <input type="radio" name="months" value="<?= (int)$p['months'] ?>"<?= $on ? ' checked' : '' ?> required>
-              <span><span class="m"><?= (int)$p['months'] ?> Months</span> <?= (int)$p['months'] === 12 ? '<span class="pop">Popular</span>' : '' ?><br><span class="t">Total <?= $R($p['total']) ?></span></span>
+          <?php foreach ($q['plans'] as $p): $on = (int)($d['choice']['months'] ?? 0) === (int)$p['months']; $ok = finPlanAllowed($p); ?>
+            <label class="ap-plan<?= $on ? ' chosen' : '' ?>"<?= $ok ? '' : ' style="opacity:.5;cursor:not-allowed" title="This instalment is more than your budget allows"' ?>>
+              <input type="radio" name="months" value="<?= (int)$p['months'] ?>"<?= $on ? ' checked' : '' ?><?= $ok ? '' : ' disabled' ?> required>
+              <span><span class="m"><?= (int)$p['months'] ?> Months</span> <?= (int)$p['months'] === 12 && $ok ? '<span class="pop">Popular</span>' : '' ?><br><span class="t"><?= $ok ? 'Total ' . $R($p['total']) : 'Over your budget' ?></span></span>
               <span class="p"><?= $R($p['monthly']) ?><small> /month</small></span>
             </label>
           <?php endforeach; ?>
@@ -223,8 +254,12 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance ·
             'expired' => 'Your Invoice Has Expired', 'pop_uploaded' => 'Verifying Your Payment', default => 'Your Pre-Auction Purchase' } ?></div>
         <div class="ap-card-body">
           <div class="ap-rowline"><span class="lbl">Total price</span><span class="val"><?= $R($app['price']) ?></span></div>
+          <?php if ($inv || $pc > 0): ?>
           <div class="ap-rowline fee"><span class="lbl">Commitment fee (<?= $pc ?>%)</span><span class="val"><?= $R($inv ? $inv['commitment_fee_amount'] : paCommitment($app)) ?></span></div>
           <div class="ap-rowline big"><span class="lbl">Outstanding after your test drive</span><span class="val"><?= $R($inv ? $inv['outstanding_amount'] : (float)$app['price'] - paCommitment($app)) ?></span></div>
+          <?php else: ?>
+          <div class="ap-rowline"><span class="lbl">Commitment fee</span><span class="val">Set by our team on your proforma invoice</span></div>
+          <?php endif; ?>
           <?php if (!empty($d['alt'])): ?><div class="ap-rowline"><span class="lbl">Alternative vehicle</span><span class="val"><?= e($d['alt']['title']) ?></span></div><?php endif; ?>
           <?php if ($inv): ?><div class="ap-rowline"><span class="lbl">Invoice</span><span class="val"><?= e($inv['invoice_number']) ?></span></div><?php endif; ?>
 
@@ -335,7 +370,7 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> In-House Finance ·
       </div>
     <?php endif; ?>
 
-    <?php if (in_array($s, ['quoted', 'chosen', 'invoiced', 'requested', 'expired'], true)): ?>
+    <?php if (in_array($s, ['review', 'quoted', 'chosen', 'invoiced', 'requested', 'expired'], true)): ?>
       <details class="ap-card" style="padding:1rem 1.4rem"><summary style="cursor:pointer;font-weight:700;color:#6a7f96">Cancel this <?= $isFin ? 'application' : 'request' ?></summary>
         <form method="post" style="margin-top:.8rem"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="cancel">
           <input class="form-control" name="reason" placeholder="Tell us why (optional)" style="margin-bottom:.7rem">

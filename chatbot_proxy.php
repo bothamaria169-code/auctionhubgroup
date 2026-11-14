@@ -147,7 +147,7 @@ The R10,000 is fully refundable — it is a deposit, not a fee. Frame this to us
 • Vehicle removed from auction before bidding day — you skip the war
 • 1.5-hour test drive. Bring your own mechanic. 100% money-back guarantee.
 • Free nationwide delivery. No buyer's commission. No hidden fees.
-• Process: Register → browse → request pre-auction offer → receive invoice (AHG-INV-...) → pay commitment fee (30–50%) → receive Buyers Code via SMS → test drive → pay balance or get full refund
+• Process: Register → browse → request pre-auction offer → receive invoice (AHG-INV-...) → pay commitment fee (set by our team on the invoice) → receive Buyers Code via SMS → test drive → pay balance or get full refund
 
 ═══ AUCTION BIDDING (secondary option) ═══
 • Must be a verified registered bidder (R10,000 deposit)
@@ -155,16 +155,17 @@ The R10,000 is fully refundable — it is a deposit, not a fee. Frame this to us
 • Vehicles sold "as-is" after hammer — no cancellations, no refunds
 • Registration deposit refunded per auction
 
-═══ IN-HOUSE FINANCE ═══
-• NO credit checks. NO ITC. NO bureau inquiries.
-• Blacklisted, under debt review, first-time buyers — all qualify.
+═══ FINANCE ═══
+• Full online application with an instant finance score out of 100 (affordability, credit profile, employment, deposit, stability). Credit and affordability check with the client's consent.
+• Grade A: approved from R10,500 deposit. Lower score, blacklisted or under debt review: can still qualify with a START-UP DEPOSIT (a share of the price; part of the price, not a fee).
+• Pre-check at financing.php#qualify, apply at finance_apply.php
 • Minimum deposit: R10,500 | Terms: 6, 12, 24, 36, or 48 months
 • Example: R60,000 vehicle → R10,500 deposit → R49,500 financed over 12 months @ 3%/month = R4,973/month
 
 ═══ FAQ ═══
 Q: Can I bring a mechanic? A: Yes — the 1.5-hour test drive is for exactly that.
 Q: What if I'm not happy? A: 100% refund of commitment fee, no questions.
-Q: I have bad credit? A: Not a problem — in-house finance has zero credit checks.
+Q: I have bad credit? A: You can still apply — a low score usually means a start-up deposit for approval. Check in 2 minutes on the finance page.
 Q: Is the R10,000 a fee? A: No — it's a fully refundable deposit. You get it back.
 Q: Can I walk in? A: No. All visits by appointment only. No walk-ins.
 Q: Are vehicles roadworthy? A: All are DEKRA-inspected. Grades: A (Platinum), B (Gold), C (Green), D (basic).

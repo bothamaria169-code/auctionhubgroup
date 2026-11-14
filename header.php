@@ -97,7 +97,7 @@ if (empty($tickerMessages)) {
         'Bank repossessions and estate vehicles at unbeatable prices',
         'All Vehicles are Dekra Certified · SAIA · NAA · JCCI · IEASA members',
         'Nationwide delivery available — Call us on ' . COMPANY_PHONE,
-        'In-House Finance available — No credit checks, blacklisted welcome',
+        'Finance — check if you qualify in 2 minutes',
     ];
 }
 
@@ -716,7 +716,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <a href="<?= APP_URL ?>/auction-guide.php" class="nav-link<?= navActive('auction-guide.php') ?>">How to Buy</a>
             </li>
             <li>
-                <a href="<?= APP_URL ?>/financing.php" class="nav-link<?= navActive('financing.php') ?>">In-House Finance</a>
+                <a href="<?= APP_URL ?>/financing.php" class="nav-link<?= navActive('financing.php') ?>">Finance</a>
             </li>
 
             <!-- ── About Dropdown (Company info + FAQ) ── -->
@@ -858,7 +858,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <a href="<?= APP_URL ?>/events.php"              class="nav-link<?= navActive('events.php') ?>">Events</a>
     <a href="<?= APP_URL ?>/sold_vehicles.php"       class="nav-link<?= navActive('sold_vehicles.php') ?>">Sold Vehicles</a>
     <a href="<?= APP_URL ?>/auction-guide.php"      class="nav-link<?= navActive('auction-guide.php') ?>">How to Buy</a>
-    <a href="<?= APP_URL ?>/financing.php"          class="nav-link<?= navActive('financing.php') ?>">In-House Finance</a>
+    <a href="<?= APP_URL ?>/financing.php"          class="nav-link<?= navActive('financing.php') ?>">Finance</a>
 
     <!-- Mobile About dropdown -->
     <div>

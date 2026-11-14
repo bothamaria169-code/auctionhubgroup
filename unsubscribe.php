@@ -13,6 +13,7 @@ $kinds = [
     'outbid'       => 'outbid alerts',
     'watch'        => 'watchlist reminders',
     'saved_search' => 'saved-search emails',
+    'tips'         => 'reminders and tips',
     'all'          => 'all alert emails',
 ];
 $token = preg_match('/^[a-f0-9]{32}$/', $_REQUEST['t'] ?? '') ? $_REQUEST['t'] : '';

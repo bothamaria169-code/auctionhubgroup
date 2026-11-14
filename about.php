@@ -71,7 +71,7 @@ function aboutInitials(string $name): string {
         $pillars = [
             ['fa-calendar-check','<?= date("Y") - 2016 ?>+ Years','Founded 2016. Trusted by thousands of buyers annually.','#005BA1'],
             ['fa-clipboard-check','DEKRA Inspected','Full condition transparency on every vehicle at auction.','#0078d7'],
-            ['fa-hand-holding-dollar','In-House Finance','No credit checks. Blacklisted clients welcome.','#25D366'],
+            ['fa-hand-holding-dollar','Finance','Instant finance score. Low score? Qualify with a start-up deposit.','#25D366'],
             ['fa-shield-halved','Regulated &amp; Compliant','Level 2 BBBEE. CPA, FICA &amp; POPI Act compliant.','#e8a000'],
             ['fa-trophy','Award-Winning','Best Auctioneer 2018 &amp; 2019 by Standard Bank.','#c9960a'],
         ];
@@ -105,8 +105,8 @@ function aboutInitials(string $name): string {
             </div>
             <div style="background:linear-gradient(135deg,#fff8e1,#fffbf0);border:1px solid #ffe08a;border-radius:14px;padding:1.75rem;text-align:center;">
                 <div style="font-size:1.75rem;color:#e8a000;margin-bottom:.75rem;"><i class="fas fa-hand-holding-dollar"></i></div>
-                <h4 style="color:#003f73;margin-bottom:.5rem;">In-House Finance</h4>
-                <p style="color:#555;font-size:.88rem;line-height:1.65;">No credit checks. No ITC. Blacklisted or low credit score? Welcome. From R10,500 deposit — increase any amount to lower instalments.</p>
+                <h4 style="color:#003f73;margin-bottom:.5rem;">Finance</h4>
+                <p style="color:#555;font-size:.88rem;line-height:1.65;">Instant finance score and quote. Low credit score or blacklisted? You can still qualify with a start-up deposit. From R10,500 deposit — pay more to lower instalments.</p>
                 <a href="<?= APP_URL ?>/financing.php" style="color:#005BA1;font-size:.85rem;font-weight:600;text-decoration:none;margin-top:.75rem;display:inline-block;">Learn About Finance <i class="fas fa-arrow-right" style="font-size:.75rem;"></i></a>
             </div>
         </div>
@@ -140,7 +140,7 @@ function aboutInitials(string $name): string {
             $points = [
                 ['fa-handshake','Bank-Mandated Auctions','Entrusted by financial institutions to responsibly dispose of repossessed assets &mdash; a mandate we honour with pride.'],
                 ['fa-clipboard-check','DEKRA Sticker Inspections','Every vehicle undergoes a professional DEKRA inspection and receives a Green, Gold, or Platinum sticker. Full condition report provided to all bidders.'],
-                ['fa-hand-holding-dollar','In-House Finance','No credit checks, no ITC. Blacklisted and debt-review clients welcome. From R10,500 deposit — pay more to lower instalments. Terms up to 48 months.'],
+                ['fa-hand-holding-dollar','Finance','One application, an instant score out of 100. Strong score: from R10,500 deposit. Low score, blacklisted or under debt review: qualify with a start-up deposit. Terms up to 48 months.'],
                 ['fa-gavel','Professional Auctioneers','Experienced auctioneers who bring energy, transparency, and fairness to every event.'],
                 ['fa-rotate','Regular Fresh Stock','New inventory arrives continuously. Hundreds of vehicles, properties, and assets go under the hammer each month.'],
                 ['fa-headset','Dedicated Support','Available via email and phone through every step of the buying process.'],
@@ -293,7 +293,7 @@ function aboutInitials(string $name): string {
                 <i class="fas fa-gavel"></i> Browse Auctions
             </a>
             <a href="<?= APP_URL ?>/financing.php" style="background:#25D366;color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.95rem;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="fas fa-hand-holding-dollar"></i> In-House Finance
+                <i class="fas fa-hand-holding-dollar"></i> Finance
             </a>
         </div>
     </div>

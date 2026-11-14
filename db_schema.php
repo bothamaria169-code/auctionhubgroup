@@ -119,6 +119,20 @@ const AHG_SCHEMA_TABLES = [
             updated_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_lead_stage (stage)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // Every email the site sends: sent / failed / skipped (mail_engine.php → Admin → Email Settings)
+    'email_log' => "
+        CREATE TABLE IF NOT EXISTS email_log (
+            id           INT AUTO_INCREMENT PRIMARY KEY,
+            kind         VARCHAR(40)   NOT NULL,
+            recipient    VARCHAR(190)  NULL,
+            subject      VARCHAR(255)  NULL,
+            status       VARCHAR(10)   NOT NULL,
+            reason       VARCHAR(255)  NULL,
+            ref          VARCHAR(60)   NULL,
+            created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_el_created (created_at),
+            INDEX idx_el_kind_ref (kind, ref)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     // Every email / WhatsApp sent to a lead from the Leads page
     'lead_messages' => "
         CREATE TABLE IF NOT EXISTS lead_messages (
@@ -133,7 +147,7 @@ const AHG_SCHEMA_TABLES = [
             created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_lm_lead (lead_key, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-    // In-house finance applications and pre-auction (Buy Now) requests — finance_helper.php.
+    // Finance applications and pre-auction (Buy Now) requests — finance_helper.php.
     // One row per application; the steps, quotation, documents and letters live in `details` (JSON).
     'client_applications' => "
         CREATE TABLE IF NOT EXISTS client_applications (
@@ -173,6 +187,10 @@ const AHG_SCHEMA_COLUMNS = [
     'users' => [
         // Bidders registered by staff for floor/live auctions: no login, no emails
         'is_floor_bidder' => "ALTER TABLE users ADD COLUMN is_floor_bidder TINYINT(1) NOT NULL DEFAULT 0",
+    ],
+    'user_email_prefs' => [
+        // Reminders & tips (finish registration, first-bid nudge, review request) — mail_engine.php
+        'tips_emails' => "ALTER TABLE user_email_prefs ADD COLUMN tips_emails TINYINT(1) NOT NULL DEFAULT 1 AFTER saved_search_emails",
     ],
 ];
 

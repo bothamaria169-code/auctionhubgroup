@@ -123,6 +123,28 @@
 .vin-channels strong { display:block; color:#003f73; margin-bottom:.3rem; }
 .vin-channels span { font-size:.85rem; color:#556; line-height:1.6; }
 
+/* Result */
+.fr-top { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
+.fr-gauge { --v:0; --c:#005BA1; width:120px; height:120px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  background:conic-gradient(var(--c) calc(var(--v) * 1%), #e5ecf4 0); position:relative; }
+.fr-gauge::after { content:''; position:absolute; inset:12px; border-radius:50%; background:#fff; }
+.fr-gauge b { position:relative; z-index:1; font-family:'Barlow Condensed',sans-serif; font-size:2.3rem; color:#003f73; line-height:1; text-align:center; }
+.fr-gauge b small { display:block; font-size:.7rem; color:#889; font-family:'Barlow',sans-serif; letter-spacing:.06em; }
+.fr-grade { display:inline-block; color:#fff; font-weight:800; font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; padding:.3rem .8rem; border-radius:50px; margin-bottom:.4rem; }
+.fr-head h4 { font-family:'Barlow Condensed',sans-serif; font-size:1.45rem; color:#003f73; margin:0 0 .2rem; }
+.fr-bar { margin:.5rem 0; }
+.fr-bar .t { display:flex; justify-content:space-between; font-size:.8rem; font-weight:700; color:#334; }
+.fr-bar .t span:last-child { color:#667; }
+.fr-bar .b { height:8px; background:#e5ecf4; border-radius:6px; overflow:hidden; margin:.25rem 0 .15rem; }
+.fr-bar .b i { display:block; height:100%; border-radius:6px; background:linear-gradient(90deg,#005BA1,#00a3e0); }
+.fr-bar .n { font-size:.74rem; color:#778; }
+.fr-plan { display:flex; justify-content:space-between; align-items:center; padding:.5rem .8rem; border-radius:8px; margin:.3rem 0; font-size:.88rem; border:1px solid #e0e8f0; }
+.fr-plan.ok { background:#f1fbf5; border-color:#bfe8cf; }
+.fr-plan.no { opacity:.55; text-decoration:line-through; }
+.fr-plan b small { font-family:'Barlow',sans-serif; font-size:.7rem; color:#778; }
+.fr-plan b { font-family:'Barlow Condensed',sans-serif; font-size:1.15rem; color:#1a9e4e; }
+.fr-loading { text-align:center; padding:2rem 1rem; color:#667; }
+
 /* ── Phones ─────────────────────────────────────────────────
    Site-wide .btn never wraps (white-space:nowrap); long labels here
    would push cards wider than the screen, so they wrap on these pages. */

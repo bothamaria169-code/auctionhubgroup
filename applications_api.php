@@ -28,7 +28,9 @@ $action = (string)($_POST['action'] ?? '');
 $note = trim(mb_substr((string)($_POST['note'] ?? ''), 0, 2000));
 
 if ($action === 'settings') {
-    foreach (['fin_min_deposit', 'fin_min_deposit_heavy', 'pa_min_percent', 'pa_max_percent', 'pa_default_percent'] as $k) {
+    foreach (['fin_min_deposit', 'fin_min_deposit_heavy', 'pa_min_percent', 'pa_max_percent', 'pa_default_percent',
+              'fin_score_a', 'fin_score_b', 'fin_score_c', 'fin_startup_b', 'fin_startup_c', 'fin_startup_d', 'fin_afford_pct',
+              'fin_buffer_pct', 'fin_min_income', 'fin_norm_base', 'fin_norm_dependant', 'fin_max_age'] as $k) {
         if (isset($_POST[$k]) && is_numeric($_POST[$k])) leadSaveSetting($k, (string)(float)$_POST[$k]);
     }
     foreach ([6, 12, 24, 36, 48, 60, 72] as $m) {
@@ -56,9 +58,37 @@ switch ($action) {
         $done = 'Deposit approved — the client has been asked for their documents and deposit.';
         break;
     case 'counter_deposit':
-        if (!$isFin || !in_array($app['status'], ['quoted', 'chosen'], true)) { $err = 'A deposit can only be suggested before approval.'; break; }
+        if (!$isFin || !in_array($app['status'], ['review', 'quoted', 'chosen'], true)) { $err = 'A deposit can only be suggested before approval.'; break; }
         $err = finCounterDeposit($app, finMoneyInput((string)($_POST['deposit'] ?? '')), $note, $by);
         $done = 'Updated quote sent at the suggested deposit.';
+        break;
+    case 'bureau':
+        // Office enters the score from the client's credit bureau report → re-score; a higher
+        // start-up deposit (or a referred application that now qualifies) gets a new quote.
+        if (!$isFin || !in_array($app['status'], ['review', 'quoted', 'chosen'], true)) { $err = 'The bureau score can only be entered before approval.'; break; }
+        if (empty($app['details']['finances'])) { $err = 'This application was made on the old form — there is nothing to score.'; break; }
+        $score = (int)($_POST['score'] ?? -1);
+        if ($score < 0 || $score > 999) { $err = 'Enter the bureau score (0–999).'; break; }
+        $bureau = in_array($_POST['bureau'] ?? '', ['TransUnion', 'Experian', 'XDS', 'Compuscan', 'Other'], true) ? $_POST['bureau'] : 'Other';
+        $app['details']['bureau'] = ['score' => $score, 'bureau' => $bureau, 'note' => $note, 'by' => $by, 'at' => date('Y-m-d H:i:s')];
+        $app['details']['finances']['debt_review'] = !empty($_POST['debt_review']);
+        $app['details']['finances']['judgments']   = !empty($_POST['judgments']);
+        $before = $app['details']['assessment'] ?? null;
+        $oldDeposit = (float)($app['details']['quote']['deposit'] ?? $app['amount']);
+        $offered = (float)($app['details']['quote']['offered'] ?? $app['amount']);
+        $as = finReassess($app);
+        $needs = $as['grade'] !== 'R' ? max($offered, (float)$as['required_deposit']) : $oldDeposit;
+        finLog($app, "Bureau score $score ($bureau) entered — re-scored " . ($before['score'] ?? '?') . ' → ' . $as['score'] . '/100, ' . ($as['grade'] === 'R' ? 'referred' : 'grade ' . $as['grade']), $by);
+        if (($app['status'] === 'review' && $as['grade'] !== 'R') || abs($needs - $oldDeposit) >= 1) {
+            $app['amount'] = $offered;
+            finQuoteFromAssessment($app, $offered, false);
+            $app['details']['quote']['note'] = $note;
+            finSendQuote($app);
+            $done = $app['status'] === 'review' ? 'Re-scored — still referred.' : 'Re-scored — new quote at ' . formatRand((float)$app['details']['quote']['deposit']) . ' deposit emailed to the client.';
+        } else {
+            finMarkAffordable($app);
+            $done = 'Re-scored: ' . $as['score'] . '/100 — the deposit and quote stay the same.';
+        }
         break;
     case 'approve':
         $err = $isFin ? finApprove($app, $by) : 'Not a finance application.';

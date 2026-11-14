@@ -282,6 +282,20 @@ $auctionTabSql = [
 ];
 if (!isset($auctionTabSql[$auctionStatus])) $auctionStatus = '';
 
+// "Relist expired vehicles" card: how many unsold lots have passed their end time,
+// how many of those got bids, and the admin's preferred relist period (days).
+require_once __DIR__ . '/auction_close.php';
+$expiredCounts = ['all' => 0, 'bids' => 0];
+$relistDays    = 7;
+try {
+    $expiredCounts = $pdo->query("SELECT COUNT(*) AS `all`,
+            COALESCE(SUM(EXISTS (SELECT 1 FROM bids b WHERE b.auction_id = a.id)), 0) AS bids
+        FROM auctions a WHERE " . EXPIRED_UNSOLD_SQL)->fetch();
+    $d = (int)$pdo->query("SELECT setting_value FROM site_settings WHERE setting_key = 'relist_days'")->fetchColumn();
+    if ($d >= 1 && $d <= 60) $relistDays = $d;
+} catch (Throwable $e) { /* settings table missing: defaults */ }
+$expiredNoBids = (int)$expiredCounts['all'] - (int)$expiredCounts['bids'];
+
 $aWhere = [];
 $aParams = [];
 if ($auctionSearch) {
@@ -964,6 +978,9 @@ require_once 'header.php';
           <i class="fas fa-file-invoice"></i>
           <span>POP Approvals <?= $stats['pending_pops']>0 ? "({$stats['pending_pops']})" : '' ?></span>
         </a>
+        <a href="?tab=auctions#goLiveCard" class="quick-action-btn" style="border-color:#43a047;color:#2e7d32;">
+          <i class="fas fa-broadcast-tower"></i><span>Go Live — 10 Days</span>
+        </a>
         <button class="quick-action-btn" onclick="openModal('setAllTimesModal')">
           <i class="fas fa-clock"></i><span>Set Auction Times</span>
         </button>
@@ -1256,39 +1273,141 @@ require_once 'header.php';
       </form>
     </div>
 
-    <!-- ── Make All Vehicles Live ───────────────────────────── -->
-    <div class="card" style="margin-bottom:1.5rem;border:2px solid #43a047;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:.75rem;">
-        <div>
-          <h3 style="margin:0;color:#2e7d32;"><i class="fas fa-broadcast-tower" style="color:#43a047;"></i> Go Live — Publish All Vehicles</h3>
-          <p class="text-muted" style="margin:.25rem 0 0;font-size:.88rem;">Set all vehicles to <strong>Live (active)</strong> instantly — visible and open for bidding on the website.</p>
+    <!-- ── Relist expired vehicles (one click) ─────────────── -->
+    <div class="card" id="relistExpiredCard" style="margin-bottom:1.5rem;border:2px solid #2e7d32;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;">
+        <div style="flex:1 1 280px;">
+          <h3 style="margin:0;color:#2e7d32;"><i class="fas fa-rotate-right"></i> Relist Expired Vehicles</h3>
+          <p class="text-muted" style="margin:.25rem 0 0;font-size:.88rem;">
+            <?php if ((int)$expiredCounts['all'] === 0): ?>
+              No vehicles have passed their end time unsold. Nothing to relist.
+            <?php else: ?>
+              <strong><?= (int)$expiredCounts['all'] ?></strong> unsold vehicle(s) have passed their end time.
+              One click puts them all back <strong>Live</strong> from now, at their starting price.
+            <?php endif; ?>
+          </p>
         </div>
-        <button type="button" class="btn btn-success" onclick="makeAllVehiclesLive()"
-                style="background:#2e7d32;border-color:#2e7d32;font-size:1rem;padding:.6rem 1.4rem;">
-          <i class="fas fa-broadcast-tower"></i> Make All Vehicles Live
+        <?php if ((int)$expiredCounts['all'] > 0): ?>
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+          <label for="relistDays" style="margin:0;font-size:.88rem;font-weight:600;">Live for</label>
+          <select id="relistDays" class="form-control" style="width:auto;" onchange="updateRelistExpiredBtn()">
+            <?php foreach ([3, 5, 7, 10, 14, 21, 30] as $opt): ?>
+              <option value="<?= $opt ?>" <?= $opt === $relistDays ? 'selected' : '' ?>><?= $opt === 7 ? '1 week' : ($opt === 14 ? '2 weeks' : ($opt === 21 ? '3 weeks' : $opt . ' days')) ?></option>
+            <?php endforeach; ?>
+            <?php if (!in_array($relistDays, [3, 5, 7, 10, 14, 21, 30], true)): ?>
+              <option value="<?= $relistDays ?>" selected><?= $relistDays ?> days</option>
+            <?php endif; ?>
+          </select>
+          <button type="button" class="btn btn-success" id="relistExpiredBtn" onclick="relistExpiredVehicles()"
+                  style="background:#2e7d32;border-color:#2e7d32;font-size:1rem;padding:.6rem 1.4rem;">
+            <i class="fas fa-rotate-right"></i> <span>Relist All</span>
+          </button>
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php if ((int)$expiredCounts['bids'] > 0): ?>
+      <label style="display:flex;gap:.5rem;align-items:flex-start;margin:.75rem 0 0;font-size:.85rem;cursor:pointer;">
+        <input type="checkbox" id="relistIncludeBids" onchange="updateRelistExpiredBtn()" style="margin-top:.2rem;">
+        <span>Also relist the <strong><?= (int)$expiredCounts['bids'] ?></strong> that got bids but didn't sell (reserve not met).
+          Their old bids are cleared; a copy is kept in the change log. Leave unticked to decide on those under
+          <a href="?tab=auctions&amp;astatus=attention">Needs attention</a>.</span>
+      </label>
+      <?php endif; ?>
+      <div id="relistExpiredResult" style="margin-top:.75rem;"></div>
+    </div>
+    <script>
+    (function () {
+      const counts = {all: <?= (int)$expiredCounts['all'] ?>, noBids: <?= $expiredNoBids ?>};
+      const count = () => document.getElementById('relistIncludeBids')?.checked ? counts.all : counts.noBids;
+      window.updateRelistExpiredBtn = function () {
+        const btn = document.getElementById('relistExpiredBtn');
+        if (!btn) return;
+        const sel = document.getElementById('relistDays');
+        const n = count();
+        btn.querySelector('span').textContent = `Relist All ${n} — Live for ${sel.options[sel.selectedIndex].text}`;
+        btn.disabled = n === 0;
+      };
+      window.relistExpiredVehicles = async function () {
+        const days = parseInt(document.getElementById('relistDays').value, 10);
+        const withBids = !!document.getElementById('relistIncludeBids')?.checked;
+        const n = count();
+        const result = document.getElementById('relistExpiredResult');
+        if (!confirm(`Put ${n} expired vehicle(s) back Live now, closing in ${days} day(s) at 18:00?`)) return;
+        const btn = document.getElementById('relistExpiredBtn');
+        btn.disabled = true;
+        try {
+          const data = await postApi({action: 'relist_expired', days: days, include_bid_lots: withBids ? 1 : 0});
+          result.innerHTML = `<div class="alert alert-${data.success ? 'success' : 'error'}">${escHtml(data.message)}</div>`;
+          if (data.success) setTimeout(() => location.reload(), 1500); else btn.disabled = false;
+        } catch {
+          result.innerHTML = '<div class="alert alert-error">Error relisting vehicles.</div>';
+          btn.disabled = false;
+        }
+      };
+      document.addEventListener('DOMContentLoaded', window.updateRelistExpiredBtn);
+    })();
+    </script>
+
+    <!-- ── Go Live: all vehicles live for N days (default 10) ── -->
+    <div class="card" id="goLiveCard" style="margin-bottom:1.5rem;border:2px solid #43a047;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">
+        <div style="flex:1 1 300px;">
+          <h3 style="margin:0;color:#2e7d32;"><i class="fas fa-broadcast-tower" style="color:#43a047;"></i> Go Live — Put All Vehicles Live</h3>
+          <p class="text-muted" style="margin:.25rem 0 0;font-size:.88rem;">One click puts every eligible vehicle <strong>Live</strong> for the period you choose. Sold vehicles, vehicles reserved for finance / pre-auction clients and ended lots with bids are never touched.</p>
+        </div>
+        <button type="button" class="btn btn-success" id="goLiveBtn" onclick="goLiveAll()"
+                style="background:#2e7d32;border-color:#2e7d32;font-size:1rem;padding:.65rem 1.5rem;">
+          <i class="fas fa-broadcast-tower"></i> <span>Go Live for 10 Days</span>
         </button>
       </div>
-      <div id="makeAllLiveResult"></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">
+      <div id="goLiveResult"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;">
         <div class="form-group" style="margin:0;">
-          <label style="font-size:.83rem;">Apply To</label>
-          <select id="makeAllLiveFilter" class="form-control">
-            <option value="upcoming">Upcoming vehicles only</option>
-            <option value="all">All non-closed vehicles</option>
+          <label style="font-size:.83rem;font-weight:700;">Live for</label>
+          <div style="display:flex;gap:.35rem;flex-wrap:wrap;" id="goLiveDaysBtns">
+            <?php foreach ([3, 5, 7, 10, 14, 21, 30] as $gd): ?>
+              <button type="button" class="btn btn-sm <?= $gd === 10 ? 'btn-success' : 'btn-outline' ?>" data-days="<?= $gd ?>" onclick="goLiveSetDays(<?= $gd ?>)"><?= $gd ?>d</button>
+            <?php endforeach; ?>
+          </div>
+          <input type="number" id="goLiveDays" class="form-control" min="1" max="90" value="10" style="margin-top:.4rem;width:110px;" oninput="goLiveSetDays(this.value, true)" aria-label="Days live">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label for="goLiveStartMode" style="font-size:.83rem;font-weight:700;">Starts</label>
+          <select id="goLiveStartMode" class="form-control" onchange="goLiveOptions()">
+            <option value="now">Right now</option>
+            <option value="tomorrow">Tomorrow at 09:00</option>
+            <option value="custom">Pick a date &amp; time…</option>
+          </select>
+          <input type="datetime-local" id="goLiveStart" class="form-control" style="margin-top:.4rem;display:none;" value="<?= date('Y-m-d\TH:i', strtotime('tomorrow 09:00')) ?>" onchange="goLivePreview()">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label for="goLiveClose" style="font-size:.83rem;font-weight:700;">Closes at</label>
+          <select id="goLiveClose" class="form-control" onchange="goLivePreview()">
+            <option value="12:00">12:00 on the last day</option>
+            <option value="15:00">15:00 on the last day</option>
+            <option value="18:00" selected>18:00 on the last day</option>
+            <option value="20:00">20:00 on the last day</option>
+            <option value="exact">Exactly N × 24 hours after the start</option>
           </select>
         </div>
         <div class="form-group" style="margin:0;">
-          <label style="font-size:.83rem;">Override Start Time <small class="text-muted">(optional)</small></label>
-          <input type="datetime-local" id="makeAllLiveStart" class="form-control">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label style="font-size:.83rem;">Override End Time <small class="text-muted">(optional)</small></label>
-          <input type="datetime-local" id="makeAllLiveEnd" class="form-control">
+          <label for="goLiveStagger" style="font-size:.83rem;font-weight:700;">Closing order</label>
+          <select id="goLiveStagger" class="form-control" onchange="goLivePreview()">
+            <option value="0">All close at the same time</option>
+            <option value="1">One by one — 1 minute apart</option>
+            <option value="2">One by one — 2 minutes apart</option>
+            <option value="5">One by one — 5 minutes apart</option>
+          </select>
         </div>
       </div>
-      <p class="text-muted" style="margin:.75rem 0 0;font-size:.8rem;">
-        <i class="fas fa-info-circle"></i> Leave times blank to keep each vehicle's existing times. Sold vehicles are never affected.
-      </p>
+      <div style="display:flex;gap:1.25rem;flex-wrap:wrap;margin-top:.9rem;font-size:.86rem;">
+        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncUpcoming" checked onchange="goLivePreview()"> Upcoming vehicles</label>
+        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncLive" checked onchange="goLivePreview()"> Vehicles already live (reset their timer)</label>
+        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLiveIncExpired" checked onchange="goLivePreview()"> Expired vehicles with no bids</label>
+        <label style="display:flex;gap:.4rem;align-items:center;cursor:pointer;"><input type="checkbox" id="goLivePhotoOnly" onchange="goLivePreview()"> Only vehicles with a photo</label>
+      </div>
+      <p id="goLiveSummary" style="margin:.85rem 0 0;font-size:.88rem;font-weight:600;color:#2e7d32;"><i class="fas fa-spinner fa-spin"></i> Counting vehicles…</p>
+      <p class="text-muted" style="margin:.35rem 0 0;font-size:.8rem;"><i class="fas fa-info-circle"></i> Bids already placed on live vehicles are kept. Expired lots that got bids are not included — use <a href="#relistExpiredCard">Relist Expired Vehicles</a> for those. A future start puts them in Upcoming until that time.</p>
     </div>
 
     <!-- Bulk Action Bar (appears when checkboxes are selected) -->
@@ -4129,7 +4248,7 @@ function insertSampleArticle(){
 
 <ul>
   <li>DEKRA-certified vehicles with full inspection history</li>
-  <li>In-house finance available — no credit checks required</li>
+  <li>Finance available — instant finance score, start-up deposit options</li>
   <li>Nationwide delivery to your door</li>
   <li>Transparent bidding — no hidden fees</li>
 </ul>
@@ -4462,7 +4581,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <i class="fas fa-hand-holding-dollar" style="color:#fff;font-size:1rem;"></i>
               </div>
               <div style="font-weight:700;color:#001F5C;font-size:.85rem;margin-bottom:.25rem;">Finance Deals</div>
-              <div style="font-size:.75rem;color:#999;line-height:1.4;">In-house finance offers</div>
+              <div style="font-size:.75rem;color:#999;line-height:1.4;">Finance offers</div>
             </div>
 
           </div>
@@ -4596,11 +4715,11 @@ document.addEventListener('DOMContentLoaded',()=>{
             <div style="display:grid;gap:.75rem;">
               <div>
                 <label class="sf-label">Email Headline *</label>
-                <input type="text" id="sf-fi-headline" placeholder="e.g. Drive Today — No Credit Checks!" class="sf-input" value="Drive Today — No Credit Checks!">
+                <input type="text" id="sf-fi-headline" placeholder="e.g. Drive Today — Check If You Qualify!" class="sf-input" value="Drive Today — Check If You Qualify!">
               </div>
               <div>
                 <label class="sf-label">Intro Paragraph *</label>
-                <textarea id="sf-fi-intro" rows="3" placeholder="e.g. Blacklisted? Low credit score? Bank said no? We say YES." class="sf-input" style="resize:vertical;">Blacklisted? Low credit score? Bank said no? We say YES. Our in-house finance is designed for South Africans who deserve a second chance behind the wheel.</textarea>
+                <textarea id="sf-fi-intro" rows="3" placeholder="e.g. Blacklisted? Low credit score? Bank said no? We say YES." class="sf-input" style="resize:vertical;">Blacklisted? Low credit score? Bank said no? We say YES. Our finance is designed for South Africans who deserve a second chance behind the wheel.</textarea>
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
                 <div>
@@ -4614,8 +4733,8 @@ document.addEventListener('DOMContentLoaded',()=>{
               </div>
               <div>
                 <label class="sf-label">Key Benefits <span style="font-weight:400;color:#999;">(one per line)</span></label>
-                <textarea id="sf-fi-bullets" rows="4" placeholder="No credit checks&#10;No ITC inquiries&#10;Blacklisted clients welcome&#10;Flexible monthly terms" class="sf-input" style="resize:vertical;">No credit checks
-No ITC inquiries
+                <textarea id="sf-fi-bullets" rows="4" placeholder="Instant finance score&#10;Low score? Start-up deposit options&#10;From R10,500 deposit&#10;Flexible monthly terms" class="sf-input" style="resize:vertical;">Instant finance score
+Low score? Start-up deposit options
 Blacklisted clients welcome
 Flexible monthly terms</textarea>
               </div>
@@ -4991,7 +5110,7 @@ function buildSmartEmail(){
     );
 
   } else if(_sfType === 'finance'){
-    const headline = document.getElementById('sf-fi-headline').value.trim() || 'Drive Today — No Credit Checks!';
+    const headline = document.getElementById('sf-fi-headline').value.trim() || 'Drive Today — Check If You Qualify!';
     const intro    = document.getElementById('sf-fi-intro').value.trim();
     const deposit  = document.getElementById('sf-fi-deposit').value.trim() || 'R10,500';
     const tagline  = document.getElementById('sf-fi-tagline').value.trim() || 'Drive away today — pay the rest monthly';
@@ -5090,8 +5209,8 @@ function loadNlTemplate(key){
 
     finance: buildEmailShell(
       `<p style="font-size:13px;color:#667;margin:0 0 4px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Finance Offer · <?= date('F Y') ?></p>
-       <h2 style="font-size:26px;font-weight:800;color:#001F5C;margin:0 0 14px;line-height:1.25;">Drive Today — No Credit Checks!</h2>`,
-      `<p style="font-size:15px;color:#334155;line-height:1.75;margin:0 0 18px;">Blacklisted? Low credit score? Bank said no? <strong>We say YES.</strong> Our in-house finance is designed for South Africans who deserve a second chance behind the wheel.</p>
+       <h2 style="font-size:26px;font-weight:800;color:#001F5C;margin:0 0 14px;line-height:1.25;">Drive Today — Check If You Qualify!</h2>`,
+      `<p style="font-size:15px;color:#334155;line-height:1.75;margin:0 0 18px;">Blacklisted? Low credit score? Bank said no? <strong>We say YES.</strong> Our finance is designed for South Africans who deserve a second chance behind the wheel.</p>
        <div style="background:linear-gradient(135deg,#fff8e1,#fff3cd);border:2px solid #ffd54f;border-radius:14px;padding:22px;margin-bottom:18px;text-align:center;">
          <p style="font-size:12px;font-weight:800;color:#e8a000;text-transform:uppercase;letter-spacing:.1em;margin:0 0 6px;">Starting Deposit</p>
          <p style="font-size:42px;font-weight:900;color:#001F5C;margin:0 0 8px;line-height:1;font-family:'Segoe UI',sans-serif;">R10,500</p>
@@ -9140,46 +9259,72 @@ async function submitBulkAuctionUpdate() {
     if (!anyFail) setTimeout(() => location.reload(), 1200);
 }
 
-// ── Make All Vehicles Live ────────────────────────────────
-async function makeAllVehiclesLive() {
-    const result = document.getElementById('makeAllLiveResult');
-    const setMsg = (ok, msg) => result.innerHTML =
-        `<div class="alert alert-${ok?'success':'error'}" style="margin-bottom:.75rem;">${msg}</div>`;
-
-    const filter    = document.getElementById('makeAllLiveFilter').value;
-    const startRaw  = document.getElementById('makeAllLiveStart').value;
-    const endRaw    = document.getElementById('makeAllLiveEnd').value;
-
-    const filterLabel = filter === 'all' ? 'ALL non-closed vehicles' : 'all UPCOMING vehicles';
-    if (!confirm(`Set ${filterLabel} to LIVE (active)?\n\nThis will make them visible and open for bidding on the website immediately.`)) return;
-
-    const btn = document.querySelector('button[onclick="makeAllVehiclesLive()"]');
+// ── Go Live: all vehicles live for N days ────────────────
+let goLiveDays = 10, goLiveTimer = null;
+function goLiveFields(dry) {
+    const mode = document.getElementById('goLiveStartMode').value;
+    const f = {
+        action: 'go_live_all', days: goLiveDays, start_mode: mode,
+        close_time: document.getElementById('goLiveClose').value,
+        stagger: document.getElementById('goLiveStagger').value,
+        inc_upcoming: document.getElementById('goLiveIncUpcoming').checked ? 1 : '',
+        inc_live: document.getElementById('goLiveIncLive').checked ? 1 : '',
+        inc_expired: document.getElementById('goLiveIncExpired').checked ? 1 : '',
+        photo_only: document.getElementById('goLivePhotoOnly').checked ? 1 : '',
+    };
+    if (mode === 'custom') f.start = document.getElementById('goLiveStart').value.replace('T', ' ') + ':00';
+    if (dry) f.dry_run = 1;
+    return f;
+}
+window.goLiveSetDays = function (d, typed) {
+    d = parseInt(d, 10);
+    if (!(d >= 1 && d <= 90)) return;
+    goLiveDays = d;
+    if (!typed) document.getElementById('goLiveDays').value = d;
+    document.querySelectorAll('#goLiveDaysBtns button').forEach(b => {
+        const on = +b.dataset.days === d;
+        b.classList.toggle('btn-success', on); b.classList.toggle('btn-outline', !on);
+    });
+    document.querySelector('#goLiveBtn span').textContent = `Go Live for ${d} Day${d === 1 ? '' : 's'}`;
+    goLivePreview();
+};
+window.goLiveOptions = function () {
+    document.getElementById('goLiveStart').style.display = document.getElementById('goLiveStartMode').value === 'custom' ? '' : 'none';
+    goLivePreview();
+};
+window.goLivePreview = function () {
+    clearTimeout(goLiveTimer);
+    goLiveTimer = setTimeout(async () => {
+        const out = document.getElementById('goLiveSummary');
+        if (!out) return;
+        try {
+            const d = await postApi(goLiveFields(true));
+            if (!d.success) { out.style.color = '#c62828'; out.textContent = d.message; return; }
+            out.style.color = '#2e7d32';
+            out.innerHTML = `<i class="fas fa-circle-check"></i> <strong>${d.count}</strong> vehicle(s) will be live from <strong>${escHtml(d.start)}</strong> until <strong>${escHtml(d.end)}</strong>`
+                + (d.last !== d.end ? ` (last lot closes ${escHtml(d.last)})` : '') + '.'
+                + (d.skipped ? ` <span class="text-muted">${d.skipped} reserved for finance / pre-auction clients skipped.</span>` : '');
+            document.getElementById('goLiveBtn').disabled = d.count === 0;
+        } catch { out.textContent = 'Could not count vehicles.'; }
+    }, 250);
+};
+window.goLiveAll = async function () {
+    const result = document.getElementById('goLiveResult');
+    const summary = document.getElementById('goLiveSummary').innerText.trim();
+    if (!confirm(`Go Live for ${goLiveDays} day(s)?\n\n${summary}\n\nThey become visible and open for bidding on the website.`)) return;
+    const btn = document.getElementById('goLiveBtn');
     const orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing…';
-
-    const fd = new FormData();
-    fd.append('action',        'set_all_auction_status');
-    fd.append('status',        'active');
-    fd.append('status_filter', filter);
-    if (startRaw) fd.append('start_time', startRaw.replace('T',' ') + ':00');
-    if (endRaw)   fd.append('end_time',   endRaw.replace('T',' ')   + ':00');
-
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Going live…';
     try {
-        const res  = await fetch('api.php', {method:'POST', body: fd});
-        const data = await res.json();
-        setMsg(data.success, data.message);
-        if (data.success) {
-            showToast(data.message, 'success');
-            setTimeout(() => location.reload(), 1400);
-        }
-    } catch(e) {
-        setMsg(false, 'Network error. Please try again.');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = orig;
-    }
-}
+        const d = await postApi(goLiveFields(false));
+        result.innerHTML = `<div class="alert alert-${d.success ? 'success' : 'error'}" style="margin-bottom:.75rem;">${escHtml(d.message)}</div>`;
+        if (d.success) { showToast(d.message, 'success'); setTimeout(() => location.reload(), 1600); return; }
+    } catch { result.innerHTML = '<div class="alert alert-error" style="margin-bottom:.75rem;">Network error. Please try again.</div>'; }
+    btn.disabled = false;
+    btn.innerHTML = orig;
+};
+document.addEventListener('DOMContentLoaded', () => { if (document.getElementById('goLiveCard')) goLivePreview(); });
 
 // Single-row shortcut: prefill the inline Add-to-Event panel with one vehicle
 window.singleAssignToEvent = function(auctionId, name) {

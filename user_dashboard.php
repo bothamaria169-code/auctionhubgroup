@@ -1075,6 +1075,8 @@ require_once 'header.php';
               <span><strong>Watchlist reminders</strong><small>An hour before a watched vehicle closes.</small></span></label>
             <label class="pref-row"><input type="checkbox" name="saved_search" value="1" <?= $myPrefs['saved_search_emails'] ? 'checked' : '' ?>>
               <span><strong>Saved-search matches</strong><small>One daily email when new vehicles match your searches.</small></span></label>
+            <label class="pref-row"><input type="checkbox" name="tips" value="1" <?= ($myPrefs['tips_emails'] ?? 1) ? 'checked' : '' ?>>
+              <span><strong>Reminders &amp; tips</strong><small>A reminder to finish registering, help with your first bid, and a review request after you buy.</small></span></label>
             <button type="submit" class="btn btn-primary" id="savePrefsBtn" style="margin-top:.5rem"><i class="fas fa-save"></i> Save Email Settings</button>
           </form>
         </div>

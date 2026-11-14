@@ -153,7 +153,7 @@ require_once 'header.php';
         <span><i class="fas fa-clipboard-check" style="color:#1E90FF;"></i> DEKRA Inspected</span>
         <span><i class="fas fa-university" style="color:#1E90FF;"></i> Bank-Sourced Vehicles</span>
         <span><i class="fas fa-shield-halved" style="color:#1E90FF;"></i> Below Market Value</span>
-        <span><i class="fas fa-hand-holding-dollar" style="color:#1E90FF;"></i> In-House Finance Available</span>
+        <span><i class="fas fa-hand-holding-dollar" style="color:#1E90FF;"></i> Finance Available</span>
     </div>
 </div>
 
@@ -497,7 +497,7 @@ require_once 'header.php';
             $reasons = [
                 ['fa-tags','Below Market Prices','Every vehicle is priced significantly below retail value. Bank repossessions and insolvency stock mean real savings for you.','#005BA1'],
                 ['fa-clipboard-check','DEKRA Inspected','Full transparency. Every vehicle comes with a DEKRA inspection sticker — Green, Gold, or Platinum — so you know exactly what you\'re buying.','#4caf50'],
-                ['fa-hand-holding-dollar','In-House Finance','No credit checks. Blacklisted welcome. From R10,500 deposit with terms up to 48 months. Everyone qualifies.','#e8a000'],
+                ['fa-hand-holding-dollar','Finance','Instant finance score. Low score? Qualify with a start-up deposit. From R10,500 deposit, terms up to 48 months.','#e8a000'],
                 ['fa-university','Bank-Sourced','We partner with Absa, Standard Bank, Nedbank (MFC), WesBank, FNB, Capitec, and private sellers. Fresh stock at every event.','#0078d7'],
                 ['fa-shield-halved','<?= date(\'Y\')-2016 ?>+ Years Trusted','Founded in 2016. Award-winning auctioneers trusted by South Africa\'s largest financial institutions.','#003f73'],
                 ['fa-truck-fast','Nationwide Delivery','Can\'t attend in person? We offer nationwide delivery to your door after you win your vehicle.','#25D366'],

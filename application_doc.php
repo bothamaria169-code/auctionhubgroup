@@ -1,7 +1,7 @@
 <?php
 // ============================================================
 // AUCTION HUB GROUP — application_doc.php?t=TOKEN&doc=…
-// In-house finance documents, on the same A4 layout as invoice_print.php
+// Finance documents, on the same A4 layout as invoice_print.php
 // (print or "Save as PDF"):  quote · invoice (deposit) · approval · decline
 // Pre-auction purchases use the existing proforma invoice
 // (preauction_invoices / invoice_pop_upload.php), not this file.
@@ -130,7 +130,7 @@ header('X-Robots-Tag: noindex, nofollow');
         <div class="co-reg"><?= e(COMPANY_REGISTERED_NAME) ?> · Reg <?= e(COMPANY_REG_NO) ?></div>
         <div class="co-meta"><?= e(COMPANY_ADDRESS) ?><br><?= e(COMPANY_PHONE) ?> · <?= e(COMPANY_EMAIL) ?></div></div>
     </div>
-    <div class="doc-title"><div class="tag"><?= e($tag) ?></div><span class="badge">In-House Finance</span></div>
+    <div class="doc-title"><div class="tag"><?= e($tag) ?></div><span class="badge">Finance</span></div>
   </div>
   <div class="rule"></div>
 
@@ -159,18 +159,23 @@ header('X-Robots-Tag: noindex, nofollow');
 <?php if ($doc === 'quote'): ?>
   <div class="totals"><table>
     <tr><td class="k">Vehicle price</td><td class="v"><?= $R($q['price']) ?></td></tr>
-    <tr><td class="k">Less: deposit</td><td class="v">− <?= $R($q['deposit']) ?></td></tr>
+    <tr><td class="k">Less: <?= !empty($q['startup']) ? 'start-up deposit' : 'deposit' ?></td><td class="v">− <?= $R($q['deposit']) ?></td></tr>
     <tr class="grand"><td class="k">Amount financed</td><td class="v"><?= $R($q['financed']) ?></td></tr>
   </table></div>
   <h3>Your Repayment Options</h3>
   <table class="items"><thead><tr><th>Term</th><th>Rate (p/m)</th><th>Monthly</th><th>Total repayable</th></tr></thead><tbody>
-    <?php foreach ($q['plans'] as $p): $on = $plan && (int)$plan['months'] === (int)$p['months']; ?>
+    <?php foreach (array_filter($q['plans'], 'finPlanAllowed') as $p): $on = $plan && (int)$plan['months'] === (int)$p['months']; ?>
       <tr class="<?= $on ? 'on' : '' ?>"><td><?= (int)$p['months'] ?> months<?= $on ? ' ✓' : '' ?></td><td><?= rtrim(rtrim(number_format($p['rate'], 2), '0'), '.') ?>%</td><td class="money"><?= $R($p['monthly']) ?></td><td class="money"><?= $R($p['total']) ?></td></tr>
     <?php endforeach; ?>
   </tbody></table>
   <h3>Documents Required</h3>
   <ul class="small"><?php foreach (['id', 'address', 'bank', 'income', 'licence'] as $k): ?><li><?= e(FIN_DOCS[$k][0]) ?></li><?php endforeach; ?></ul>
-  <div class="box"><strong>No credit checks · No ITC · No bureau inquiries.</strong> This quote is indicative and becomes binding only when your finance agreement is signed. The deposit is deducted from the price — it is not an extra cost.</div>
+  <?php if (!empty($app['details']['assessment'])): $as = $app['details']['assessment']; ?>
+  <div class="box"><strong>Finance assessment: <?= (int)$as['score'] ?> / 100 — <?= e($as['label']) ?>.</strong>
+    Only terms whose instalment fits your budget (up to <?= $R($as['max_instalment']) ?> per month) are shown.<?= !empty($q['startup']) ? ' Approval requires the start-up deposit above.' : '' ?>
+    Subject to your documents and a credit bureau check.</div>
+  <?php endif; ?>
+  <div class="box">This quote is indicative and becomes binding only when your finance agreement is signed. The deposit is deducted from the price — it is not an extra cost.</div>
 
 <?php elseif ($doc === 'invoice'): ?>
   <div class="totals"><table>
@@ -191,7 +196,7 @@ header('X-Robots-Tag: noindex, nofollow');
 
 <?php elseif ($doc === 'approval'): ?>
   <p class="body" style="margin-top:12px">Dear <?= e($app['name']) ?>,</p>
-  <p class="body">We are pleased to confirm that your <strong>In-House Vehicle Finance is approved</strong> and your deposit has been received. The vehicle above is reserved in your name.</p>
+  <p class="body">We are pleased to confirm that your <strong>Vehicle Finance is approved</strong> and your deposit has been received. The vehicle above is reserved in your name.</p>
   <div class="totals"><table>
     <tr><td class="k">Vehicle price</td><td class="v"><?= $R($app['price']) ?></td></tr>
     <tr><td class="k">Deposit received</td><td class="v"><?= $R($app['amount']) ?></td></tr>
@@ -205,7 +210,7 @@ header('X-Robots-Tag: noindex, nofollow');
 
 <?php else: ?>
   <p class="body" style="margin-top:12px">Dear <?= e($app['name']) ?>,</p>
-  <p class="body">Thank you for your trust in Auction Hub Group. We regret that we are <strong>not able to proceed</strong> with your in-house finance application on the vehicle above.</p>
+  <p class="body">Thank you for your trust in Auction Hub Group. We regret that we are <strong>not able to proceed</strong> with your finance application on the vehicle above.</p>
   <?php if (!empty($d['declined']['reason'])): ?><div class="box"><?= nl2br(e($d['declined']['reason'])) ?></div><?php endif; ?>
   <p class="body">This relates only to this application and vehicle — it is not a reflection of your creditworthiness. New bank-stock vehicles become available every week; our consultants will gladly help you find another option.</p>
 <?php endif; ?>

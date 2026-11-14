@@ -3,9 +3,10 @@
 // AUCTION HUB GROUP — preauction_request.php
 // Step 1 of the Pre-Auction Purchase on preauction.php — "Submit Your
 // Details": full name, ID/passport, contact details, physical address,
-// commitment fee (30–50%), an alternative vehicle and a test-drive time.
-// The office then issues the proforma invoice from Admin → Finance &
-// Pre-Auction (a preauction_invoices row, valid 24 hours).
+// an alternative vehicle and a test-drive time. The client does NOT choose
+// the commitment fee: the office sets the % when it issues the proforma
+// invoice from Admin → Finance & Pre-Auction (a preauction_invoices row,
+// valid 24 hours).
 // ============================================================
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
@@ -15,7 +16,6 @@ require_once __DIR__ . '/leads_helper.php';
 ahgSchemaReady();
 $pageUser = getPageUser();
 $lots = finEligibleLots();
-[$pMin, $pMax, $pDef] = paRange();
 $vehicle = null;
 $notEligible = false;
 if (($vid = (int)($_GET['id'] ?? $_POST['auction_id'] ?? 0)) > 0) {
@@ -33,7 +33,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone   = finCleanPhone((string)($_POST['phone'] ?? ''));
     $idNo    = strtoupper(trim(mb_substr((string)($_POST['id_number'] ?? ''), 0, 20)));
     $address = trim(mb_substr((string)($_POST['address'] ?? ''), 0, 500));
-    $percent = (int)($_POST['percent'] ?? 0);
     $date    = (string)($_POST['date'] ?? '');
     $time    = (string)($_POST['time'] ?? '');
     $alt = null;
@@ -47,14 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!finValidPhone($phone))                       $errors['phone'] = 'Please enter a number we can call or WhatsApp.';
     if (mb_strlen($address) < 8)                      $errors['address'] = 'Please enter your physical address.';
     if (!$vehicle)                                    $errors['auction_id'] = 'Please choose the vehicle you want to secure.';
-    if ($percent < $pMin || $percent > $pMax)         $errors['percent'] = "Choose a commitment fee between $pMin% and $pMax%.";
     if ($e = finViewingError($date, $time))           $errors['date'] = $e;
     if (empty($_POST['agree']))                       $errors['agree'] = 'Please tick to confirm.';
     if (!$errors && enquiryRateLimited(6, 900))       $errors['form'] = 'You have sent several requests already — we will be in touch. For anything urgent call ' . COMPANY_PHONE . '.';
 
     if (!$errors) {
         try {
-            $app = finCreate('preauction', ['name' => $name, 'email' => $email, 'phone' => $phone, 'user_id' => $pageUser['sub'] ?? null], $vehicle, 0, (float)$percent, [
+            $app = finCreate('preauction', ['name' => $name, 'email' => $email, 'phone' => $phone, 'user_id' => $pageUser['sub'] ?? null], $vehicle, 0, null, [
                 'id_number' => $idNo,
                 'address'   => $address,
                 'viewing'   => ['date' => $date, 'time' => $time, 'status' => 'wanted'],
@@ -62,15 +60,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'alt'       => $alt ? ['id' => (int)$alt['id'], 'title' => finVehicleTitle($alt), 'price' => finPrice($alt)] : null,
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
             ]);
-            finLog($app, "Submitted details — commitment fee $percent%, test drive wanted " . finViewingLabel($app['details']['viewing']));
+            finLog($app, 'Submitted details — test drive wanted ' . finViewingLabel($app['details']['viewing']));
             $ok = finMailClient($app, 'We Have Your Pre-Auction Request',
                 '<p>Thank you for choosing a <strong>Pre-Auction Purchase</strong> on the <strong>' . e($app['vehicle']) . '</strong> at ' . formatRand((float)$app['price']) . '.</p>'
-                . '<div class="highlight-box"><p><strong>Commitment fee requested:</strong> ' . $percent . '% = <span class="gold">' . formatRand(paCommitment($app)) . '</span></p>'
-                . '<p><strong>Outstanding after your test drive:</strong> ' . formatRand((float)$app['price'] - paCommitment($app)) . '</p>'
+                . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand((float)$app['price']) . '</p>'
+                . '<p><strong>Commitment fee:</strong> set by our team on your proforma invoice</p>'
                 . ($alt ? '<p><strong>Alternative vehicle:</strong> ' . e($alt ? finVehicleTitle($alt) : '') . '</p>' : '')
                 . '<p><strong>Preferred test drive:</strong> ' . e(finViewingLabel($app['details']['viewing'])) . '</p></div>'
                 . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
-                . '<li>Our team issues your personalised <strong>proforma invoice</strong> — usually within the hour</li>'
+                . '<li>Our team issues your personalised <strong>proforma invoice</strong>, with your commitment fee and outstanding balance — usually within the hour</li>'
                 . '<li>Pay the commitment fee within <strong>24 hours</strong> and upload your proof of payment</li>'
                 . '<li>The vehicle is marked <strong>Presold</strong> under your name and your <strong>Buyer Code</strong> is emailed to you</li>'
                 . '<li>Test drive for <strong>1 hour 30 minutes</strong> — then proceed, switch to your alternative, or cancel for a refund</li></ol>',
@@ -93,7 +91,7 @@ $err = fn(string $k) => isset($errors[$k]) ? '<span class="ap-err-text">' . e($e
 $grp = fn(string $k, string $x = '') => trim('form-group ' . $x . (isset($errors[$k]) ? ' ap-err' : ''));
 
 $pageTitle       = 'Pre-Auction Purchase — Secure Your Vehicle Before Auction';
-$pageDescription = 'Secure a bank-stock vehicle at the financial institution\'s price before it reaches the auction floor. Pay a 30–50% commitment fee, receive your Buyer Code and test drive for 1h30.';
+$pageDescription = 'Secure a bank-stock vehicle at the financial institution\'s price before it reaches the auction floor. Pay the commitment fee on your proforma invoice, receive your Buyer Code and test drive for 1h30.';
 $bodyClass       = 'page-preauction';
 require_once __DIR__ . '/header.php';
 require __DIR__ . '/fin_ui.php';
@@ -101,7 +99,7 @@ require __DIR__ . '/fin_ui.php';
 finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the Hammer Falls',
     'Submit your details and our team issues your personalised proforma invoice. Pay the commitment fee and the vehicle goes <strong style="color:#fff">Presold under your name</strong> — no competing bids, no floor drama.',
     '<a href="' . APP_URL . '/preauction.php">Pre-Auction Purchase</a><span class="sep">/</span>Submit Your Details',
-    ['DEKRA-inspected', $pMin . '–' . $pMax . '% commitment fee', '1h30 test drive', 'Full refund option']);
+    ['DEKRA-inspected', 'Commitment fee on your invoice', '1h30 test drive', 'Full refund option']);
 ?>
 <section class="ap-section"><div class="ap-container">
   <?= finFlashHtml() ?>
@@ -119,19 +117,12 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
           <div class="full <?= $grp('auction_id') ?>"><label class="form-label" for="ap-vehicle">Vehicle <span class="required">*</span></label>
             <?= finVehicleSelect($lots, $vehicle) ?><?= $err('auction_id') ?>
             <span class="ap-help"><?= count($lots) ?> vehicles open for pre-auction purchase.</span></div>
-          <div class="<?= $grp('percent') ?>"><label class="form-label" for="percent">Commitment fee <span class="required">*</span></label>
-            <select class="form-control" id="percent" name="percent">
-              <?php for ($p = $pMin; $p <= $pMax; $p += 5): ?>
-                <option value="<?= $p ?>"<?= (int)($old['percent'] ?? $pDef) === $p ? ' selected' : '' ?>><?= $p ?>% of the price</option>
-              <?php endfor; ?>
-            </select><?= $err('percent') ?></div>
-          <div class="form-group"><label class="form-label" for="alt_id">Alternative vehicle <span style="font-weight:400;color:#889">optional</span></label>
+          <div class="full form-group"><label class="form-label" for="alt_id">Alternative vehicle <span style="font-weight:400;color:#889">optional</span></label>
             <?= finVehicleSelect($lots, isset($old['alt_id']) ? ['id' => (int)$old['alt_id']] : null, 'alt_id', 'alt_id', false) ?></div>
           <div class="full" id="pa-figures" style="display:none;margin:-.25rem 0 1rem">
             <div style="background:linear-gradient(135deg,#f0f6fc,#e8f4fd);border:1.5px solid #b8d4ee;border-radius:12px;padding:.6rem 1rem">
               <div class="ap-rowline"><span class="lbl">Total price</span><span class="val" id="pa-price"></span></div>
-              <div class="ap-rowline fee"><span class="lbl">Commitment fee (<span id="pa-pct"></span>%)</span><span class="val" id="pa-fee"></span></div>
-              <div class="ap-rowline big"><span class="lbl">Outstanding after your test drive</span><span class="val" id="pa-out"></span></div>
+              <div class="ap-rowline"><span class="lbl">Commitment fee</span><span class="val">Set by our team on your proforma invoice</span></div>
             </div>
           </div>
           <div class="<?= $grp('name') ?>"><label class="form-label" for="name">Full name <span class="required">*</span></label><input class="form-control" id="name" name="name" autocomplete="name" required value="<?= $val('name', $pageUser['full_name'] ?? '') ?>"><?= $err('name') ?></div>
@@ -174,7 +165,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
       <div class="ap-notice"><i class="fas fa-triangle-exclamation"></i><div><strong>Entry requirements:</strong> No Buyer Code = No Entry · No Prior Appointment = No Entry · No Walk-Ins. Your Buyer Code is issued once your commitment fee is verified with the financial institution.</div></div>
       <div class="ap-card">
         <div class="ap-card-head gold"><i class="fas fa-hand-holding-dollar"></i> Need Finance?</div>
-        <div class="ap-card-body"><p class="ap-help" style="margin:0 0 .8rem">Apply for <strong>in-house finance</strong> on the same vehicle — no credit checks, from <?= e(formatRand((float)finSetting('fin_min_deposit', '10500'))) ?> deposit.</p>
+        <div class="ap-card-body"><p class="ap-help" style="margin:0 0 .8rem">Apply for <strong>finance</strong> on the same vehicle — instant score and quote, from <?= e(formatRand((float)finSetting('fin_min_deposit', '10500'))) ?> deposit.</p>
           <a class="btn btn-outline btn-sm" href="<?= APP_URL ?>/finance_apply.php<?= $vehicle ? '?id=' . (int)$vehicle['id'] : '' ?>"><i class="fas fa-file-signature"></i> Apply for Finance</a>
           <p class="ap-help">We never publish VINs online — see our <a href="<?= APP_URL ?>/vin-policy.php">VIN policy</a>.</p></div>
       </div>
@@ -183,19 +174,15 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
 </div></section>
 <script>
 (function () {
-  var sel = document.getElementById('ap-vehicle'), pct = document.getElementById('percent');
+  var sel = document.getElementById('ap-vehicle');
   var R = function (v) { return 'R' + Math.round(v).toLocaleString('en-ZA', {maximumFractionDigits: 0}); };
   function update() {
     var o = sel.options[sel.selectedIndex], box = document.getElementById('pa-figures');
     if (!o || !o.value) { box.style.display = 'none'; return; }
-    var price = +o.dataset.price, p = +pct.value, fee = price * p / 100;
-    document.getElementById('pa-price').textContent = R(price);
-    document.getElementById('pa-pct').textContent = p;
-    document.getElementById('pa-fee').textContent = R(fee);
-    document.getElementById('pa-out').textContent = R(price - fee);
+    document.getElementById('pa-price').textContent = R(+o.dataset.price);
     box.style.display = '';
   }
-  sel.addEventListener('change', update); pct.addEventListener('change', update); update();
+  sel.addEventListener('change', update); update();
 })();
 </script>
 <?php require_once __DIR__ . '/footer.php'; ?>

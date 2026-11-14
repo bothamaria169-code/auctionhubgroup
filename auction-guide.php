@@ -120,13 +120,13 @@ require_once __DIR__ . '/header.php';
             </div>
         </div>
 
-        <!-- ═══════════ IN-HOUSE FINANCE CALCULATOR (compact) ═══════════ -->
+        <!-- ═══════════ FINANCE CALCULATOR (compact) ═══════════ -->
         <div style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);border-top:4px solid #25D366;">
             <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.35rem;flex-wrap:wrap;">
                 <h2 style="color:#003f73;font-size:1.4rem;margin:0;display:flex;align-items:center;gap:.65rem;">
-                    <i class="fas fa-calculator" style="color:#25D366;"></i> In-House Finance Calculator
+                    <i class="fas fa-calculator" style="color:#25D366;"></i> Finance Calculator
                 </h2>
-                <span style="background:rgba(37,211,102,.12);color:#1a8a3e;font-size:.72rem;font-weight:700;padding:.2rem .65rem;border-radius:4px;letter-spacing:.04em;">NO CREDIT CHECKS</span>
+                <span style="background:rgba(37,211,102,.12);color:#1a8a3e;font-size:.72rem;font-weight:700;padding:.2rem .65rem;border-radius:4px;letter-spacing:.04em;">INSTANT SCORE</span>
             </div>
             <p style="color:#777;font-size:.87rem;margin-bottom:1.5rem;">Need finance? Enter your vehicle price below to see estimated monthly instalments. Minimum deposit R10,500 — increase your deposit to lower your monthly payments.</p>
 
@@ -452,7 +452,7 @@ require_once __DIR__ . '/header.php';
                 ['fa-clock','Arrive Early','Get to the venue early, pick up your bidder card, and review the lot order so you know when your vehicle comes up.'],
                 ['fa-head-side-virus','Stay Calm','Auction adrenaline is real. Don\'t let emotions push you over your budget. There will always be another vehicle.'],
                 ['fa-file-contract','Read the Fine Print','Understand the terms before you bid. All vehicles are sold voetstoots. Bids cannot be withdrawn.'],
-                ['fa-hand-holding-dollar','Finance First','If you need finance, arrange it before auction day. Check out our <a href="'.APP_URL.'/financing.php" style="color:#005BA1;font-weight:600;">in-house finance</a> &mdash; no credit checks required.'],
+                ['fa-hand-holding-dollar','Finance First','If you need finance, arrange it before auction day. Check out our <a href="'.APP_URL.'/financing.php" style="color:#005BA1;font-weight:600;">finance</a> &mdash; check if you qualify in two minutes.'],
             ];
             foreach ($tips as [$icon,$title,$desc]):
             ?>
@@ -479,7 +479,7 @@ require_once __DIR__ . '/header.php';
                     <i class="fas fa-gavel"></i> View Auctions
                 </a>
                 <a href="<?= APP_URL ?>/financing.php" style="background:#25D366;color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;">
-                    <i class="fas fa-hand-holding-dollar"></i> In-House Finance
+                    <i class="fas fa-hand-holding-dollar"></i> Finance
                 </a>
             </div>
         </div>
