@@ -30,7 +30,7 @@ $note = trim(mb_substr((string)($_POST['note'] ?? ''), 0, 2000));
 if ($action === 'settings') {
     foreach (['fin_min_deposit', 'fin_min_deposit_heavy', 'pa_min_percent', 'pa_max_percent', 'pa_default_percent',
               'fin_score_a', 'fin_score_b', 'fin_score_c', 'fin_startup_b', 'fin_startup_c', 'fin_startup_d', 'fin_afford_pct',
-              'fin_buffer_pct', 'fin_min_income', 'fin_norm_base', 'fin_norm_dependant', 'fin_max_age'] as $k) {
+              'fin_buffer_pct', 'fin_min_income', 'fin_norm_base', 'fin_norm_dependant', 'fin_max_age', 'fin_min_credit_score'] as $k) {
         if (isset($_POST[$k]) && is_numeric($_POST[$k])) leadSaveSetting($k, (string)(float)$_POST[$k]);
     }
     foreach ([6, 12, 24, 36, 48, 60, 72] as $m) {

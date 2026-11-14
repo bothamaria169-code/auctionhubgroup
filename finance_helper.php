@@ -362,15 +362,37 @@ function finChosenPlan(array $app): ?array {
 // (and fin_buffer_pct % of what is left after expenses). Anything above that becomes
 // part of the start-up deposit. No room in the budget at all → referred to the office (R).
 // A credit bureau score entered by the office replaces the client's own estimate.
+// Credit score: TransUnion South Africa's official 0–999 bands. Standard approval
+// (grade A) also needs a known score of at least fin_min_credit_score (614 =
+// "Favourable", the level SA vehicle lenders commonly look for); below it the
+// application can still qualify, but only with a start-up deposit (grade B or lower).
 
-const FIN_CREDIT_BANDS = [   // key => [label, points out of 25, typical score]
-    'excellent' => ['Excellent (700 and above)', 25, 720],
-    'good'      => ['Good (650 – 699)',          21, 670],
-    'fair'      => ['Fair (600 – 649)',          16, 620],
-    'poor'      => ['Poor (500 – 599)',          10, 550],
-    'very_poor' => ['Very poor (below 500)',      5, 450],
-    'unknown'   => ["I don't know my score",     12, null],
+const FIN_CREDIT_BANDS = [   // key => [label, points out of 25, lowest score in the band] — TransUnion SA bands
+    'excellent'     => ['Excellent (767 – 999)',     25, 767],
+    'good'          => ['Good (681 – 766)',          22, 681],
+    'favourable'    => ['Favourable (614 – 680)',    18, 614],
+    'average'       => ['Average (583 – 613)',       13, 583],
+    'below_average' => ['Below average (527 – 582)',  9, 527],
+    'unfavourable'  => ['Unfavourable (487 – 526)',   5, 487],
+    'poor'          => ['Poor (0 – 486)',             2, 0],
+    'unknown'       => ["I don't know my score",     12, null],
 ];
+const FIN_CREDIT_BANDS_OLD = ['fair' => 'favourable', 'very_poor' => 'poor'];   // keys used before Nov 2026
+
+/** Where clients check their own credit score free (NCA: one free report a year per bureau). */
+const FIN_SCORE_CHECKS = [
+    ['TransUnion', 'https://www.transunion.co.za', 'Free annual report · same 0–999 scale we use'],
+    ['ClearScore', 'https://www.clearscore.com/za', 'Free score, updated monthly'],
+    ['Experian',   'https://www.experian.co.za',   'Free annual report'],
+    ['XDS',        'https://www.xds.co.za',        'Free annual report'],
+];
+
+/** "Check your score free" links (opens in a new tab so the form keeps its answers). */
+function finScoreCheckLinks(string $class = 'fp-bureaus'): string {
+    $h = '<div class="' . e($class) . '">';
+    foreach (FIN_SCORE_CHECKS as [$n, $u, $t]) $h .= '<a href="' . e($u) . '" target="_blank" rel="noopener nofollow">' . e($n) . ' <i class="fas fa-up-right-from-square" style="font-size:.7em"></i><small>' . e($t) . '</small></a>';
+    return $h . '</div>';
+}
 const FIN_EMPLOYMENT = [
     'permanent' => 'Permanently employed',
     'contract'  => 'Contract / temporary',
@@ -402,12 +424,20 @@ function finRules(): array {
         'min_income' => $n('fin_min_income', '4000'),
         'norm_base'  => $n('fin_norm_base', '2500'), 'norm_dep' => $n('fin_norm_dependant', '900'),
         'max_age'    => $n('fin_max_age', '70'),
+        'min_credit' => $n('fin_min_credit_score', '614'),
     ];
 }
 
-/** Score band for a bureau / known score (0–999 scale used by SA bureaus). */
+/** TransUnion band for a known score (0–999). */
 function finBandForScore(int $score): string {
-    return $score >= 700 ? 'excellent' : ($score >= 650 ? 'good' : ($score >= 600 ? 'fair' : ($score >= 500 ? 'poor' : 'very_poor')));
+    foreach (FIN_CREDIT_BANDS as $k => $b) if ($b[2] !== null && $score >= $b[2]) return $k;
+    return 'poor';
+}
+
+/** A band key from a form / stored application (old keys mapped to the TransUnion bands). */
+function finBandKey(?string $k): string {
+    $k = FIN_CREDIT_BANDS_OLD[$k ?? ''] ?? ($k ?? '');
+    return isset(FIN_CREDIT_BANDS[$k]) ? $k : 'unknown';
 }
 
 /** SA ID number → ['dob','age','gender','citizen'] or null when it is not valid (date + Luhn check digit). */
@@ -474,9 +504,12 @@ function finAssess(array $in, float $price, float $deposit, array $vehicle): arr
     $bureau = isset($in['bureau_score']) && $in['bureau_score'] !== '' && $in['bureau_score'] !== null ? (int)$in['bureau_score'] : null;
     $own    = isset($in['credit_score']) && (int)$in['credit_score'] > 0 ? (int)$in['credit_score'] : null;
     $band   = $bureau !== null ? finBandForScore($bureau)
-            : ($own !== null ? finBandForScore($own) : (isset(FIN_CREDIT_BANDS[$in['credit_band'] ?? '']) ? $in['credit_band'] : 'unknown'));
+            : ($own !== null ? finBandForScore($own) : finBandKey($in['credit_band'] ?? null));
+    $known  = $bureau ?? $own ?? FIN_CREDIT_BANDS[$band][2];          // null when the client doesn't know
+    $belowMin = $known !== null && $known < $r['min_credit'];
     $p = FIN_CREDIT_BANDS[$band][1];
     $notes = [($bureau !== null ? 'Bureau score ' . $bureau : ($own !== null ? 'Own estimate ' . $own : 'Own estimate')) . ' — ' . FIN_CREDIT_BANDS[$band][0]];
+    if ($belowMin) $notes[] = 'below the ' . (int)$r['min_credit'] . ' needed for standard approval';
     if (!empty($in['debt_review'])) { $p -= 8; $notes[] = 'under debt review'; }
     if (!empty($in['judgments']))   { $p -= 6; $notes[] = 'judgments / adverse listings'; }
     $pts['credit'] = ['Credit profile', max(0, $p), 25, implode(', ', $notes)];
@@ -507,6 +540,7 @@ function finAssess(array $in, float $price, float $deposit, array $vehicle): arr
 
     $score = (int)array_sum(array_column($pts, 1));
     $grade = $score >= $r['score_a'] ? 'A' : ($score >= $r['score_b'] ? 'B' : ($score >= $r['score_c'] ? 'C' : 'D'));
+    if ($grade === 'A' && $belowMin) $grade = 'B';   // standard approval needs the minimum credit score
     $gradePct = ['A' => 0, 'B' => $r['startup_b'], 'C' => $r['startup_c'], 'D' => $r['startup_d']][$grade];
 
     $reasons = [];
@@ -617,7 +651,7 @@ function finReadForm(array $p, bool $full = true): array {
         'exp_housing' => $m('exp_housing'), 'exp_living' => $m('exp_living'), 'exp_debt' => $m('exp_debt'), 'exp_other' => $m('exp_other'),
         'bank_name' => in_array($p['bank_name'] ?? '', FIN_BANKS, true) ? $p['bank_name'] : '',
         'bank_years' => max(0, min(80, (float)($p['bank_years'] ?? 0))),
-        'credit_band' => isset(FIN_CREDIT_BANDS[$p['credit_band'] ?? '']) ? $p['credit_band'] : 'unknown',
+        'credit_band' => finBandKey($p['credit_band'] ?? null),
         'credit_score' => ($cs = (int)($p['credit_score'] ?? 0)) >= 100 && $cs <= 999 ? $cs : null,
         'debt_review' => ($p['debt_review'] ?? '') === 'yes', 'judgments' => ($p['judgments'] ?? '') === 'yes',
     ];

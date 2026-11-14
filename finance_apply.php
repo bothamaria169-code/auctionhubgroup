@@ -262,9 +262,14 @@ finHero('<i class="fas fa-file-signature"></i> Finance Application', 'Apply for 
               <select class="form-control" id="bank_name" name="bank_name" required><option value="">Choose…</option><?= $opt2(FIN_BANKS, 'bank_name') ?></select><?= $err('bank_name') ?></div>
             <div class="form-group"><label class="form-label" for="bank_years">Years with this bank</label>
               <input class="form-control" id="bank_years" name="bank_years" type="number" min="0" max="80" step="0.5" value="<?= $val('bank_years', '0') ?>"></div>
+            <div class="full fp-scorebox">
+              <strong><i class="fas fa-magnifying-glass-chart"></i> Know your credit score?</strong>
+              <span class="ap-help" style="display:block;margin:.2rem 0 0">Standard approval needs <strong><?= (int)$rules['min_credit'] ?>+</strong> on TransUnion's 0–999 scale. Not sure of yours? Check it free — it opens in a new tab, so your answers here stay.</span>
+              <?= finScoreCheckLinks() ?>
+            </div>
             <div class="form-group"><label class="form-label" for="credit_band">Your credit score</label>
               <select class="form-control" id="credit_band" name="credit_band"><?= $opt(array_map(fn($b) => $b[0], FIN_CREDIT_BANDS), 'credit_band', 'unknown') ?></select>
-              <span class="ap-help">Not sure? <a href="<?= APP_URL ?>/financing.php#credit-score" target="_blank">Check it free</a>.</span></div>
+</div>
             <div class="form-group"><label class="form-label" for="credit_score">Exact score, if you know it <?= $opt_('') ?></label>
               <input class="form-control" id="credit_score" name="credit_score" type="number" min="100" max="999" value="<?= $val('credit_score') ?>" placeholder="e.g. 640"></div>
             <div class="form-group"><label class="form-label">Under debt review / administration?</label>
@@ -319,7 +324,7 @@ finHero('<i class="fas fa-file-signature"></i> Finance Application', 'Apply for 
             <div class="ap-rowline"><span class="lbl"><strong style="color:#003f73"><?= $l ?></strong><br><small><?= $h ?></small></span><span class="val"><?= $m ?> pts</span></div>
           <?php endforeach; ?>
           <div style="margin-top:.9rem">
-            <?php foreach ([['A', $rules['score_a'] . '+', 'Approved in principle — ' . formatRand($minStd) . ' minimum deposit'],
+            <?php foreach ([['A', $rules['score_a'] . '+', 'Approved in principle — ' . formatRand($minStd) . ' minimum deposit, credit score ' . (int)$rules['min_credit'] . '+'],
                             ['B', (int)$rules['score_b'] . '–' . ((int)$rules['score_a'] - 1), 'Start-up deposit from ' . (int)$rules['startup_b'] . '% of the price'],
                             ['C', (int)$rules['score_c'] . '–' . ((int)$rules['score_b'] - 1), 'Start-up deposit from ' . (int)$rules['startup_c'] . '%'],
                             ['D', 'below ' . (int)$rules['score_c'], 'Start-up deposit from ' . (int)$rules['startup_d'] . '%']] as [$g, $r, $t]): ?>

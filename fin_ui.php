@@ -145,6 +145,13 @@
 .fr-plan b { font-family:'Barlow Condensed',sans-serif; font-size:1.15rem; color:#1a9e4e; }
 .fr-loading { text-align:center; padding:2rem 1rem; color:#667; }
 
+.fp-bureaus { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr)); gap:.6rem; margin:.8rem 0; }
+.fp-bureaus a { display:block; background:#f4f8ff; border:1.5px solid #d5e3f3; border-radius:12px; padding:.75rem .9rem; text-decoration:none; color:#003f73; font-weight:700; }
+.fp-bureaus a small { display:block; color:#667; font-weight:500; font-size:.76rem; margin-top:.15rem; }
+.fp-bureaus a:hover { border-color:#005BA1; }
+.fp-scorebox { background:linear-gradient(135deg,#f0f6fc,#e8f4fd); border:1.5px solid #b8d4ee; border-radius:12px; padding:.9rem 1rem; margin:.25rem 0 1rem; }
+.fp-scorebox strong { color:#003f73; }
+
 /* ── Phones ─────────────────────────────────────────────────
    Site-wide .btn never wraps (white-space:nowrap); long labels here
    would push cards wider than the screen, so they wrap on these pages. */

@@ -55,10 +55,6 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
 .fp-calc th { background:#003f73; color:#fff; padding:.65rem .8rem; text-align:left; font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; }
 .fp-calc td { padding:.65rem .8rem; border-bottom:1px solid #eef2f7; }
 .fp-calc td.m { font-family:'Barlow Condensed',sans-serif; font-size:1.2rem; font-weight:800; color:#1a9e4e; }
-.fp-bureaus { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); gap:.75rem; margin:1rem 0; }
-.fp-bureaus a { display:block; background:#f4f8ff; border:1.5px solid #d5e3f3; border-radius:12px; padding:.9rem 1rem; text-decoration:none; color:#003f73; font-weight:700; }
-.fp-bureaus a small { display:block; color:#667; font-weight:500; font-size:.78rem; margin-top:.2rem; }
-.fp-bureaus a:hover { border-color:#005BA1; }
 .fp-bands { width:100%; border-collapse:collapse; font-size:.86rem; }
 .fp-bands td { padding:.5rem .6rem; border-bottom:1px solid #eef2f7; }
 .fp-bands td:first-child { width:12px; padding:0; }
@@ -66,6 +62,7 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
 
 <div class="ap-container fp-cta">
   <a class="btn btn-primary btn-lg" href="#qualify"><i class="fas fa-gauge-high"></i> Do I Qualify?</a>
+  <a class="btn btn-outline btn-lg" href="#credit-score" style="background:#fff"><i class="fas fa-magnifying-glass-chart"></i> Check My Credit Score</a>
   <a class="btn btn-success btn-lg" href="<?= APP_URL ?>/finance_apply.php"><i class="fas fa-file-signature"></i> Apply Now</a>
 </div>
 
@@ -83,7 +80,7 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
       <div><b>30</b><span>Affordability</span></div><div><b>25</b><span>Credit profile</span></div><div><b>20</b><span>Employment</span></div><div><b>15</b><span>Deposit</span></div><div><b>10</b><span>Stability</span></div>
     </div>
     <div class="fp-grades">
-      <?php foreach ([['A', (int)$rules['score_a'] . ' – 100', 'Approved in principle', 'Standard minimum deposit of ' . $R($minStd) . ' (' . $R($minHvy) . ' on trucks & plant).'],
+      <?php foreach ([['A', (int)$rules['score_a'] . ' – 100', 'Approved in principle', 'Standard minimum deposit of ' . $R($minStd) . ' (' . $R($minHvy) . ' on trucks & plant). Needs a credit score of ' . (int)$rules['min_credit'] . ' or more (TransUnion "Favourable" or better).'],
                       ['B', (int)$rules['score_b'] . ' – ' . ((int)$rules['score_a'] - 1), 'Start-up deposit', 'Approved with a start-up deposit from ' . (int)$rules['startup_b'] . '% of the price.'],
                       ['C', (int)$rules['score_c'] . ' – ' . ((int)$rules['score_b'] - 1), 'Start-up deposit', 'Approved with a start-up deposit from ' . (int)$rules['startup_c'] . '% of the price.'],
                       ['D', '0 – ' . ((int)$rules['score_c'] - 1), 'Larger start-up deposit', 'Approved with a start-up deposit from ' . (int)$rules['startup_d'] . '% of the price.']] as [$g, $range, $t, $d]): ?>
@@ -131,6 +128,7 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
             <div class="form-group"><label class="form-label" for="pc-years">Years in this job</label>
               <select class="form-control" id="pc-years" name="emp_years"><?php for ($i = 0; $i <= 30; $i++): ?><option value="<?= $i ?>"<?= $i === 2 ? ' selected' : '' ?>><?= $i ?><?= $i === 30 ? '+' : '' ?></option><?php endfor; ?></select></div>
             <div class="form-group"><label class="form-label" for="pc-band">Your credit score</label>
+              <span class="ap-help" style="display:block;margin:-.2rem 0 .3rem">Don't know it? <a href="#credit-score">Check it free</a> — it takes a few minutes.</span>
               <select class="form-control" id="pc-band" name="credit_band"><?php foreach (FIN_CREDIT_BANDS as $k => $b): ?><option value="<?= $k ?>"<?= $k === 'unknown' ? ' selected' : '' ?>><?= e($b[0]) ?></option><?php endforeach; ?></select></div>
             <div class="form-group"><label class="form-label" for="pc-res">Where you live</label>
               <select class="form-control" id="pc-res" name="residence"><?php foreach (FIN_RESIDENCE as $k => $l): ?><option value="<?= $k ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
@@ -180,24 +178,23 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
         <div class="ap-card-head"><i class="fas fa-magnifying-glass-chart"></i> Check Your Credit Score — Free</div>
         <div class="ap-card-body">
           <p class="ap-sub" style="margin-bottom:.5rem">Under the National Credit Act you are entitled to <strong>one free credit report a year from each credit bureau</strong>. Checking your own score never lowers it. Know your score before you apply — and put the exact figure on your application.</p>
-          <div class="fp-bureaus">
-            <a href="https://www.transunion.co.za" target="_blank" rel="noopener nofollow">TransUnion<small>Free annual credit report</small></a>
-            <a href="https://www.experian.co.za" target="_blank" rel="noopener nofollow">Experian<small>Free annual credit report</small></a>
-            <a href="https://www.xds.co.za" target="_blank" rel="noopener nofollow">XDS<small>Free annual credit report</small></a>
-            <a href="https://www.clearscore.com/za" target="_blank" rel="noopener nofollow">ClearScore<small>Free score, updated monthly</small></a>
-          </div>
+          <?= finScoreCheckLinks() ?>
           <p class="ap-help">When you apply you give consent for us to check your credit with a registered bureau. A bureau score replaces your own estimate and can raise or lower your result.</p>
         </div>
       </div>
       <div class="ap-card">
-        <div class="ap-card-head gold"><i class="fas fa-ranking-star"></i> What Your Score Means Here</div>
+        <div class="ap-card-head gold"><i class="fas fa-ranking-star"></i> The Credit Score You Need</div>
         <div class="ap-card-body">
+          <p class="ap-help" style="margin:0 0 .7rem">Scores on TransUnion's 0–999 scale. For <strong>standard approval</strong> (grade A, <?= e($R($minStd)) ?> deposit) you need <strong><?= (int)$rules['min_credit'] ?> or more</strong>. Below that you can still qualify — with a start-up deposit.</p>
           <table class="fp-bands">
-            <?php foreach (FIN_CREDIT_BANDS as $k => [$label, $pts]): if ($k === 'unknown') continue; ?>
-              <tr><td style="background:<?= ['excellent' => '#1a9e4e', 'good' => '#4caf50', 'fair' => '#e8a000', 'poor' => '#ef6c00', 'very_poor' => '#c62828'][$k] ?>"></td><td><strong><?= e($label) ?></strong></td><td style="text-align:right"><?= $pts ?> / 25 pts</td></tr>
+            <?php foreach (FIN_CREDIT_BANDS as $k => [$label, $pts, $from]): if ($k === 'unknown') continue; $ok = $from >= $rules['min_credit']; ?>
+              <tr><td style="background:<?= ['excellent' => '#1a9e4e', 'good' => '#4caf50', 'favourable' => '#8bc34a', 'average' => '#e8a000', 'below_average' => '#ef6c00', 'unfavourable' => '#e53935', 'poor' => '#a30000'][$k] ?>"></td>
+                <td><strong><?= e($label) ?></strong><br><small style="color:<?= $ok ? '#1a9e4e' : '#a35a00' ?>"><?= $ok ? 'Standard approval possible' : 'Start-up deposit needed' ?></small></td>
+                <td style="text-align:right"><?= $pts ?> / 25 pts</td></tr>
             <?php endforeach; ?>
-            <tr><td style="background:#a30000"></td><td>Debt review / judgments</td><td style="text-align:right">− 8 / − 6 pts</td></tr>
+            <tr><td style="background:#5a0000"></td><td>Debt review / judgments</td><td style="text-align:right">− 8 / − 6 pts</td></tr>
           </table>
+          <p class="ap-help" style="margin-top:.6rem">Experian, XDS and Compuscan use their own scales, so the same person can score differently at each bureau. We assess on the bureau report we pull with your consent.</p>
           <p class="ap-help" style="margin-top:.8rem"><strong>Improve your result:</strong> a bigger deposit (up to 15 points), paying down store cards and loans (frees up budget), and keeping accounts up to date.</p>
         </div>
       </div>
@@ -258,6 +255,8 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
     <?php foreach ([
         ['I am blacklisted / under debt review — can I still get finance?', 'You can apply. Judgments and debt review lower your credit-profile points, which usually means a start-up deposit for approval. The pre-check above shows you the amount before you apply.'],
         ['What is a start-up deposit?', 'When your score is below grade A, or the instalment at the minimum deposit does not fit your budget, approval is conditional on a larger deposit — the start-up deposit. It comes off the price, so you finance less and pay lower instalments.'],
+        ['What credit score do I need?', 'For standard approval (grade A, ' . $R($minStd) . ' deposit) you need a score of ' . (int)$rules['min_credit'] . ' or more on TransUnion\'s 0–999 scale ("Favourable" or better), plus a budget that fits the instalment. With a lower score you can still be approved with a start-up deposit.'],
+        ['How do I check my credit score?', 'Free, online: TransUnion and Experian give you one free credit report a year, and ClearScore shows a free score updated monthly. Checking your own score never lowers it. Enter the exact number on your application for the most accurate result.'],
         ['Do you check my credit?', 'Yes — with your consent on the application, we confirm your score with a registered credit bureau. That bureau score replaces the estimate you gave us.'],
         ['How is affordability worked out?', 'Take-home pay plus other income, less rent / bond, living costs (at least ' . $R($rules['norm_base']) . ' plus ' . $R($rules['norm_dep']) . ' per dependant), loan repayments and other fixed costs. Your instalment may be at most ' . (int)$rules['afford_pct'] . '% of income and must fit in what is left.'],
         ['Can I improve my result after applying?', 'Yes. Offer a bigger deposit, or send us a better bureau report — our team re-scores your application and emails a new quote.'],
