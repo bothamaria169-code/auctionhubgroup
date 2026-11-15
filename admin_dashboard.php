@@ -6096,7 +6096,7 @@ document.getElementById('workerCreateForm').addEventListener('submit', async fun
     require __DIR__ . '/admin_applications_tab.php'; ?>
 
 <?php elseif ($activeTab === 'stock'):
-    $stBranches = $pdo->query("SELECT id, name FROM branches ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $stBranches = $pdo->query("SELECT id, name FROM branches WHERE " . openBranchSql() . " ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR);
     $stMakes    = $pdo->query("SELECT id, name FROM makes ORDER BY name")->fetchAll(PDO::FETCH_KEY_PAIR);
     $stPage     = max(1, (int)($_GET['spage'] ?? 1));
     $stCount    = (int)$pdo->query("SELECT COUNT(*) FROM stock_drafts WHERE status = 'draft'")->fetchColumn();

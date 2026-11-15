@@ -181,6 +181,8 @@ define('COMPANY_SARS_NO',         '9982096167');
 define('COMPANY_REG_DATE',        '2016/06/30');
 define('COMPANY_TYPE',            'Private Company');
 define('COMPANY_ADDRESS', '80 Sterling Rd, Kosmosdal, Centurion, 0187');
+// The only two locations (Nov 2026). Durban, Bloemfontein and Gqeberha are closed: branch lists hide them.
+define('AHG_OPEN_BRANCH_CITIES', ['Centurion', 'Boksburg']);
 define('AUCTION_GROUND',  '80 Sterling Rd, Kosmosdal, Centurion, 0187');
 define('COMPANY_EMAIL',   'info@auctionhubgroup.co.za');
 define('COMPANY_PHONE',   '+27 10 516 0683');
@@ -439,6 +441,12 @@ SVG;
  */
 function e(?string $str): string {
     return htmlspecialchars($str ?? '', ENT_QUOTES, 'UTF-8');
+}
+
+/** SQL condition: the branch (table alias $a) is one of the open branches. */
+function openBranchSql(string $a = ''): string {
+    $col = ($a !== '' ? $a . '.' : '') . 'city';
+    return $col . " IN ('" . implode("','", AHG_OPEN_BRANCH_CITIES) . "')";
 }
 
 /**

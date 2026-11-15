@@ -13,7 +13,7 @@ Three of these stop the test from telling you anything. Do them first, in this o
 | 1 | `GADS_LABEL_REGISTRATION`, `_WHATSAPP` and `_CALL` in `config.php` (lines 144–148) are still `XXXXXXXXXXXXXXXXXX` | Google records clicks but no registrations, so after 10 days you can't tell which keyword produced a bidder | Create the three conversion actions (section 9), paste the labels, deploy `config.php` |
 | 2 | Two tracking paths are installed: the `AW-3636429749` tag from `config.php` and GTM `GTM-N5LK7BDP` | Tags in both places count every registration twice | Keep the labels in `config.php` and build **no** Ads conversion tags in GTM |
 | 3 | Stock has dropped from 494 lots (October) to **48** (13 Nov) | An ad that lands on an empty model page burns the click | On launch morning open the three landing pages. Hilux needs 10+ lots, Quantum 4+. Launch without group C if Quantum is under 4 |
-| 4 | There is no Western Cape branch | A Cape Town bidder who wins and can't get the car home asks for a refund | Confirm you can quote and arrange delivery to Cape Town. If not, remove Western Cape before launch |
+| 4 | There are no branches outside Gauteng (Durban, Bloemfontein and Gqeberha closed, 15 Nov) | A Cape Town bidder who wins and can't get the car home asks for a refund | Confirm you can quote and arrange delivery to Cape Town. If not, remove Western Cape before launch |
 | 5 | New registrants need a call within a day | Most ad sign-ups never pay the R10,000 deposit without a human nudge | Agree who works the Leads page every morning during the test |
 
 ## 2. The campaign at a glance
@@ -40,19 +40,19 @@ AHG | Expansion | Search   (R100/day, Max clicks R8 cap, KZN/EC/FS/WC, Gauteng e
 
 ## 3. Where the ads show
 
-The test buys reach where you have no paid presence yet: the provinces with your branch cities, plus Cape Town for online bidders. Distances are approximate road distances from head office in Centurion.
+The test buys reach where you have no paid presence yet: four provinces far from head office, sold on online bidding and nationwide delivery. Distances are approximate road distances from head office in Centurion.
 
 | Province | Your presence | Main cities | From Centurion | Target? |
 |---|---|---|---|---|
-| Free State | Bloemfontein branch, Cnr R64 & Valentia Rd, Waterbron | Bloemfontein, Welkom | ~420 km | Yes |
-| KwaZulu-Natal | Durban branch, River Horse Estate | Durban, Pietermaritzburg, Richards Bay | ~600 km | Yes |
-| Eastern Cape | Gqeberha branch, 142 Burman Rd, Deal Party | Gqeberha, East London, Mthatha | ~950–1,060 km | Yes |
+| Free State | No branch. Online bidding, delivery on request | Bloemfontein, Welkom | ~420 km | Yes |
+| KwaZulu-Natal | No branch. Online bidding, delivery on request | Durban, Pietermaritzburg, Richards Bay | ~600 km | Yes |
+| Eastern Cape | No branch. Online bidding, delivery on request | Gqeberha, East London, Mthatha | ~950–1,060 km | Yes |
 | Western Cape | No branch. Online bidding by webcast, delivery on request | Cape Town, George | ~1,450 km | Yes, if delivery is confirmed |
 | Gauteng | Head office and Boksburg |  |  | **Excluded** |
 
 > Gauteng is shut out twice. The location exclusion stops people **in** Gauteng seeing the ads. Negative list 5 stops people elsewhere who search for Gauteng places, for example "repossessed cars pretoria" typed in Durban.
 
-Don't promise viewing at a branch in the ads. The ads say you can bid online and that delivery is available, which the register page states. If the Durban, Gqeberha and Bloemfontein branches can show these vehicles, add that later as its own test.
+Don't promise viewing at a branch in the ads. The ads say you can bid online and that delivery is available, which the register page states. The only locations are head office in Centurion and the Boksburg auction ground.
 
 ## 4. Set it up, screen by screen
 
@@ -398,7 +398,7 @@ R10,000 deposit is fully refundable if you don't buy. Nationwide delivery availa
 | How Bidding Works | Register, get verified, bid. | The full process explained. | `/auction-guide.php` |
 | Toyota Hilux Lots | Every repossessed Hilux | currently on auction. | `/auctions.php?search=hilux` |
 | Toyota Quantum Lots | Repossessed Quantum minibuses | on auction now. | `/auctions.php?search=quantum` |
-| Our Branches | Durban, Gqeberha, Bloemfontein | and Centurion head office. | `/about.php#branches` |
+| Our Locations | Head office in Centurion and | auction ground in Boksburg. | `/contact.php` |
 | Pre-Auction Deals | Buy before it reaches | the auction floor. | `/preauction.php` |
 
 ### Callouts

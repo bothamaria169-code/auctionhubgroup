@@ -212,7 +212,7 @@ finHero('<i class="fas fa-hand-holding-dollar"></i> Vehicle Finance', 'Finance Y
                       ['fa-calendar-days', '#0078d7', '2. Choose your term', 'Pick any repayment term that fits your budget, from 6 to ' . $maxTerm . ' months.'],
                       ['fa-file-arrow-up', '#8b5cf6', '3. Documents & credit check', 'Upload your documents on your application page. With your consent we confirm your score with a credit bureau.'],
                       ['fa-coins', '#e8a000', '4. Pay your (start-up) deposit', 'Your deposit invoice comes by email. Once it reflects, your finance is approved and the vehicle is reserved.'],
-                      ['fa-id-badge', '#25D366', '5. Buyer Code & test drive', 'Your Buyer Code is your access pass. Book your test drive at head office.'],
+                      ['fa-id-badge', '#25D366', '5. Buyer Code & test drive', 'Your Buyer Code is your access pass. Our team books your test drive at head office with you.'],
                       ['fa-key', '#ef4444', '6. Sign & drive away', 'Sign your instalment sale agreement, set up your debit order and drive away.']] as [$ic, $c, $t, $d]): ?>
         <div class="fp-card" style="--c:<?= $c ?>"><div class="ic"><i class="fas <?= $ic ?>"></i></div><h3><?= e($t) ?></h3><p><?= e($d) ?></p></div>
       <?php endforeach; ?>

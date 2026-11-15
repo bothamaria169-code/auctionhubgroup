@@ -110,10 +110,7 @@ function _emailTemplate(string $title, string $bodyContent, bool $replyable = fa
             <a href="mailto:finance@auctionhubgroup.co.za" style="color:#005BA1;text-decoration:none;">finance@auctionhubgroup.co.za</a>
           </p>
           <p style="margin:0 0 12px;">+27 10 516 0683 (Main Office Line) &nbsp;|&nbsp; +27 10 516 0681 (Secondary Line)</p>
-          <p style="margin:0 0 4px;color:#999999;font-size:11px;">Gauteng &mdash; Boksburg: 8 Top Rd, O.R. Tambo, Boksburg, 1459</p>
-          <p style="margin:0 0 4px;color:#999999;font-size:11px;">KwaZulu-Natal &mdash; Durban: Quarry Place, Off Queen Nandi Drive, River Horse Estate, Durban</p>
-          <p style="margin:0 0 4px;color:#999999;font-size:11px;">Free State &mdash; Bloemfontein: Cnr R64 &amp; Valentia Road, Waterbron, Bloemfontein</p>
-          <p style="margin:0 0 10px;color:#999999;font-size:11px;">Eastern Cape &mdash; Gqeberha (PE): ABSA Vehicle &amp; Asset Finance Trade Centre, 142 Burman Road, Deal Party, Gqeberha (PE)</p>
+          <p style="margin:0 0 10px;color:#999999;font-size:11px;">Auction Ground &mdash; 8 Top Rd, O.R. Tambo, Boksburg, 1459</p>
           <p style="margin:0;color:#aaaaaa;font-size:12px;">' . ($replyable ? 'Reply to this email, call us or WhatsApp ' . (defined('COMPANY_WHATSAPP') ? COMPANY_WHATSAPP : '') . ' &mdash; a consultant will help you.' : 'This is an automated message. Please do not reply directly to this email.') . '</p>
         </td>
       </tr>

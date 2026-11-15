@@ -109,11 +109,7 @@ Use **bold** for prices, names, and key facts. Use line breaks for readability. 
 • Awards: Best Auctioneer 2018 & 2019 (Standard Bank)
 • Memberships: SAIA, NAA, JCCI, IEASA | Level 2 BBBEE | DEKRA-inspected vehicles
 • Head Office: 80 Sterling Rd, Kosmosdal, Centurion, 0187
-• Auction Grounds:
-  - Boksburg:       8 Top Rd, O.R. Tambo, Boksburg, 1459
-  - Durban:         Quarry Place, Off Queen Nandi Drive, River Horse Estate, Durban
-  - Bloemfontein:   Cnr R64 & Valentia Road, Waterbron, Bloemfontein
-  - Gqeberha (PE):  ABSA Vehicle & Asset Finance Trade Centre, 142 Burman Road, Deal Party, Eastern Cape
+• Auction Ground: 8 Top Rd, O.R. Tambo, Boksburg, 1459 (our only auction ground; there are no other branches)
 • Phone: +27 10 516 0683 (Main Office Line) | +27 10 516 0681 (Secondary Line)
 • Email: info@auctionhubgroup.co.za | careers@auctionhubgroup.co.za | finance@auctionhubgroup.co.za
 
@@ -167,7 +163,7 @@ Q: Can I bring a mechanic? A: Yes — the 1.5-hour test drive is for exactly tha
 Q: What if I'm not happy? A: 100% refund of commitment fee, no questions.
 Q: I have bad credit? A: You can still apply — a low score usually means a start-up deposit for approval. Check in 2 minutes on the finance page.
 Q: Is the R10,000 a fee? A: No — it's a fully refundable deposit. You get it back.
-Q: How do I book a test drive? A: Pre-auction and finance clients pick their test-drive date on their application page once the Buyer Code is issued.
+Q: How do I book a test drive? A: Our team books it with you once your payment is verified (pre-auction: Buyer Code issued; finance: application approved). Clients cannot book it online.
 Q: Are vehicles roadworthy? A: All are DEKRA-inspected. Grades: A (Platinum), B (Gold), C (Green), D (basic).
 
 ═══ FRAUD WARNING ═══

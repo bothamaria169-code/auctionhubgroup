@@ -236,7 +236,7 @@ require_once __DIR__ . '/header.php';
 
         <div class="section-header">
             <h2 class="section-title">Auction Ground Locations</h2>
-            <p class="section-subtitle">We operate auction grounds across South Africa</p>
+            <p class="section-subtitle">Our head office in Centurion and our auction ground in Boksburg</p>
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;margin-top:2rem;">
@@ -249,41 +249,6 @@ require_once __DIR__ . '/header.php';
                 <address style="font-style:normal;color:#555;font-size:.87rem;line-height:1.7;margin:0;">
                     8 Top Rd, O.R. Tambo<br>
                     Boksburg, 1459
-                </address>
-            </div>
-
-            <div style="background:#f8fafc;border-radius:14px;padding:1.5rem;border:1px solid #e5eaf0;">
-                <div style="width:44px;height:44px;background:linear-gradient(135deg,#005BA1,#003f73);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
-                    <i class="fas fa-warehouse" style="color:#fff;font-size:1rem;"></i>
-                </div>
-                <h4 style="color:#003f73;font-size:.95rem;margin:0 0 .5rem;">KwaZulu-Natal — Durban</h4>
-                <address style="font-style:normal;color:#555;font-size:.87rem;line-height:1.7;margin:0;">
-                    Quarry Place<br>
-                    Off Queen Nandi Drive<br>
-                    River Horse Estate, Durban
-                </address>
-            </div>
-
-            <div style="background:#f8fafc;border-radius:14px;padding:1.5rem;border:1px solid #e5eaf0;">
-                <div style="width:44px;height:44px;background:linear-gradient(135deg,#005BA1,#003f73);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
-                    <i class="fas fa-warehouse" style="color:#fff;font-size:1rem;"></i>
-                </div>
-                <h4 style="color:#003f73;font-size:.95rem;margin:0 0 .5rem;">Free State — Bloemfontein</h4>
-                <address style="font-style:normal;color:#555;font-size:.87rem;line-height:1.7;margin:0;">
-                    Cnr R64 &amp; Valentia Road<br>
-                    Waterbron, Bloemfontein
-                </address>
-            </div>
-
-            <div style="background:#f8fafc;border-radius:14px;padding:1.5rem;border:1px solid #e5eaf0;">
-                <div style="width:44px;height:44px;background:linear-gradient(135deg,#005BA1,#003f73);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
-                    <i class="fas fa-warehouse" style="color:#fff;font-size:1rem;"></i>
-                </div>
-                <h4 style="color:#003f73;font-size:.95rem;margin:0 0 .5rem;">Eastern Cape — Gqeberha (PE)</h4>
-                <address style="font-style:normal;color:#555;font-size:.87rem;line-height:1.7;margin:0;">
-                    ABSA Vehicle &amp; Asset Finance Trade Centre<br>
-                    142 Burman Road, Deal Party<br>
-                    Gqeberha (PE), Eastern Cape
                 </address>
             </div>
 

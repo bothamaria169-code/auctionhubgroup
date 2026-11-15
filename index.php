@@ -312,13 +312,13 @@ function displayPrice(array $auction): string {
                 </div>
             </div>
             <p style="color:#99b8d0;font-size:.93rem;line-height:1.7;margin:0;">
-                Attend in person at any of our <strong style="color:#fff;">5 branches</strong> across South Africa. Stand on the floor, see the vehicles before the hammer falls, and bid against real buyers in real time.
+                Attend in person at our <strong style="color:#fff;">Boksburg auction ground</strong>. Stand on the floor, see the vehicles before the hammer falls, and bid against real buyers in real time.
             </p>
             <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.65rem;">
                 <?php foreach ([
                     ['fa-users','Bid live alongside other registered buyers'],
-                    ['fa-car-side','View vehicles physically before bidding'],
-                    ['fa-map-marker-alt','5 branches: Centurion, Boksburg, Durban, Bloemfontein, PE'],
+                    ['fa-car-side','See each vehicle on the floor as it is auctioned'],
+                    ['fa-map-marker-alt','Auction ground: 8 Top Rd, O.R. Tambo, Boksburg'],
                     ['fa-calendar-check','Scheduled auction days — no appointment needed to bid'],
                     ['fa-key','Same-day collection after payment is confirmed'],
                 ] as [$ic, $txt]): ?>
@@ -1026,8 +1026,8 @@ function scrollTestimonials(dir) {
                 Our Locations
             </h2>
             <p class="section-subtitle">
-                Five locations across South Africa &mdash;
-                <strong>Head Office · Boksburg · Bloemfontein · Durban · Eastern Cape</strong>
+                Our two locations &mdash;
+                <strong>Head Office, Centurion · Auction Ground, Boksburg</strong>
             </p>
         </div>
 
@@ -1079,78 +1079,6 @@ function scrollTestimonials(dir) {
                     <div class="branch-card-tags">
                         <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
                         <span class="branch-tag"><i class="fas fa-tractor"></i> DEALER STOCK</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bloemfontein -->
-            <div class="branch-card">
-                <div class="branch-card-img-wrap">
-                    <img src="assets/images/branch-bloemfontein.jpg"
-                         alt="Auction Hub Group Bloemfontein branch — Cnr R64 &amp; Valentia Road"
-                         class="branch-card-img"
-                         loading="lazy"
-                         onerror="this.style.display='none';this.closest('.branch-card-img-wrap').style.background='#1a3a5c'">
-                </div>
-                <div class="branch-card-body">
-                    <h3 class="branch-card-city">
-                        <i class="fas fa-location-dot" aria-hidden="true"></i> Bloemfontein
-                    </h3>
-                    <address class="branch-card-address">
-                        Cnr R64 &amp; Valentia Road<br>
-                        Waterbron, Bloemfontein
-                    </address>
-                    <div class="branch-card-tags">
-                        <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
-                        <span class="branch-tag"><i class="fas fa-gavel"></i> REPO STOCK</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Gqeberha / Eastern Cape -->
-            <div class="branch-card">
-                <div class="branch-card-img-wrap">
-                    <img src="assets/images/branch-eastern-cape.jpg"
-                         alt="Auction Hub Group Eastern Cape branch — 142 Burman Road, Gqeberha"
-                         class="branch-card-img"
-                         loading="lazy"
-                         onerror="this.style.display='none';this.closest('.branch-card-img-wrap').style.background='#1a3a5c'">
-                </div>
-                <div class="branch-card-body">
-                    <h3 class="branch-card-city">
-                        <i class="fas fa-location-dot" aria-hidden="true"></i> Gqeberha (Port Elizabeth)
-                    </h3>
-                    <address class="branch-card-address">
-                        142 Burman Road, Deal Party<br>
-                        Gqeberha, Eastern Cape
-                    </address>
-                    <div class="branch-card-tags">
-                        <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
-                        <span class="branch-tag"><i class="fas fa-truck"></i> FLEET VEHICLES</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Durban -->
-            <div class="branch-card">
-                <div class="branch-card-img-wrap">
-                    <img src="assets/images/branch-durban.jpg"
-                         alt="Auction Hub Group Durban branch — River Horse Estate"
-                         class="branch-card-img"
-                         loading="lazy"
-                         onerror="this.style.display='none';this.closest('.branch-card-img-wrap').style.background='#1a3a5c'">
-                </div>
-                <div class="branch-card-body">
-                    <h3 class="branch-card-city">
-                        <i class="fas fa-location-dot" aria-hidden="true"></i> Durban
-                    </h3>
-                    <address class="branch-card-address">
-                        Quarry Place, Off Queen Nandi Drive<br>
-                        River Horse Estate, Durban
-                    </address>
-                    <div class="branch-card-tags">
-                        <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
-                        <span class="branch-tag"><i class="fas fa-gavel"></i> OPEN TO PUBLIC</span>
                     </div>
                 </div>
             </div>

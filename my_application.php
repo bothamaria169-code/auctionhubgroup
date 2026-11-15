@@ -4,7 +4,7 @@
 // The client's private page for an Finance application or a
 // Pre-Auction Purchase request: progress, and each step they take.
 //   Finance:     choose a term · upload documents & proof of payment ·
-//                Buyer Code · book the test drive
+//                Buyer Code · test drive (booked by staff in Admin)
 //   Pre-auction: proforma invoice + POP upload (invoice_pop_upload.php) ·
 //                Buyer Code · after the 1h30 test drive: proceed, switch
 //                to the alternative, or cancel for a refund
@@ -64,18 +64,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($err !== '') finFlash('error', e($err));
         $to = 'documents';
-    } elseif ($isFin && $action === 'viewing' && $s === 'approved') {
-        $date = (string)($_POST['date'] ?? ''); $time = (string)($_POST['time'] ?? '');
-        if ($e = finViewingError($date, $time)) {
-            finFlash('error', e($e));
-        } else {
-            $app['details']['viewing'] = ['date' => $date, 'time' => $time, 'status' => 'requested', 'note' => trim(mb_substr((string)($_POST['note'] ?? ''), 0, 500)), 'at' => date('Y-m-d H:i:s')];
-            finLog($app, 'Requested a test drive on ' . finViewingLabel($app['details']['viewing']));
-            finSave($app);
-            finMailOffice($app, 'Test drive requested: ' . finViewingLabel($app['details']['viewing']));
-            finFlash('success', 'Thank you — we will confirm your test drive shortly.');
-        }
-        $to = 'viewing';
     } elseif (!$isFin && $action === 'decision' && $s === 'paid' && empty($app['details']['decision'])) {
         $choice = (string)($_POST['choice'] ?? '');
         if (in_array($choice, ['proceed', 'alternative', 'refund'], true) && ($choice !== 'alternative' || !empty($app['details']['alt']))) {
@@ -306,17 +294,10 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
             <?php if (!empty($v['note'])): ?><p class="ap-help"><?= nl2br(e($v['note'])) ?></p><?php endif; ?>
           <?php elseif (!empty($v['date'])): ?>
             <div class="alert alert-info" style="margin:0 0 .8rem"><i class="fas fa-hourglass-half"></i><span>You asked for <strong><?= e(finViewingLabel($v)) ?></strong> — our team confirms the time with you.</span></div>
+          <?php else: ?>
+            <div class="alert alert-info" style="margin:0 0 .8rem"><i class="fas fa-phone"></i><span>Our team will contact you to book your test-drive date and time.</span></div>
           <?php endif; ?>
           <p class="ap-help">At <?= e(COMPANY_ADDRESS) ?>. You have <strong>1 hour 30 minutes</strong> to test drive and inspect — bring your own mechanic if you like, plus your ID<?= $isFin ? ' and driver\'s licence' : '' ?>.</p>
-          <?php if ($isFin && $s === 'approved' && ($v['status'] ?? '') !== 'confirmed'): ?>
-            <form method="post" class="ap-form" style="margin-top:1rem">
-              <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="viewing">
-              <div class="form-group"><label class="form-label" for="v-date">Day</label><input class="form-control" id="v-date" type="date" name="date" required min="<?= date('Y-m-d', strtotime('tomorrow')) ?>" max="<?= date('Y-m-d', strtotime('+60 days')) ?>"></div>
-              <div class="form-group"><label class="form-label" for="v-time">Time</label><select class="form-control" id="v-time" name="time"><?php for ($h = 8; $h <= 15; $h++): ?><option><?= sprintf('%02d:00', $h) ?></option><?php endfor; ?></select></div>
-              <div class="full form-group"><label class="form-label" for="v-note">Note <span style="font-weight:400;color:#889">optional</span></label><input class="form-control" id="v-note" name="note"></div>
-              <div class="full"><button class="btn btn-primary" type="submit"><i class="fas fa-calendar-plus"></i> <?= !empty($v['date']) ? 'Request Another Time' : 'Book My Test Drive' ?></button></div>
-            </form>
-          <?php endif; ?>
         </div>
       </div>
     <?php endif; ?>

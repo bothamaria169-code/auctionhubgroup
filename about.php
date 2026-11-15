@@ -313,7 +313,7 @@ function aboutInitials(string $name): string {
                 Our Locations
             </h2>
             <p style="color:#4a6080;font-size:1rem;">
-                Five locations across South Africa &mdash; Head Office &bull; Boksburg &bull; Bloemfontein &bull; Durban &bull; Eastern Cape
+                Head Office in Centurion &bull; Auction Ground in Boksburg
             </p>
         </div>
 
@@ -354,60 +354,6 @@ function aboutInitials(string $name): string {
                         <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
                         <span class="branch-tag"><i class="fas fa-tractor"></i> DEALER STOCK</span>
                         <span class="branch-tag"><i class="fas fa-truck"></i> FLEET VEHICLES</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bloemfontein -->
-            <div class="branch-card">
-                <div class="branch-card-img-wrap">
-                    <img src="assets/images/branch-bloemfontein.jpg"
-                         alt="Auction Hub Group Bloemfontein branch — Cnr R64 &amp; Valentia Road"
-                         class="branch-card-img" loading="lazy"
-                         onerror="this.style.display='none';this.closest('.branch-card-img-wrap').style.background='#1a3a5c'">
-                </div>
-                <div class="branch-card-body">
-                    <h3 class="branch-card-city"><i class="fas fa-location-dot"></i> Bloemfontein</h3>
-                    <address class="branch-card-address">Cnr R64 &amp; Valentia Road<br>Waterbron, Bloemfontein</address>
-                    <div class="branch-card-tags">
-                        <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
-                        <span class="branch-tag"><i class="fas fa-gavel"></i> REPO STOCK</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Gqeberha / Eastern Cape -->
-            <div class="branch-card">
-                <div class="branch-card-img-wrap">
-                    <img src="assets/images/branch-eastern-cape.jpg"
-                         alt="Auction Hub Group Eastern Cape branch — 142 Burman Road, Gqeberha"
-                         class="branch-card-img" loading="lazy"
-                         onerror="this.style.display='none';this.closest('.branch-card-img-wrap').style.background='#1a3a5c'">
-                </div>
-                <div class="branch-card-body">
-                    <h3 class="branch-card-city"><i class="fas fa-location-dot"></i> Gqeberha (Port Elizabeth)</h3>
-                    <address class="branch-card-address">142 Burman Road, Deal Party<br>Gqeberha, Eastern Cape</address>
-                    <div class="branch-card-tags">
-                        <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
-                        <span class="branch-tag"><i class="fas fa-truck"></i> FLEET VEHICLES</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Durban -->
-            <div class="branch-card">
-                <div class="branch-card-img-wrap">
-                    <img src="assets/images/branch-durban.jpg"
-                         alt="Auction Hub Group Durban branch — River Horse Estate"
-                         class="branch-card-img" loading="lazy"
-                         onerror="this.style.display='none';this.closest('.branch-card-img-wrap').style.background='#1a3a5c'">
-                </div>
-                <div class="branch-card-body">
-                    <h3 class="branch-card-city"><i class="fas fa-location-dot"></i> Durban</h3>
-                    <address class="branch-card-address">Quarry Place, Off Queen Nandi Drive<br>River Horse Estate, Durban</address>
-                    <div class="branch-card-tags">
-                        <span class="branch-tag"><i class="fas fa-car"></i> VEHICLE AUCTIONS</span>
-                        <span class="branch-tag"><i class="fas fa-gavel"></i> OPEN TO PUBLIC</span>
                     </div>
                 </div>
             </div>

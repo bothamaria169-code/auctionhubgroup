@@ -1071,7 +1071,7 @@ function finApproveDeposit(array &$app, string $by): string {
         . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
         . '<li>Upload your SA ID, proof of address, 3 months\' bank statements, payslip and driver\'s licence</li>'
         . '<li>Pay your deposit using reference <strong>' . e(finPayRef($app)) . '</strong> and upload your proof of payment</li>'
-        . '<li>Once verified, you receive your <strong>Buyer Code</strong> and book your test drive</li></ol>'
+        . '<li>Once verified, you receive your <strong>Buyer Code</strong> and our team contacts you to book your test drive</li></ol>'
         . '<p><a href="' . e(finDocLink($app, 'invoice')) . '">View your deposit invoice</a> — please pay within ' . FIN_INVOICE_DAYS . ' days.</p>',
         'Upload My Documents', 'documents');
     finRecordMail($app, 'Deposit invoice', $ok);
@@ -1125,9 +1125,9 @@ function finApprove(array &$app, string $by): string {
         . '<div class="highlight-box" style="text-align:center;padding:20px;"><p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#666;">Your Buyer Code</p>'
         . '<p style="margin:0;font-size:24px;font-weight:900;color:#005BA1;letter-spacing:.1em;">' . e($code) . '</p></div>'
         . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
-        . '<li>Book your test drive on your application page</li><li>Present your <strong>Buyer Code</strong> at ' . e(COMPANY_ADDRESS) . '</li>'
+        . '<li>Our team contacts you to book your test-drive date</li><li>Present your <strong>Buyer Code</strong> at ' . e(COMPANY_ADDRESS) . '</li>'
         . '<li>Bring your ID and driver\'s licence</li><li>Sign your finance agreement and drive away</li></ol>',
-        'Book My Test Drive', 'viewing');
+        'View My Application', 'viewing');
     finRecordMail($app, 'Approval + Buyer Code', $ok);
     return '';
 }
@@ -1184,7 +1184,7 @@ function finAdminWhatsAppUrl(array $app): string {
         'chosen'       => 'we are reviewing your deposit now',
         'invoiced'     => $app['kind'] === 'finance' ? 'your deposit is approved — please upload your documents and proof of payment' : 'your proforma invoice is ready — please pay the commitment fee within 24 hours and upload proof of payment',
         'pop_uploaded' => 'we have your proof of payment and are verifying it',
-        'approved'     => 'you are approved! Your Buyer Code is ' . $app['buyer_code'] . ' — please book your test drive',
+        'approved'     => 'you are approved! Your Buyer Code is ' . $app['buyer_code'] . ' — our team will contact you to book your test drive',
         'paid'         => 'your vehicle is Presold under your name. Your Buyer Code is ' . $app['buyer_code'],
         default        => 'here is an update on your application',
     };

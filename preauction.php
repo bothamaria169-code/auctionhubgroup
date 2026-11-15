@@ -21,7 +21,7 @@ $preAuctionVehicles = $pdo->query("
            (SELECT COUNT(*) FROM bids bx WHERE bx.auction_id = a.id) AS bid_count
     FROM auctions a
     LEFT JOIN makes m  ON m.id  = a.make_id
-    LEFT JOIN branches b2 ON b2.id = a.branch_id
+    LEFT JOIN branches b2 ON b2.id = a.branch_id AND " . openBranchSql('b2') . "
     WHERE a.status IN ('upcoming','active')
     ORDER BY a.status DESC, a.end_time ASC
 ")->fetchAll();
@@ -34,7 +34,7 @@ foreach ($preAuctionVehicles as $v) {
     $bid = $v['branch_id'] ?? 0;
     $branchCounts[$bid] = ($branchCounts[$bid] ?? 0) + 1;
 }
-$allBranches = $pdo->query("SELECT id, name, city, province FROM branches ORDER BY sort_order")->fetchAll();
+$allBranches = $pdo->query("SELECT id, name, city, province FROM branches WHERE " . openBranchSql() . " ORDER BY sort_order")->fetchAll();
 ?>
 
 <style>
@@ -504,7 +504,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
             <strong style="color:#7a4f00;font-size:.92rem;">Entry Requirements — Please Read Carefully</strong>
             <p style="color:#856404;font-size:.85rem;line-height:1.7;margin:.35rem 0 0;">
                 <strong>No Buyer's Code = No Entry</strong><br>
-                Pick your test-drive date on your application page once your Buyer Code is issued.<br>
+                Once your Buyer Code is issued, our team contacts you to book your test-drive date.<br>
                 Your Buyer Code is issued by email once your commitment fee has been received and verified with the financial institution. At that point the vehicle is already marked Presold under your name. The Buyer Code is unique to you and valid for this transaction only — it is your access pass for the 1 hour 30 minute test drive window. Please do not share or misplace it.
             </p>
         </div>

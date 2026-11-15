@@ -39,7 +39,9 @@ if ($auctionId) {
 $makes = $pdo->query("SELECT id, name FROM makes ORDER BY name")->fetchAll();
 
 // ── Branches dropdown ──────────────────────────────────────────
-$branches = $pdo->query("SELECT id, name, city, province FROM branches ORDER BY sort_order")->fetchAll();
+$branches = $pdo->prepare("SELECT id, name, city, province FROM branches WHERE " . openBranchSql() . " OR id = ? ORDER BY sort_order");
+$branches->execute([(int)($auction['branch_id'] ?? 0)]);
+$branches = $branches->fetchAll();
 
 // ── Page setup ─────────────────────────────────────────────────
 $pageTitle       = ($isEdit ? 'Edit Vehicle — ' : 'Add Vehicle — ') . APP_NAME;

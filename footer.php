@@ -48,18 +48,6 @@
                     <i class="fas fa-warehouse" aria-hidden="true"></i>
                     Auction Ground: 8 Top Rd, O.R. Tambo, Boksburg, 1459
                 </div>
-                <div class="footer-contact-item">
-                    <i class="fas fa-warehouse" aria-hidden="true"></i>
-                    Quarry Place, Off Queen Nandi Drive, River Horse Estate, Durban
-                </div>
-                <div class="footer-contact-item">
-                    <i class="fas fa-warehouse" aria-hidden="true"></i>
-                    Cnr R64 &amp; Valentia Road, Waterbron, Bloemfontein
-                </div>
-                <div class="footer-contact-item">
-                    <i class="fas fa-warehouse" aria-hidden="true"></i>
-                    ABSA Vehicle &amp; Asset Finance Trade Centre, 142 Burman Road, Deal Party, Gqeberha (PE), Eastern Cape
-                </div>
             </div>
         </div>
 
