@@ -477,7 +477,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
                 ['3','fa-coins','#f59e0b','Pay the Commitment Fee — Vehicle Goes Presold Under Your Name',
                  'Pay the commitment fee (typically <strong>30–50% of the asking price</strong>). The vehicle is immediately marked <strong>Presold</strong> and registered under your name with the financial institution. No other buyer can access it. Upload your proof of payment straight away.'],
                 ['4','fa-id-badge','#25D366','Receive Your Unique Buyer Code',
-                 'Once payment is verified with the financial institution, you receive your unique <strong>Buyer Code</strong> by email. This code is your exclusive access pass to the vehicle — <strong>no Buyer Code, no entry</strong>. No walk-ins and no prior appointment without it.'],
+                 'Once payment is verified with the financial institution, you receive your unique <strong>Buyer Code</strong> by email. This code is your exclusive access pass to the vehicle — <strong>no Buyer Code, no entry</strong>.'],
                 ['5','fa-car-side','#ef4444','Test Drive &amp; Inspect — Then Decide',
                  'Arrive at our premises with your Buyer Code. You have a full <strong>1 hour 30 minutes</strong> to test drive and inspect the vehicle — bring your own mechanic. You can <strong>proceed with the purchase, cancel the deal for a full refund, or switch to your nominated alternative vehicle</strong>.'],
             ];
@@ -503,9 +503,8 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
         <div>
             <strong style="color:#7a4f00;font-size:.92rem;">Entry Requirements — Please Read Carefully</strong>
             <p style="color:#856404;font-size:.85rem;line-height:1.7;margin:.35rem 0 0;">
-                <strong>No Buyer's Code = No Entry</strong> &nbsp;&bull;&nbsp;
-                <strong>No Prior Appointment = No Entry</strong> &nbsp;&bull;&nbsp;
-                <strong>No Walk-Ins Permitted</strong><br>
+                <strong>No Buyer's Code = No Entry</strong><br>
+                Pick your test-drive date on your application page once your Buyer Code is issued.<br>
                 Your Buyer Code is issued by email once your commitment fee has been received and verified with the financial institution. At that point the vehicle is already marked Presold under your name. The Buyer Code is unique to you and valid for this transaction only — it is your access pass for the 1 hour 30 minute test drive window. Please do not share or misplace it.
             </p>
         </div>
@@ -551,7 +550,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
             <!-- Instruction -->
             <div style="display:flex;align-items:flex-start;gap:.6rem;background:#fffbea;border:1px solid #fde68a;border-radius:9px;padding:.7rem .9rem;margin-bottom:1.1rem;">
               <i class="fas fa-circle-info" style="color:#d97706;font-size:.9rem;margin-top:.1rem;flex-shrink:0;"></i>
-              <p style="margin:0;font-size:.75rem;color:#78350f;line-height:1.55;font-weight:600;">Show this screen at our reception to access test drives and vehicle collection. Appointment required.</p>
+              <p style="margin:0;font-size:.75rem;color:#78350f;line-height:1.55;font-weight:600;">Show this screen at our reception on your booked test-drive date.</p>
             </div>
           </div>
 
@@ -750,7 +749,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
       <span style="color:#fff;font-weight:600;margin:0 .4rem;">&mdash;</span>
       <span style="color:#fff;font-weight:700;">Available for</span>
       <span style="color:#ffd54f;font-weight:900;letter-spacing:.02em;"> PRE-AUCTION TEST DRIVES &amp; VEHICLE COLLECTION ONLY</span>
-      <span style="color:rgba(255,255,255,.6);font-size:.88rem;margin-left:.5rem;">(by appointment · registered buyers only)</span>
+      <span style="color:rgba(255,255,255,.6);font-size:.88rem;margin-left:.5rem;">(registered buyers only)</span>
     </p>
   </div>
 

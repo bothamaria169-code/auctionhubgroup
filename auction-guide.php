@@ -396,7 +396,7 @@ require_once __DIR__ . '/header.php';
             <div>
                 <h3 style="color:#7a4f00;font-size:1rem;margin-bottom:.5rem;">Important Entry Requirements</h3>
                 <p style="color:#856404;font-size:.92rem;line-height:1.7;margin:0;">
-                    <strong>No Buyers Code = No Entry</strong> &nbsp;|&nbsp; <strong>No Appointment = No Entry</strong> &nbsp;|&nbsp; <strong>No Walk-Ins Permitted</strong><br>
+                    <strong>No Buyers Code = No Entry</strong><br>Pick your test-drive date on your application page once your Buyer Code is issued.<br>
                     Please do not lose or delete your Buyers Code &mdash; it is your access key to the premises and test drive venue.
                 </p>
             </div>
@@ -448,7 +448,7 @@ require_once __DIR__ . '/header.php';
             <?php
             $tips = [
                 ['fa-magnifying-glass-dollar','Set a Budget','Decide your maximum spend before auction day and stick to it. Factor in admin fees, VAT, and potential repair costs.'],
-                ['fa-car-burst','Inspect the Vehicle','Always review the DEKRA inspection report. Attend viewing days and bring a trusted mechanic if possible.'],
+                ['fa-car-burst','Inspect the Vehicle','Always review the DEKRA inspection report and the photos before you bid.'],
                 ['fa-clock','Arrive Early','Get to the venue early, pick up your bidder card, and review the lot order so you know when your vehicle comes up.'],
                 ['fa-head-side-virus','Stay Calm','Auction adrenaline is real. Don\'t let emotions push you over your budget. There will always be another vehicle.'],
                 ['fa-file-contract','Read the Fine Print','Understand the terms before you bid. All vehicles are sold voetstoots. Bids cannot be withdrawn.'],

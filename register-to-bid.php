@@ -57,7 +57,7 @@ $lpFaqs = [
     ['Is the R10,000 deposit refundable?',
      'Yes, fully refundable. It is a good-faith security deposit. If you attend an auction and do not buy, it is refunded in full. If you win, it comes off your purchase price.'],
     ['Are these damaged or written-off vehicles?',
-     'No. Every vehicle is professionally DEKRA inspected before auction and you receive the full condition report. You are welcome to bring your own mechanic to the viewing.'],
+     'No. Every vehicle is professionally DEKRA inspected before auction and you receive the full condition report.'],
     ['Why are the prices below retail?',
      'The vehicles come directly from banks as liquidated or insolvency assets and are priced at the outstanding balance owed rather than at retail value. There are no middlemen and no markups.'],
     ['Do I pay a buyer\'s commission?',
@@ -293,7 +293,7 @@ $waHeroLink = waLink("Hi Auction Hub Group, I'd like help registering as a bidde
                 </p>
 
                 <ul class="lp-ticks">
-                    <li><i class="fas fa-circle-check"></i> <span><strong>Every vehicle DEKRA inspected</strong> — full condition report supplied, bring your own mechanic to the viewing.</span></li>
+                    <li><i class="fas fa-circle-check"></i> <span><strong>Every vehicle DEKRA inspected</strong> — full condition report supplied with every lot.</span></li>
                     <li><i class="fas fa-circle-check"></i> <span><strong>No buyer's commission.</strong> Hammer price + R2,600 admin fee + VAT. That's the whole cost.</span></li>
                     <li><i class="fas fa-circle-check"></i> <span><strong>R10,000 deposit is fully refundable</strong> — refunded in full if you don't buy, deducted from the price if you win.</span></li>
                     <li><i class="fas fa-circle-check"></i> <span><strong>Verified in 1–2 business days</strong> once your proof of payment is uploaded.</span></li>

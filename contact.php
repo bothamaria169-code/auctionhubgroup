@@ -116,7 +116,7 @@ require_once __DIR__ . '/header.php';
                     </div>
                     <div style="padding:1.5rem;">
                         <p style="color:#555;font-size:.9rem;margin-bottom:1.25rem;line-height:1.65;">
-                            For general enquiries, registration questions, financing information, or appointment bookings — send us an email and our team will get back to you promptly.
+                            For general enquiries, registration questions or financing information — send us an email and our team will get back to you promptly.
                         </p>
                         <a href="mailto:<?= COMPANY_EMAIL ?>?subject=General%20Enquiry"
                            style="display:inline-flex;align-items:center;gap:.6rem;background:#005BA1;color:#fff;padding:.75rem 1.5rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.9rem;width:100%;justify-content:center;">
@@ -201,10 +201,6 @@ require_once __DIR__ . '/header.php';
                             <strong style="color:#dc3545;">Closed</strong>
                         </div>
                     </div>
-                    <div style="margin-top:1rem;background:#fff8e1;border:1px solid #ffe08a;border-radius:8px;padding:.75rem 1rem;font-size:.82rem;color:#7a5700;display:flex;align-items:flex-start;gap:.5rem;">
-                        <i class="fas fa-triangle-exclamation" style="flex-shrink:0;margin-top:.1rem;"></i>
-                        <span>Vehicle previews and test drives are <strong>by appointment only</strong> for registered buyers. No walk-ins permitted.</span>
-                    </div>
                 </div>
 
             </div><!-- /right col -->
@@ -240,7 +236,7 @@ require_once __DIR__ . '/header.php';
 
         <div class="section-header">
             <h2 class="section-title">Auction Ground Locations</h2>
-            <p class="section-subtitle">We operate auction grounds across South Africa — all accessible by appointment for registered buyers</p>
+            <p class="section-subtitle">We operate auction grounds across South Africa</p>
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;margin-top:2rem;">
@@ -291,23 +287,6 @@ require_once __DIR__ . '/header.php';
                 </address>
             </div>
 
-        </div>
-
-        <!-- Appointment notice -->
-        <div style="margin-top:2rem;background:linear-gradient(135deg,#001F5C,#005DDB);border-radius:14px;padding:1.5rem 2rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:.75rem;">
-                <div style="width:40px;height:40px;background:#dc3545;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas fa-calendar-check" style="color:#fff;"></i>
-                </div>
-                <div>
-                    <strong style="color:#fff;display:block;font-size:.92rem;">Appointments Required</strong>
-                    <span style="color:rgba(255,255,255,.65);font-size:.82rem;">All visits to our auction grounds must be pre-booked. Call or email us to schedule yours.</span>
-                </div>
-            </div>
-            <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Appointment%20Request%20—%20Vehicle%20Viewing"
-               style="display:inline-flex;align-items:center;gap:.5rem;background:#fff;color:#003f73;padding:.75rem 1.5rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:.88rem;white-space:nowrap;">
-                <i class="fas fa-calendar-check"></i> Book via Email
-            </a>
         </div>
 
     </div>

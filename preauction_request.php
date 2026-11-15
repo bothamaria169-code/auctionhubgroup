@@ -162,7 +162,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
           </ol>
         </div>
       </div>
-      <div class="ap-notice"><i class="fas fa-triangle-exclamation"></i><div><strong>Entry requirements:</strong> No Buyer Code = No Entry · No Prior Appointment = No Entry · No Walk-Ins. Your Buyer Code is issued once your commitment fee is verified with the financial institution.</div></div>
+      <div class="ap-notice"><i class="fas fa-triangle-exclamation"></i><div><strong>Entry requirements:</strong> No Buyer Code = No Entry. Your Buyer Code is issued once your commitment fee is verified with the financial institution.</div></div>
       <div class="ap-card">
         <div class="ap-card-head gold"><i class="fas fa-hand-holding-dollar"></i> Need Finance?</div>
         <div class="ap-card-body"><p class="ap-help" style="margin:0 0 .8rem">Apply for <strong>finance</strong> on the same vehicle — instant score and quote, from <?= e(formatRand((float)finSetting('fin_min_deposit', '10500'))) ?> deposit.</p>

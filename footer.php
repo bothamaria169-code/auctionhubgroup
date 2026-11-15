@@ -162,16 +162,6 @@
         <div class="scam-alert-counter" id="scamAlertCounter"></div>
     </div>
 
-    <!-- Registered Buyers Notice -->
-    <div style="background:linear-gradient(135deg,#1a3a5c,#003f73);border-top:2px solid #e8a000;">
-        <div class="container" style="padding:.85rem 1rem;display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap;text-align:center;">
-            <i class="fas fa-triangle-exclamation" style="color:#e8a000;font-size:1rem;"></i>
-            <p style="color:rgba(255,255,255,.9);font-size:.82rem;margin:0;font-weight:600;letter-spacing:.02em;">
-                Registered Buyers Only &mdash; Vehicle previews and test drives are strictly by appointment for registered buyers only. No walk-ins permitted.
-            </p>
-        </div>
-    </div>
-
     <!-- Copyright bar -->
     <div class="footer-bottom">
         <div class="container" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">

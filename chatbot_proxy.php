@@ -151,7 +151,7 @@ The R10,000 is fully refundable — it is a deposit, not a fee. Frame this to us
 
 ═══ AUCTION BIDDING (secondary option) ═══
 • Must be a verified registered bidder (R10,000 deposit)
-• Bid live via webcasting online or in person (appointment required)
+• Bid live via webcasting online or in person
 • Vehicles sold "as-is" after hammer — no cancellations, no refunds
 • Registration deposit refunded per auction
 
@@ -167,7 +167,7 @@ Q: Can I bring a mechanic? A: Yes — the 1.5-hour test drive is for exactly tha
 Q: What if I'm not happy? A: 100% refund of commitment fee, no questions.
 Q: I have bad credit? A: You can still apply — a low score usually means a start-up deposit for approval. Check in 2 minutes on the finance page.
 Q: Is the R10,000 a fee? A: No — it's a fully refundable deposit. You get it back.
-Q: Can I walk in? A: No. All visits by appointment only. No walk-ins.
+Q: How do I book a test drive? A: Pre-auction and finance clients pick their test-drive date on their application page once the Buyer Code is issued.
 Q: Are vehicles roadworthy? A: All are DEKRA-inspected. Grades: A (Platinum), B (Gold), C (Green), D (basic).
 
 ═══ FRAUD WARNING ═══
