@@ -38,6 +38,7 @@
 // ============================================================
 
 require_once __DIR__ . '/email_helper.php';
+require_once __DIR__ . '/invoice_helper.php';   // draft → review → send client invoices
 
 const FIN_UPLOAD_DIR = __DIR__ . '/uploads/applications/';
 const FIN_DOC_MAX    = 8 * 1024 * 1024;
@@ -311,6 +312,8 @@ function finCreate(string $kind, array $person, array $vehicle, float $amount, ?
                                             : 'Pre-auction purchase request ' . finRef($app) . ' · commitment fee set by the office'),
                        $kind === 'finance' ? 'finance_apply.php' : 'preauction_request.php', $_SERVER['REMOTE_ADDR'] ?? null]);
     } catch (Throwable $e) { error_log('[AHG fin] enquiry row: ' . $e->getMessage()); }
+    // The invoice is drafted now; the office reviews and sends it (invoice_edit.php).
+    try { invCreateDraft($app); } catch (Throwable $e) { error_log('[AHG fin] draft invoice: ' . $e->getMessage()); }
     return $app;
 }
 
@@ -729,7 +732,7 @@ function paInvoiceLink(array $inv): string {
 function paSync(array $app): array {
     if ($app['kind'] !== 'preauction' || in_array($app['status'], ['completed', 'refund', 'cancelled'], true)) return $app;
     $inv = paInvoiceRow($app);
-    if (!$inv) return $app;
+    if (!$inv || $inv['status'] === 'draft') return $app;   // a draft has not reached the client yet
     $new = match ($inv['status']) {
         'approved'     => 'paid',
         'declined'     => 'declined',
@@ -755,12 +758,26 @@ function paSync(array $app): array {
     return $app;
 }
 
-/** Step 2: the office issues the proforma invoice — a row in preauction_invoices, valid 24 hours. */
+/**
+ * Step 2: the office sends the proforma at $percent. Uses the draft made when the client
+ * submitted the form (invoice_helper.php), creating it first for older requests.
+ */
 function paIssueInvoice(array &$app, int $percent, string $note, int $adminId, string $by): string {
     global $pdo;
     [$min, $max] = paRange();
     if (!in_array($app['status'], ['requested', 'expired'], true)) return 'An invoice has already been issued.';
     if ($percent < $min || $percent > $max) return "Choose a commitment fee between $min% and $max%.";
+    $draft = invForApp($app);
+    if ($app['status'] === 'requested' && !$draft) $draft = invCreateDraft($app);
+    if ($draft && in_array($draft['status'], ['draft', 'pending'], true)) {
+        $price = (float)$draft['total_price'];
+        $fee = round($price * $percent / 100, 2);
+        $pdo->prepare("UPDATE preauction_invoices SET commitment_fee_pct = ?, commitment_fee_amount = ?, outstanding_amount = ?,
+                              notes = CONCAT(COALESCE(notes, ''), ?), created_by = COALESCE(created_by, ?) WHERE id = ?")
+            ->execute([$percent, $fee, round($price - $fee, 2), $note !== '' ? ' · ' . $note : '', $adminId ?: null, $draft['id']]);
+        return invSendPreauction($app, $by);
+    }
+    // No usable draft (e.g. the old invoice was declined): the original path below makes a new one.
     $v = finVehicle((int)$app['auction_id']);
     $d = $app['details'];
     $price = (float)$app['price'];
@@ -1058,8 +1075,19 @@ function finSendQuote(array &$app): bool {
 // ── Finance: office decisions ─────────────────────────────────
 
 function finApproveDeposit(array &$app, string $by): string {
+    global $pdo;
     if ($app['status'] !== 'chosen') return 'The client has not chosen a term yet.';
-    $app['details']['invoice'] = ['number' => 'AHG-FIN-INV-' . date('Ym') . '-' . str_pad((string)$app['id'], 4, '0', STR_PAD_LEFT),
+    // The deposit invoice drafted at submission (reviewed in invoice_edit.php) goes out now.
+    $row = invForApp($app) ?: invCreateDraft($app);
+    if ($row) {
+        $row = invSyncFinance($app, $row);
+        if ($row['status'] === 'draft') {
+            $pdo->prepare("UPDATE preauction_invoices SET status = 'pending', sent_at = NOW(), invoice_date = COALESCE(invoice_date, CURDATE()), expires_at = ? WHERE id = ?")
+                ->execute([date('Y-m-d 23:59:59', strtotime('+' . FIN_INVOICE_DAYS . ' days')), $row['id']]);
+            $row = invRow((int)$row['id']);
+        }
+    }
+    $app['details']['invoice'] = ['number' => $row ? $row['invoice_number'] : 'AHG-FIN-INV-' . date('Ym') . '-' . str_pad((string)$app['id'], 4, '0', STR_PAD_LEFT),
                                   'issued' => date('Y-m-d H:i:s'), 'due' => date('Y-m-d', strtotime('+' . FIN_INVOICE_DAYS . ' days')),
                                   'amount' => (float)$app['amount']];
     $app['status'] = 'invoiced';
@@ -1072,7 +1100,7 @@ function finApproveDeposit(array &$app, string $by): string {
         . '<li>Upload your SA ID, proof of address, 3 months\' bank statements, payslip and driver\'s licence</li>'
         . '<li>Pay your deposit using reference <strong>' . e(finPayRef($app)) . '</strong> and upload your proof of payment</li>'
         . '<li>Once verified, you receive your <strong>Buyer Code</strong> and our team contacts you to book your test drive</li></ol>'
-        . '<p><a href="' . e(finDocLink($app, 'invoice')) . '">View your deposit invoice</a> — please pay within ' . FIN_INVOICE_DAYS . ' days.</p>',
+        . '<p><a href="' . e($row ? invClientLink($row) : finDocLink($app, 'invoice')) . '">View &amp; download your deposit invoice</a> — please pay within ' . FIN_INVOICE_DAYS . ' days.</p>',
         'Upload My Documents', 'documents');
     finRecordMail($app, 'Deposit invoice', $ok);
     return '';

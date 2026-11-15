@@ -27,6 +27,9 @@ if (!$invoiceNum || !$uploadToken) {
 
         if (!$invoice) {
             $error = 'This link is invalid or has been revoked. Please contact us for assistance.';
+        } elseif ($invoice['status'] === 'draft') {
+            $invoice = null;
+            $error = 'This invoice has not been issued yet. Auction Hub Group will email it to you.';
         } elseif ($invoice['status'] === 'approved') {
             $success = 'Your commitment fee payment has already been approved. Your Buyer Code is <strong>' . htmlspecialchars($invoice['buyer_code'], ENT_QUOTES) . '</strong>. Please check your email for details.';
         } elseif ($invoice['status'] === 'declined') {
@@ -196,6 +199,7 @@ body { font-family:'Barlow',sans-serif; background:#f0f4f8; min-height:100vh; }
 
 <div class="pop-header">
     <h1><i class="fas fa-file-upload"></i> Upload Proof of Payment</h1>
+    <?php if ($invoice && !empty($invoice['upload_token'])): ?><p style="margin:.4rem 0 0"><a href="invoice_view.php?num=<?= urlencode($invoice['invoice_number']) ?>&amp;token=<?= urlencode($invoice['upload_token']) ?>" target="_blank" style="font-weight:700"><i class="fas fa-file-invoice"></i> View &amp; download your invoice</a></p><?php endif; ?>
     <p>Auction Hub Group — Pre-Auction Purchase Commitment</p>
 </div>
 

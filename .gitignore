@@ -60,3 +60,6 @@ sitemap.xml
 articles.xml
 news-sitemap.xml
 feed.xml
+
+# Client invoices saved in the project folder: personal data (POPIA), never in git or on the web
+AHG-*.pdf

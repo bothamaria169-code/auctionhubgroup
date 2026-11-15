@@ -147,7 +147,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
     </div>
   </form>
 
-<?php elseif ($faOne): $a = $faOne; $d = $a['details']; $isFin = $a['kind'] === 'finance'; $plan = $isFin ? finChosenPlan($a) : null; $inv = $isFin ? null : paInvoiceRow($a); $wa = finAdminWhatsAppUrl($a); $id = (int)$a['id']; ?>
+<?php elseif ($faOne): $a = $faOne; $d = $a['details']; $isFin = $a['kind'] === 'finance'; $plan = $isFin ? finChosenPlan($a) : null; $inv = $isFin ? invForApp($a) : paInvoiceRow($a); $invLabel = $inv ? (['draft' => 'Draft — not sent yet', 'pending' => 'Sent', 'pop_uploaded' => 'Proof of payment uploaded', 'approved' => 'Paid', 'declined' => 'Declined'][$inv['status']] ?? $inv['status']) : ''; $wa = finAdminWhatsAppUrl($a); $id = (int)$a['id']; ?>
   <p><a href="?tab=applications"><i class="fas fa-arrow-left"></i> All applications</a></p>
   <div class="fa2-grid">
     <div>
@@ -185,7 +185,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
             <div class="fa2-row"><span class="lbl">Commitment fee</span><span class="val"><?= paPercent($a) > 0 ? paPercent($a) . '% = ' . formatRand($inv ? (float)$inv['commitment_fee_amount'] : paCommitment($a)) : 'Not set yet — you set it on the proforma invoice' ?></span></div>
             <div class="fa2-row"><span class="lbl">Alternative</span><span class="val"><?= e($d['alt']['title'] ?? '—') ?></span></div>
             <div class="fa2-row"><span class="lbl">Mechanic</span><span class="val"><?= !empty($d['mechanic']) ? 'Yes' : 'No' ?></span></div>
-            <div class="fa2-row"><span class="lbl">Invoice</span><span class="val"><?= $inv ? e($inv['invoice_number']) . ' · ' . e($inv['status']) . ' · expires ' . safeDate('d M H:i', $inv['expires_at']) : '— not issued' ?></span></div>
+            <div class="fa2-row"><span class="lbl">Invoice</span><span class="val"><?= $inv ? e($inv['invoice_number']) . ' · ' . e($invLabel) . ($inv['status'] === 'pending' && $inv['expires_at'] ? ' · expires ' . safeDate('d M H:i', $inv['expires_at']) : '') : '— not drafted' ?></span></div>
             <?php if (!empty($d['decision'])): ?><div class="fa2-row"><span class="lbl">After test drive</span><span class="val"><?= e(['proceed' => 'Proceeding', 'alternative' => 'Switching to alternative', 'refund' => 'Cancelled — refund'][$d['decision']['choice']]) ?> <?= e($d['decision']['reason']) ?></span></div><?php endif; ?>
           <?php endif; ?>
           <div class="fa2-row"><span class="lbl">Buyer Code</span><span class="val"><?= e($a['buyer_code'] ?: '—') ?></span></div>
@@ -195,10 +195,11 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
             <?php if ($wa): ?><a class="btn btn-sm btn-success" href="<?= e($wa) ?>" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> WhatsApp next step</a><?php endif; ?>
             <a class="btn btn-sm btn-outline" href="<?= e(finLink($a)) ?>" target="_blank"><i class="fas fa-eye"></i> Client page</a>
-            <?php if ($isFin): foreach (['quote' => 'Quote', 'invoice' => 'Deposit invoice', 'approval' => 'Approval', 'decline' => 'Decline notice'] as $k => $l): ?>
+            <a class="btn btn-sm btn-primary" href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>"><i class="fas fa-file-pen"></i> <?= $inv && $inv['status'] !== 'draft' ? 'Invoice' : 'Review &amp; edit invoice' ?></a>
+            <?php if ($inv): ?><a class="btn btn-sm btn-outline" href="invoice_view.php?id=<?= (int)$inv['id'] ?>" target="_blank"><i class="fas fa-print"></i> View / print</a><?php endif; ?>
+            <?php if ($isFin): foreach (['quote' => 'Quote', 'approval' => 'Approval', 'decline' => 'Decline notice'] as $k => $l): ?>
               <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/application_doc.php?id=<?= $id ?>&amp;doc=<?= $k ?>" target="_blank"><?= $l ?></a>
             <?php endforeach; elseif ($inv): ?>
-              <a class="btn btn-sm btn-outline" href="invoice_print.php?id=<?= (int)$inv['id'] ?>" target="_blank"><i class="fas fa-file-invoice"></i> Proforma invoice</a>
               <?php if ($inv['pop_file_path']): ?><a class="btn btn-sm btn-outline" href="serve_pop.php?file=<?= urlencode(basename($inv['pop_file_path'])) ?>" target="_blank"><i class="fas fa-paperclip"></i> Proof of payment</a><?php endif; ?>
               <a class="btn btn-sm btn-outline" href="invoice_generator.php?tab=preauction"><i class="fas fa-magic"></i> Deal Builder</a>
             <?php endif; ?>
@@ -216,6 +217,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <?= $faForm($id, 'resend', '<input type="hidden" name="what" value="quote">', '<i class="fas fa-paper-plane"></i> Email the quote again', 'btn-outline') ?>
         <?php elseif ($isFin && $a['status'] === 'chosen'): ?>
           <p style="font-size:.88rem">Client chose <strong><?= $plan ? (int)$plan['months'] . ' months at ' . formatRand($plan['monthly']) : '—' ?></strong> on a deposit of <strong><?= formatRand((float)$a['amount']) ?></strong>.</p>
+          <p style="font-size:.85rem;margin:.2rem 0 .5rem">Approving emails the client the deposit invoice<?= $inv ? ' <strong>' . e($inv['invoice_number']) . '</strong>' : '' ?>. <a href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>">Review &amp; edit it first</a>.</p>
           <?= $faForm($id, 'approve_deposit', '', '<i class="fas fa-check"></i> Approve Deposit &amp; Request Documents', 'btn-success') ?>
         <?php elseif ($isFin && $a['status'] === 'invoiced'): $sum = finDocsSummary($a); ?>
           <p style="font-size:.88rem">Deposit invoice <?= e($d['invoice']['number']) ?> (due <?= safeDate('d M', $d['invoice']['due']) ?>). Documents: <strong><?= $sum['uploaded'] ?>/<?= $sum['total'] ?></strong> uploaded, <?= $sum['accepted'] ?> accepted.</p>
@@ -228,9 +230,9 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <?= $faForm($id, 'counter_deposit', '<label>Suggest deposit (R)<br><input class="form-control" name="deposit" required style="width:130px"></label><label>Note to client<br><input class="form-control" name="note" style="width:220px"></label>', 'Suggest Higher Deposit', 'btn-outline') ?>
         <?php endif; ?>
 
-        <?php if (!$isFin && in_array($a['status'], ['requested', 'expired'], true)): [$mn, $mx, $df] = paRange(); $cur = paPercent($a) ?: $df; ?>
-          <p style="font-size:.88rem"><?= $a['status'] === 'expired' ? 'The 24-hour window closed without payment. Re-issue if the vehicle is still available, or decline.' : 'Decide the <strong>commitment fee</strong> (' . $mn . '–' . $mx . '% of ' . formatRand((float)$a['price']) . ') and issue the proforma invoice — it goes into the Deal Builder\'s pre-auction invoices and is emailed to the client (valid 24 hours).' ?></p>
-          <?= $faForm($id, 'pa_invoice', '<label>Commitment fee (%)<br><input class="form-control" type="number" name="percent" min="' . $mn . '" max="' . $mx . '" step="1" value="' . $cur . '" required style="width:100px" oninput="var f=this.form.querySelector(\'.pa-fee\');if(f)f.textContent=\'= R\'+Math.round(' . (float)$a['price'] . '*this.value/100).toLocaleString(\'en-ZA\')"> <small class="pa-fee" style="font-weight:700;color:#003f73">= ' . formatRand(round((float)$a['price'] * $cur / 100)) . '</small></label><label>Note on the invoice email<br><input class="form-control" name="note" style="width:240px"></label>', '<i class="fas fa-file-invoice-dollar"></i> ' . ($a['status'] === 'expired' ? 'Re-issue' : 'Issue') . ' Proforma Invoice', 'btn-success') ?>
+        <?php if (!$isFin && in_array($a['status'], ['requested', 'expired'], true)): ?>
+          <p style="font-size:.88rem"><?= $a['status'] === 'expired' ? 'The 24-hour window closed without payment. Open the invoice to re-send it for another 24 hours if the vehicle is still available, or decline.' : ($inv ? 'The invoice <strong>' . e($inv['invoice_number']) . '</strong> was drafted automatically at ' . e(invPctLabel(invAmounts($inv)['pct'])) . ' (' . formatRand((float)$inv['commitment_fee_amount']) . '). Check it, change anything, then send it to the client from the invoice page (valid 24 hours).' : 'Draft the invoice, check it, then send it to the client (valid 24 hours).') ?></p>
+          <a class="btn btn-success" href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>"><i class="fas fa-file-pen"></i> <?= $a['status'] === 'expired' ? 'Review &amp; Re-send Invoice' : 'Review, Edit &amp; Send Invoice' ?></a>
         <?php elseif (!$isFin && in_array($a['status'], ['invoiced', 'pop_uploaded'], true)): ?>
           <p style="font-size:.88rem"><?= $a['status'] === 'pop_uploaded' ? 'Proof of payment uploaded — verify it with the bank, then approve.' : 'Waiting for the commitment fee (invoice expires ' . e(safeDate('d M H:i', $inv['expires_at'] ?? '')) . ').' ?></p>
           <?= $faForm($id, 'pa_approve', '<label>Note in the Buyer Code email<br><input class="form-control" name="note" style="width:240px"></label>', '<i class="fas fa-id-badge"></i> Approve &amp; Send Buyer Code', 'btn-success', 'Has the commitment fee been verified?') ?>
@@ -241,7 +243,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
 
         <?php if (!in_array($a['status'], ['paid', 'approved'], true)): ?>
           <details style="margin-top:.6rem"><summary style="cursor:pointer;color:#a1271b;font-weight:700;font-size:.85rem">Decline…</summary>
-            <?= $faForm($id, 'decline', '<label>' . ($inv ? 'Reason from the financial institution (emailed)' : 'Reason (emailed politely)') . '<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label>', 'Decline &amp; Notify', 'btn-danger', 'Decline and notify the client?') ?>
+            <?= $faForm($id, 'decline', '<label>' . (!$isFin && $inv ? 'Reason from the financial institution (emailed)' : 'Reason (emailed politely)') . '<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label>', 'Decline &amp; Notify', 'btn-danger', 'Decline and notify the client?') ?>
           </details>
         <?php endif; ?>
       </div>

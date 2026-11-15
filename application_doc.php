@@ -24,6 +24,11 @@ $s   = $app['status'];
 $allowed = ['quote' => !empty($d['quote']), 'invoice' => !empty($d['invoice']),
             'approval' => in_array($s, ['approved', 'completed'], true), 'decline' => $s === 'declined'];
 if (empty($allowed[$doc])) { http_response_code(404); exit('This document is not available yet.'); }
+// The deposit invoice is the invoice_view.php layout (invoice_helper.php) when the office sent one.
+if ($doc === 'invoice' && ($row = invForApp($app)) && $row['status'] !== 'draft') {
+    header('Location: ' . (!empty($_GET['id']) ? APP_URL . '/invoice_view.php?id=' . (int)$row['id'] : invClientLink($row)));
+    exit;
+}
 
 $bank  = getBankSettings();
 $v     = $d['vehicle'] ?? [];

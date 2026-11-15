@@ -937,8 +937,9 @@ try {
                     <tbody>
                     <?php foreach ($invoices as $inv): ?>
                         <?php
-                        $isExpired = strtotime($inv['expires_at']) < time();
+                        $isExpired = !empty($inv['expires_at']) && strtotime($inv['expires_at']) < time();
                         $statusBadge = match($inv['status']) {
+                            'draft'        => '<a class="badge badge-pending" href="invoice_edit.php?id=' . (int)$inv['id'] . '" title="Review &amp; send"><i class="fas fa-pen"></i> Draft — review</a>',
                             'pop_uploaded' => '<span class="badge badge-pop"><i class="fas fa-upload"></i> POP Uploaded</span>',
                             'approved'     => '<span class="badge badge-approved"><i class="fas fa-check"></i> Approved</span>',
                             'declined'     => '<span class="badge badge-declined"><i class="fas fa-times"></i> Declined</span>',
