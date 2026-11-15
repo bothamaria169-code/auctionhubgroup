@@ -3,7 +3,8 @@
 // AUCTION HUB GROUP — preauction_request.php
 // Step 1 of the Pre-Auction Purchase on preauction.php — "Submit Your
 // Details": full name, ID/passport, contact details, physical address,
-// an alternative vehicle and a test-drive time. The client does NOT choose
+// and an alternative vehicle. The client does NOT choose a test-drive date:
+// staff book it in Admin once the commitment fee is verified. Nor does it choose
 // the commitment fee: the office sets the % when it issues the proforma
 // invoice from Admin → Finance & Pre-Auction (a preauction_invoices row,
 // valid 24 hours).
@@ -33,8 +34,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone   = finCleanPhone((string)($_POST['phone'] ?? ''));
     $idNo    = strtoupper(trim(mb_substr((string)($_POST['id_number'] ?? ''), 0, 20)));
     $address = trim(mb_substr((string)($_POST['address'] ?? ''), 0, 500));
-    $date    = (string)($_POST['date'] ?? '');
-    $time    = (string)($_POST['time'] ?? '');
     $alt = null;
     if (($altId = (int)($_POST['alt_id'] ?? 0)) > 0 && (!$vehicle || $altId !== (int)$vehicle['id'])) {
         foreach ($lots as $l) if ((int)$l['id'] === $altId) $alt = $l;
@@ -46,7 +45,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!finValidPhone($phone))                       $errors['phone'] = 'Please enter a number we can call or WhatsApp.';
     if (mb_strlen($address) < 8)                      $errors['address'] = 'Please enter your physical address.';
     if (!$vehicle)                                    $errors['auction_id'] = 'Please choose the vehicle you want to secure.';
-    if ($e = finViewingError($date, $time))           $errors['date'] = $e;
     if (empty($_POST['agree']))                       $errors['agree'] = 'Please tick to confirm.';
     if (!$errors && enquiryRateLimited(6, 900))       $errors['form'] = 'You have sent several requests already — we will be in touch. For anything urgent call ' . COMPANY_PHONE . '.';
 
@@ -55,23 +53,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $app = finCreate('preauction', ['name' => $name, 'email' => $email, 'phone' => $phone, 'user_id' => $pageUser['sub'] ?? null], $vehicle, 0, null, [
                 'id_number' => $idNo,
                 'address'   => $address,
-                'viewing'   => ['date' => $date, 'time' => $time, 'status' => 'wanted'],
                 'mechanic'  => !empty($_POST['mechanic']),
                 'alt'       => $alt ? ['id' => (int)$alt['id'], 'title' => finVehicleTitle($alt), 'price' => finPrice($alt)] : null,
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
             ]);
-            finLog($app, 'Submitted details — test drive wanted ' . finViewingLabel($app['details']['viewing']));
+            finLog($app, 'Submitted details');
             $ok = finMailClient($app, 'We Have Your Pre-Auction Request',
                 '<p>Thank you for choosing a <strong>Pre-Auction Purchase</strong> on the <strong>' . e($app['vehicle']) . '</strong> at ' . formatRand((float)$app['price']) . '.</p>'
                 . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand((float)$app['price']) . '</p>'
                 . '<p><strong>Commitment fee:</strong> set by our team on your proforma invoice</p>'
                 . ($alt ? '<p><strong>Alternative vehicle:</strong> ' . e($alt ? finVehicleTitle($alt) : '') . '</p>' : '')
-                . '<p><strong>Preferred test drive:</strong> ' . e(finViewingLabel($app['details']['viewing'])) . '</p></div>'
+                . '</div>'
                 . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
                 . '<li>Our team issues your personalised <strong>proforma invoice</strong>, with your commitment fee and outstanding balance — usually within the hour</li>'
                 . '<li>Pay the commitment fee within <strong>24 hours</strong> and upload your proof of payment</li>'
                 . '<li>The vehicle is marked <strong>Presold</strong> under your name and your <strong>Buyer Code</strong> is emailed to you</li>'
-                . '<li>Test drive for <strong>1 hour 30 minutes</strong> — then proceed, switch to your alternative, or cancel for a refund</li></ol>',
+                . '<li>Our team contacts you to book your test drive: <strong>1 hour 30 minutes</strong> — then proceed, switch to your alternative, or cancel for a refund</li></ol>',
                 'Follow My Request');
             finRecordMail($app, 'Request received', $ok);
             finSave($app);
@@ -130,14 +127,6 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
           <div class="<?= $grp('phone') ?>"><label class="form-label" for="phone">Cellphone <span class="required">*</span></label><input class="form-control" id="phone" type="tel" name="phone" autocomplete="tel" required value="<?= $val('phone') ?>"><?= $err('phone') ?></div>
           <div class="<?= $grp('email') ?>"><label class="form-label" for="email">Email <span class="required">*</span></label><input class="form-control" id="email" type="email" name="email" autocomplete="email" required value="<?= $val('email', $pageUser['email'] ?? '') ?>"><?= $err('email') ?></div>
           <div class="full <?= $grp('address') ?>"><label class="form-label" for="address">Physical address <span class="required">*</span></label><input class="form-control" id="address" name="address" autocomplete="street-address" required value="<?= $val('address') ?>"><?= $err('address') ?></div>
-          <div class="<?= $grp('date') ?>"><label class="form-label" for="date">Preferred test-drive day <span class="required">*</span></label>
-            <input class="form-control" id="date" type="date" name="date" required min="<?= date('Y-m-d', strtotime('tomorrow')) ?>" max="<?= date('Y-m-d', strtotime('+60 days')) ?>" value="<?= $val('date') ?>"><?= $err('date') ?></div>
-          <div class="form-group"><label class="form-label" for="time">Time</label>
-            <select class="form-control" id="time" name="time">
-              <?php for ($h = 8; $h <= 15; $h++): $t = sprintf('%02d:00', $h); ?>
-                <option<?= ($old['time'] ?? '10:00') === $t ? ' selected' : '' ?>><?= $t ?></option>
-              <?php endfor; ?>
-            </select></div>
           <div class="full form-group"><label class="form-label" for="message">Anything else? <span style="font-weight:400;color:#889">optional</span></label><textarea class="form-control" id="message" name="message" rows="2"><?= $val('message') ?></textarea></div>
           <div class="full <?= isset($errors['agree']) ? 'ap-err' : '' ?>">
             <label class="ap-check"><input type="checkbox" name="mechanic" value="1"<?= !empty($old['mechanic']) ? ' checked' : '' ?>><span>I will bring my own mechanic to the test drive</span></label>
@@ -158,7 +147,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
             <li><strong>Review your proforma invoice</strong> — total price, commitment fee and outstanding balance. Valid for 24 hours.</li>
             <li><strong>Pay the commitment fee</strong> — the vehicle goes Presold under your name. Upload your proof of payment.</li>
             <li><strong>Receive your Buyer Code</strong> — your access pass. No Buyer Code, no entry.</li>
-            <li><strong>Test drive &amp; inspect for 1h30</strong> — then proceed, switch to your alternative, or cancel.</li>
+            <li><strong>Test drive &amp; inspect for 1h30</strong> — our team books the date with you; then proceed, switch to your alternative, or cancel.</li>
           </ol>
         </div>
       </div>
