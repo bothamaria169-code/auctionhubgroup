@@ -43,7 +43,6 @@ require_once __DIR__ . '/invoice_helper.php';   // draft → review → send cli
 const FIN_UPLOAD_DIR = __DIR__ . '/uploads/applications/';
 const FIN_DOC_MAX    = 8 * 1024 * 1024;
 const PA_REFUND_FEE  = 102.0;      // retained on a cancelled commitment (preauction.php FAQ)
-const FIN_INVOICE_DAYS = 3;        // finance deposit invoice: pay within
 
 /** What a finance client uploads: key => [label, hint, max files]. Same list as financing.php. */
 const FIN_DOCS = [
@@ -820,7 +819,7 @@ function paIssueInvoice(array &$app, int $percent, string $note, int $adminId, s
         . '<p><strong>Commitment fee (' . $percent . '%):</strong> <span class="gold">' . formatRand($fee) . '</span></p>'
         . '<p><strong>Outstanding after your test drive:</strong> ' . formatRand($price - $fee) . '</p></div>'
         . ($note !== '' ? '<p>' . nl2br(e($note)) . '</p>' : '')
-        . '<p>The window is set by the financial institution: please pay the commitment fee and upload your proof of payment <strong>within 24 hours</strong>. '
+        . '<p><strong>' . e(invPayWarning()) . '</strong> Upload your proof of payment once you have paid. '
         . 'Once it is verified the vehicle is marked <strong>Presold</strong> under your name and your <strong>Buyer Code</strong> is emailed to you.</p>'
         . ($inv ? '<p><a class="cta-btn" href="' . e(paInvoiceLink($inv)) . '">View invoice &amp; upload proof of payment</a></p>' : ''),
         'Follow my request');
@@ -1083,24 +1082,25 @@ function finApproveDeposit(array &$app, string $by): string {
         $row = invSyncFinance($app, $row);
         if ($row['status'] === 'draft') {
             $pdo->prepare("UPDATE preauction_invoices SET status = 'pending', sent_at = NOW(), invoice_date = COALESCE(invoice_date, CURDATE()), expires_at = ? WHERE id = ?")
-                ->execute([date('Y-m-d 23:59:59', strtotime('+' . FIN_INVOICE_DAYS . ' days')), $row['id']]);
+                ->execute([date('Y-m-d H:i:s', strtotime('+' . INV_PAY_HOURS . ' hours')), $row['id']]);
             $row = invRow((int)$row['id']);
         }
     }
     $app['details']['invoice'] = ['number' => $row ? $row['invoice_number'] : 'AHG-FIN-INV-' . date('Ym') . '-' . str_pad((string)$app['id'], 4, '0', STR_PAD_LEFT),
-                                  'issued' => date('Y-m-d H:i:s'), 'due' => date('Y-m-d', strtotime('+' . FIN_INVOICE_DAYS . ' days')),
+                                  'issued' => date('Y-m-d H:i:s'), 'due' => date('Y-m-d H:i:s', strtotime('+' . INV_PAY_HOURS . ' hours')),
                                   'amount' => (float)$app['amount']];
     $app['status'] = 'invoiced';
     finLog($app, 'Deposit approved — invoice ' . $app['details']['invoice']['number'], $by);
     $plan = finChosenPlan($app);
-    $ok = finMailClient($app, 'Deposit Approved — Submit Your Documents',
+    $ok = finMailClient($app, 'Deposit Approved — Pay Within ' . INV_PAY_HOURS . ' Hours & Submit Your Documents',
         '<p>Good news — your deposit of <strong>' . formatRand((float)$app['amount']) . '</strong> is approved'
         . ($plan ? ' on the <strong>' . $plan['months'] . '-month</strong> term at <strong>' . formatRand($plan['monthly']) . ' per month</strong>' : '') . '.</p>'
         . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
         . '<li>Upload your SA ID, proof of address, 3 months\' bank statements, payslip and driver\'s licence</li>'
         . '<li>Pay your deposit using reference <strong>' . e(finPayRef($app)) . '</strong> and upload your proof of payment</li>'
         . '<li>Once verified, you receive your <strong>Buyer Code</strong> and our team contacts you to book your test drive</li></ol>'
-        . '<p><a href="' . e($row ? invClientLink($row) : finDocLink($app, 'invoice')) . '">View &amp; download your deposit invoice</a> — please pay within ' . FIN_INVOICE_DAYS . ' days.</p>',
+        . '<p><a href="' . e($row ? invClientLink($row) : finDocLink($app, 'invoice')) . '">View &amp; download your deposit invoice</a></p>'
+        . '<p style="color:#c8102e"><strong>' . e(invPayWarning()) . '</strong></p>',
         'Upload My Documents', 'documents');
     finRecordMail($app, 'Deposit invoice', $ok);
     return '';

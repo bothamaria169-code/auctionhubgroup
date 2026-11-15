@@ -58,7 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'resend' && $app && $inv['status'] !== 'draft') {
         $ok = finMailClient($app, 'Your invoice ' . $inv['invoice_number'] . ' — ' . COMPANY_TRADING_AS,
             '<p>Here is the link to your ' . ($isFin ? 'deposit' : 'commitment fee') . ' invoice <strong>' . e($inv['invoice_number']) . '</strong> again.</p>'
-            . '<p><a class="cta-btn" href="' . e(invClientLink($inv)) . '">View &amp; download your invoice</a></p>', 'Follow my request');
+            . '<p><a class="cta-btn" href="' . e(invClientLink($inv)) . '">View &amp; download your invoice</a></p>'
+            . ($inv['status'] === 'pending' ? '<p><strong>' . e(invPayWarning()) . '</strong></p>' : ''), 'Follow my request');
         finRecordMail($app, 'Invoice link re-sent', $ok);
         finLog($app, 'Invoice link re-sent', $by);
         finSave($app);

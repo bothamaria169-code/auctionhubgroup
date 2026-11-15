@@ -54,6 +54,8 @@ $statusNote = match ($inv['status']) {
     'draft' => 'DRAFT — not sent to the client yet', 'approved' => 'PAID — buyer\'s code ' . ($inv['buyer_code'] ?: 'issued'),
     'declined' => 'DECLINED', 'pop_uploaded' => 'Proof of payment received — being verified', default => '',
 };
+// Finance deposit invoices have their own design (AHG-INV-YYYYMMDD-NN).
+if ($isFin) { require __DIR__ . '/invoice_view_finance.php'; exit; }
 ?><!DOCTYPE html>
 <html lang="en">
 <head>

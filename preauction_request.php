@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . '</div>'
                 . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
                 . '<li>Our team issues your personalised <strong>proforma invoice</strong>, with your commitment fee and outstanding balance — usually within the hour</li>'
-                . '<li>Pay the commitment fee within <strong>24 hours</strong> and upload your proof of payment</li>'
+                . '<li>Pay the commitment fee within <strong>24 hours of receiving your invoice</strong>, otherwise the vehicle will be sold to another buyer, and upload your proof of payment</li>'
                 . '<li>The vehicle is marked <strong>Presold</strong> under your name and your <strong>Buyer Code</strong> is emailed to you</li>'
                 . '<li>Our team contacts you to book your test drive: <strong>1 hour 30 minutes</strong> — then proceed, switch to your alternative, or cancel for a refund</li></ol>',
                 'Follow My Request');

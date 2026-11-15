@@ -18,6 +18,12 @@
 // ============================================================
 
 const INV_PHOTOS_MAX = 4;
+const INV_PAY_HOURS  = 24;   // every client invoice: pay within 24 hours of receiving it
+
+/** The payment-window sentence used in every invoice email and on the invoices. */
+function invPayWarning(): string {
+    return 'Please pay within ' . INV_PAY_HOURS . ' hours of receiving this invoice, otherwise the vehicle will be sold to another buyer.';
+}
 
 /** Columns and the 'draft' status this feature needs; added once, on first use. */
 function invSchemaFix(): void {
@@ -70,10 +76,10 @@ function invForApp(array $app): ?array {
     return $id > 0 ? invRow($id) : null;
 }
 
-/** AHG-20261115-01: date + running number for that day. */
-function invNextNumber(): string {
+/** Running number per day: AHG-20261115-01 (commitment fee) or AHG-INV-20261115-01 (finance deposit). */
+function invNextNumber(string $kind = 'preauction'): string {
     global $pdo;
-    $prefix = 'AHG-' . date('Ymd') . '-';
+    $prefix = ($kind === 'finance' ? 'AHG-INV-' : 'AHG-') . date('Ymd') . '-';
     $n = 0;
     try {
         $st = $pdo->prepare("SELECT invoice_number FROM preauction_invoices WHERE invoice_number LIKE ?");
@@ -114,7 +120,13 @@ function invPhotos(array $inv): array {
 
 function invIsFinance(array $inv): bool { return ($inv['kind'] ?? 'preauction') === 'finance'; }
 
-function invTitle(array $inv): string { return invIsFinance($inv) ? 'DEPOSIT INVOICE' : 'COMMITMENT FEE INVOICE'; }
+function invTitle(array $inv): string { return invIsFinance($inv) ? 'FINANCE APPROVAL DEPOSIT INVOICE' : 'COMMITMENT FEE INVOICE'; }
+
+/** Finance line item: "Startup Deposit" when the assessment asked for a start-up deposit. */
+function invFinanceLine(array $inv): string {
+    $app = !empty($inv['application_id']) ? finGet((int)$inv['application_id']) : null;
+    return (!empty($app['details']['quote']['startup']) ? 'Startup Deposit' : 'Deposit') . ': Finance Approval Process';
+}
 
 /** What the client pays on this invoice (commitment fee or deposit) and what remains. */
 function invAmounts(array $inv): array {
@@ -132,9 +144,8 @@ function invPctLabel(float $pct): string {
 function invDefaultNote(array $inv): string {
     $a = invAmounts($inv);
     if (invIsFinance($inv)) {
-        return 'The ' . formatRand($a['fee']) . ' deposit on this invoice is ' . invPctLabel($a['pct']) . ' of the vehicle price. '
-             . 'The balance of ' . formatRand($a['rest']) . ' is financed on the term you chose. Once the deposit is paid and your documents are verified, '
-             . "the buyer will receive a buyer's code and a confirmed appointment booking time.";
+        // The sub-line under the deposit on the finance invoice.
+        return 'Opens the finance approval process with the lender. Forms part of the deposit, not an extra cost.';
     }
     return 'The ' . formatRand($a['fee']) . ' commitment fee on this invoice is ' . invPctLabel($a['pct']) . ' of the vehicle price. '
          . 'Once it is paid, the outstanding balance is ' . formatRand($a['rest']) . '. '
@@ -181,7 +192,7 @@ function invCreateDraft(array &$app): ?array {
                  total_price, commitment_fee_pct, commitment_fee_amount, outstanding_amount,
                  upload_token, notes, due_text, invoice_date, auction_id)
                 VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)")
-            ->execute([invNextNumber(), $isFin ? 'finance' : 'preauction', (int)$app['id'],
+            ->execute([invNextNumber($isFin ? 'finance' : 'preauction'), $isFin ? 'finance' : 'preauction', (int)$app['id'],
                        $app['name'], $app['email'], $app['phone'], $d['id_number'] ?? null, $d['address'] ?? null,
                        $app['vehicle'], ($vd['year'] ?? null) ?: null,
                        !empty($vd['mileage']) ? number_format((int)$vd['mileage'], 0, '.', ' ') . ' km' : null,
@@ -190,7 +201,7 @@ function invCreateDraft(array &$app): ?array {
                        $vd['body'] ?? null, $vd['colour'] ?? null, $vd['fuel'] ?? null, $features, $vd['image'] ?? null,
                        json_encode(invLotPhotos((int)$app['auction_id']), JSON_UNESCAPED_SLASHES),
                        $price, $pct, $fee, round($price - $fee, 2),
-                       bin2hex(random_bytes(32)), $notes, $isFin ? 'Within ' . FIN_INVOICE_DAYS . ' days' : 'On receipt', (int)$app['auction_id']]);
+                       bin2hex(random_bytes(32)), $notes, $isFin ? 'Within ' . INV_PAY_HOURS . ' hours' : 'On receipt', (int)$app['auction_id']]);
     } catch (Throwable $e) {
         error_log('[AHG inv] draft: ' . $e->getMessage());
         return null;
@@ -270,7 +281,7 @@ function invSendPreauction(array &$app, string $by): string {
     if (!in_array($app['status'], ['requested', 'expired', 'invoiced'], true)) return 'This request is past the invoice step.';
     if (empty($inv['buyer_email'])) return 'Add the client\'s email address first.';
     $pdo->prepare("UPDATE preauction_invoices SET status = 'pending', sent_at = NOW(), expires_at = ?, invoice_date = COALESCE(invoice_date, CURDATE()) WHERE id = ?")
-        ->execute([date('Y-m-d H:i:s', strtotime('+24 hours')), $inv['id']]);
+        ->execute([date('Y-m-d H:i:s', strtotime('+' . INV_PAY_HOURS . ' hours')), $inv['id']]);
     $inv = invRow((int)$inv['id']);
     $a = invAmounts($inv);
     $app['details']['pa_invoice_id'] = (int)$inv['id'];
@@ -285,8 +296,8 @@ function invSendPreauction(array &$app, string $by): string {
         . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand($a['price']) . '</p>'
         . '<p><strong>Commitment fee (' . invPctLabel($a['pct']) . '):</strong> <span class="gold">' . formatRand($a['fee']) . '</span></p>'
         . '<p><strong>Outstanding balance after payment:</strong> ' . formatRand($a['rest']) . '</p></div>'
-        . '<p>Please pay the commitment fee and upload your proof of payment <strong>within 24 hours</strong>. '
-        . "Once payment is made you receive your buyer's code, and our team contacts you with a confirmed appointment booking time.</p>"
+        . '<p><strong>' . e(invPayWarning()) . '</strong> Upload your proof of payment once you have paid.</p>'
+        . "<p>Once payment is made you receive your buyer's code, and our team contacts you with a confirmed appointment booking time.</p>"
         . '<p><a class="cta-btn" href="' . e(invClientLink($inv)) . '">View &amp; download your invoice</a></p>'
         . '<p><a href="' . e(paInvoiceLink($inv)) . '">Upload proof of payment</a></p>',
         'Follow my request');

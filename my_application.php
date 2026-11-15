@@ -222,7 +222,7 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
               <div class="ap-rowline"><span class="lbl">Branch code</span><span class="val"><?= e($bank['bank_branch_code']) ?></span></div>
               <div class="ap-rowline"><span class="lbl">Reference</span><span class="val"><?= e(finPayRef($app)) ?></span></div>
             </div>
-            <p class="ap-help"><i class="fas fa-shield-halved"></i> Only pay into the account on your Auction Hub Group invoice. Please pay by <?= date('j F Y', strtotime($d['invoice']['due'])) ?>.</p>
+            <p class="ap-help"><i class="fas fa-shield-halved"></i> Only pay into the account on your Auction Hub Group invoice. Please pay within <?= INV_PAY_HOURS ?> hours of receiving your invoice (by <?= date('j F, H:i', strtotime($d['invoice']['due'])) ?>), otherwise the vehicle will be sold to another buyer.</p>
           <?php endif; ?>
           <div class="ap-row" style="margin-top:.9rem">
             <?php if (!empty($d['invoice'])): ?><a class="btn btn-outline btn-sm" href="<?= e(finDocLink($app, 'invoice')) ?>" target="_blank"><i class="fas fa-file-invoice"></i> Deposit Invoice</a><?php endif; ?>
