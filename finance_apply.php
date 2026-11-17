@@ -167,7 +167,7 @@ finHero('<i class="fas fa-file-signature"></i> Finance Application', 'Apply for 
               <?= finVehicleSelect($lots, $vehicle) ?><?= $err('auction_id') ?>
               <span class="ap-help" id="ap-vehicle-help"><?= count($lots) ?> vehicles available — finance applies until a vehicle receives its first bid.</span></div>
             <div class="<?= $grp('deposit') ?>"><label class="form-label" for="deposit">Deposit you can pay <span class="required">*</span></label>
-              <div class="fw-money"><input class="form-control" id="deposit" name="deposit" inputmode="decimal" required value="<?= $val('deposit', $vehicle ? (string)(int)finMinDeposit($vehicle) : '') ?>" placeholder="<?= (int)$minStd ?>"></div><?= $err('deposit') ?>
+              <div class="fw-money"><input class="form-control" id="deposit" name="deposit" inputmode="decimal" required value="<?= $val('deposit', isset($_GET['deposit']) && is_numeric($_GET['deposit']) ? (string)(int)$_GET['deposit'] : ($vehicle ? (string)(int)finMinDeposit($vehicle) : '')) ?>" placeholder="<?= (int)$minStd ?>"></div><?= $err('deposit') ?>
               <span class="ap-help" id="ap-deposit-help">Minimum <?= e(formatRand($minStd)) ?> — more deposit lowers your instalment and raises your score.</span></div>
           </div>
         </div>

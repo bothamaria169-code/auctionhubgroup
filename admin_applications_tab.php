@@ -63,6 +63,7 @@ $faOutboxCard = function (array $o, string $back = '') use ($faCsrf): string {
         . '<details style="margin:.5rem 0"><summary style="cursor:pointer;font-weight:700;font-size:.85rem;color:#005BA1"><i class="fas fa-pen"></i> Edit before sending</summary>'
         . '<label style="display:block;font-size:.75rem;font-weight:700;color:#556;margin-top:.5rem">Subject<input class="form-control" name="subject" value="' . e($o['subject']) . '"></label>'
         . '<label style="display:block;font-size:.75rem;font-weight:700;color:#556;margin-top:.5rem">' . ($o['body_inner'] !== null ? 'Message (HTML — the AHG header and footer are added around it)' : 'Email HTML') . '<textarea class="form-control" name="body" rows="10" style="font-family:monospace;font-size:.78rem">' . e($o['body_inner'] ?? $o['body_html']) . '</textarea></label></details>'
+        . '<label style="display:flex;gap:.4rem;align-items:flex-start;font-size:.84rem;font-weight:700;margin:.4rem 0"><input type="checkbox" name="verified" value="1" required> I have checked the names, amounts, vehicle, reference and terms in this email</label>'
         . '<button class="btn btn-sm btn-success" type="submit" onclick="return confirm(\'Send this email to the client now?\')"><i class="fas fa-paper-plane"></i> Approve &amp; Send</button></form>'
         . '<form method="post" action="applications_api.php" style="margin-top:.4rem">' . $hidden . '<input type="hidden" name="action" value="outbox_discard"><button class="btn btn-sm btn-outline" type="submit" onclick="return confirm(\'Discard this email? The client will not receive it.\')"><i class="fas fa-trash"></i> Discard</button></form>'
         . '</div>';
@@ -163,6 +164,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
       <div class="fa2-act">
         <label>Min deposit — cars &amp; bakkies (R)<br><input class="form-control" name="fin_min_deposit" value="<?= e(finSetting('fin_min_deposit', '10500')) ?>"></label>
         <label>Min deposit — trucks &amp; plant (R)<br><input class="form-control" name="fin_min_deposit_heavy" value="<?= e(finSetting('fin_min_deposit_heavy', '50000')) ?>"></label>
+        <label>NEW QUOTATION approval deposit (R)<br><input class="form-control" name="fin_reapproval_deposit" value="<?= e((string)(int)finReapprovalDefault()) ?>"></label>
       </div>
       <p class="text-muted" style="font-size:.85rem">Rate per month by term — the same tiers as the calculator on financing.php. Cars &amp; bakkies 6–48 months; trucks &amp; plant up to 72.</p>
       <div class="fa2-act">
@@ -325,7 +327,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <details style="margin-top:.6rem"<?= $isFin && $a['status'] === 'review' ? ' open' : '' ?>><summary style="cursor:pointer;color:#a1271b;font-weight:700;font-size:.85rem"><?= $isFin ? 'Decline this finance application…' : 'Decline…' ?></summary>
             <?php if ($isFin): $faRs = ''; foreach (FIN_DECLINE_REASONS as $k => [$l]) $faRs .= '<label><input type="checkbox" name="reasons[]" value="' . $k . '"' . (($k === 'debt_review' && !empty($d['finances']['debt_review'])) || ($k === 'judgments' && !empty($d['finances']['judgments'])) || ($k === 'affordability' && ($d['assessment']['grade'] ?? '') === 'R') ? ' checked' : '') . '> ' . e($l) . '</label>'; ?>
               <p style="font-size:.82rem;margin:.4rem 0 0">Tick the reason(s). Nothing is emailed yet — next you check the <strong>decline letter</strong> (built from the template, with what the client can do to qualify) and put it in the Outbox.</p>
-              <?= $faForm($id, 'decline', '<div style="width:100%"><div class="fa2-reasons">' . $faRs . '</div><label>Other reason / your own words (optional)<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label></div>', 'Decline &amp; Write Letter', 'btn-danger', 'Decline this finance application?') ?>
+              <?= $faForm($id, 'decline', '<div style="width:100%"><div class="fa2-reasons">' . $faRs . '</div><div class="fa2-act" style="margin:.4rem 0"><label style="display:flex;gap:.4rem;align-items:center;font-weight:700"><input type="checkbox" name="send_quotation" value="1" checked> Send a NEW QUOTATION with approval terms</label><label>Approval deposit (R)<br><input class="form-control" name="suggested_deposit" value="' . (int)finReapprovalDefault(finVehicle((int)$a['auction_id']) ?: []) . '" style="width:130px"></label></div><label>Other reason / your own words (optional)<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label></div>', 'Decline &amp; Write Letter', 'btn-danger', 'Decline this finance application?') ?>
             <?php else: ?>
               <?= $faForm($id, 'decline', '<label>' . ($inv ? 'Reason from the financial institution' : 'Reason (polite)') . ' — the notice waits in the Outbox for approval<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label>', 'Decline', 'btn-danger', 'Decline this request? The notice to the client goes to the Outbox for approval.') ?>
             <?php endif; ?>
@@ -358,6 +360,17 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
               <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/application_doc.php?id=<?= $id ?>&amp;doc=decline" target="_blank"><i class="fas fa-print"></i> Preview / print letter</a>
             </div>
           </form>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($isFin && $a['status'] === 'declined'): $pp = $d['declined']['proposed'] ?? null; ?>
+      <div class="card" style="overflow:visible;margin-bottom:1.25rem">
+        <div class="fa2-head"><h4><i class="fas fa-file-signature"></i> NEW QUOTATION — Approval Terms</h4>
+          <span class="badge" style="color:<?= $pp && !empty($pp['sent_at']) ? '#1a9e4e' : '#856404' ?>"><?= !$pp ? 'Not sent' : (!empty($pp['sent_at']) ? 'Sent ' . safeDate('d M H:i', $pp['sent_at']) : 'In the Outbox') ?></span></div>
+        <div class="fa2-body">
+          <p class="text-muted" style="font-size:.84rem;margin-top:0">Suggest the deposit that would get this client approved. The NEW QUOTATION (letter plus approval terms and a link to apply again with that deposit) goes to the Outbox, and is emailed only when you approve it.<?= $pp ? ' Current proposal: ' . e(formatRand((float)$pp['deposit'])) . '.' : '' ?></p>
+          <?= $faForm($id, 'propose_deposit', '<label>Suggested approval deposit (R)<br><input class="form-control" name="deposit" required value="' . (int)($pp['deposit'] ?? finReapprovalDefault(finVehicle((int)$a['auction_id']) ?: [])) . '" style="width:150px"></label>', '<i class="fas fa-file-signature"></i> Propose &amp; Put NEW QUOTATION in Outbox', 'btn-primary') ?>
         </div>
       </div>
       <?php endif; ?>

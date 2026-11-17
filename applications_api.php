@@ -30,7 +30,7 @@ $action = (string)($_POST['action'] ?? '');
 $note = trim(mb_substr((string)($_POST['note'] ?? ''), 0, 2000));
 
 if ($action === 'settings') {
-    foreach (['fin_min_deposit', 'fin_min_deposit_heavy', 'pa_min_percent', 'pa_max_percent', 'pa_default_percent',
+    foreach (['fin_min_deposit', 'fin_min_deposit_heavy', 'fin_reapproval_deposit', 'pa_min_percent', 'pa_max_percent', 'pa_default_percent',
               'fin_score_a', 'fin_score_b', 'fin_score_c', 'fin_startup_b', 'fin_startup_c', 'fin_startup_d', 'fin_afford_pct',
               'fin_buffer_pct', 'fin_min_income', 'fin_norm_base', 'fin_norm_dependant', 'fin_max_age', 'fin_min_credit_score'] as $k) {
         if (isset($_POST[$k]) && is_numeric($_POST[$k])) leadSaveSetting($k, (string)(float)$_POST[$k]);
@@ -64,7 +64,8 @@ if (in_array($action, ['outbox_send', 'outbox_discard', 'outbox_retry'], true)) 
     $row = outboxRow($oid);
     $back = (string)($_POST['back'] ?? '') === 'app' && $row && $row['app_id'] ? 'admin_dashboard.php?tab=applications&app=' . (int)$row['app_id'] : 'admin_dashboard.php?tab=applications&view=outbox';
     if ($action === 'outbox_send') {
-        $err = outboxSend($oid, $by, isset($_POST['subject']) ? (string)$_POST['subject'] : null, isset($_POST['body']) ? (string)$_POST['body'] : null);
+        $err = empty($_POST['verified']) ? 'Tick "I have checked this email" before you send it.'
+            : outboxSend($oid, $by, isset($_POST['subject']) ? (string)$_POST['subject'] : null, isset($_POST['body']) ? (string)$_POST['body'] : null);
         $done = 'Approved and emailed to ' . ($row['to_email'] ?? 'the client') . '.';
     } elseif ($action === 'outbox_discard') {
         $err = outboxDiscard($oid, $by);
@@ -149,14 +150,30 @@ switch ($action) {
         $reasons = array_map('strval', (array)($_POST['reasons'] ?? []));
         if ($isFin) {
             if (!$reasons && $note === '') { $err = 'Tick at least one reason (or write one).'; break; }
+            $sendNew = !empty($_POST['send_quotation']);
+            $dep = $sendNew ? (finMoneyInput((string)($_POST['suggested_deposit'] ?? '')) ?: finReapprovalDefault(finVehicle((int)$app['auction_id']) ?: [])) : 0.0;
+            if ($sendNew && ($why = finDepositCheck($app, $dep))) { $err = $why; break; }
             finDecline($app, $note, $by, $reasons);
-            // Start the decline letter straight away from the template
+            // The decline letter is built from the template; with NEW QUOTATION ticked it goes out as that quotation
             finDeclineLetterSave($app, finDeclineLetterBuild($app, $reasons, $note), $reasons, $by);
-            $done = 'Declined. Nothing has been emailed yet — check the decline letter below, then put it in the Outbox.';
+            if ($sendNew) {
+                $e2 = finSendNewQuotation($app, $dep, $by);
+                $done = $e2 === '' ? 'Declined. The NEW QUOTATION at ' . formatRand($dep) . ' approval deposit is in the Outbox — check it and press Send.' : 'Declined, but ' . $e2;
+            } else {
+                $done = 'Declined. Nothing has been emailed yet — check the decline letter, then put it in the Outbox.';
+            }
         } else {
             $err = paDecline($app, $note, $by);
             $done = 'Declined — the notice to the client is in the Outbox for approval.';
         }
+        break;
+    case 'propose_deposit':
+        // A declined client can be offered approval at a suggested deposit: NEW QUOTATION → Outbox
+        if (!$isFin || $app['status'] !== 'declined') { $err = 'Only a declined finance application can get a NEW QUOTATION.'; break; }
+        $dep = finMoneyInput((string)($_POST['deposit'] ?? ''));
+        if ($why = finDepositCheck($app, $dep)) { $err = $why; break; }
+        $err = finSendNewQuotation($app, $dep, $by);
+        $done = 'NEW QUOTATION at ' . formatRand($dep) . ' is in the Outbox — check it and press Send.';
         break;
     case 'decline_letter':
         if (!$isFin || $app['status'] !== 'declined') { $err = 'Decline the finance application first.'; break; }

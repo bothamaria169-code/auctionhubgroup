@@ -1281,6 +1281,8 @@ function finDeclineLetterSave(array &$app, string $text, array $reasons, string 
 
 /** Puts the letter in the Outbox — it is emailed only when an admin approves it there. */
 function finDeclineLetterQueue(array &$app, string $by): string {
+    // A NEW QUOTATION with an approval deposit has been proposed: the letter goes out as that quotation.
+    if (!empty($app['details']['declined']['proposed'])) return finSendNewQuotation($app, (float)$app['details']['declined']['proposed']['deposit'], $by);
     $l = $app['details']['declined']['letter'] ?? null;
     if (empty($l['text'])) return 'Write the letter first.';
     if (!empty($l['queued_at']) && empty($l['sent_at'])) return 'This letter is already waiting in the Outbox.';
@@ -1296,6 +1298,56 @@ function finDeclineLetterQueue(array &$app, string $by): string {
     return '';
 }
 
+
+// ── Finance: NEW QUOTATION with approval terms (declined applications) ─────
+
+/** The approval deposit suggested to a declined client: the office setting, never below the vehicle's minimum. */
+function finReapprovalDefault(array $vehicle = []): float {
+    $d = (float)finSetting('fin_reapproval_deposit', '15000');
+    return $vehicle ? max($d, finMinDeposit($vehicle)) : $d;
+}
+
+/** Error text if a suggested approval deposit cannot be used on this vehicle, else ''. */
+function finDepositCheck(array $app, float $dep): string {
+    $vehicle = finVehicle((int)$app['auction_id']) ?: [];
+    if ($dep <= 0) return 'Enter the approval deposit.';
+    if ($vehicle && $dep < finMinDeposit($vehicle)) return 'That is below the minimum deposit for this vehicle (' . formatRand(finMinDeposit($vehicle)) . ').';
+    if ($dep >= (float)$app['price']) return 'The deposit must be less than the vehicle price.';
+    return '';
+}
+
+/**
+ * NEW QUOTATION for a declined application: the letter (what the client can do) plus the
+ * approval terms — the deposit needed and how to fill the form again. It is held in the
+ * Outbox; nothing is emailed until an admin approves it. Replaces any earlier unsent one.
+ */
+function finSendNewQuotation(array &$app, float $deposit, string $by): string {
+    global $pdo;
+    if ($why = finDepositCheck($app, $deposit)) return $why;
+    $deposit = round($deposit, 2);
+    $letter = $app['details']['declined']['letter']['text'] ?? '';
+    if ($letter === '') $letter = finDeclineLetterBuild($app, $app['details']['declined']['reasons'] ?? [], (string)($app['details']['declined']['reason'] ?? ''));
+    $letter = preg_replace('/^Dear[^\n]*\n+/', '', $letter);   // finMailClient() already opens with "Dear <name>"
+    $apply = APP_URL . '/finance_apply.php?id=' . (int)$app['auction_id'] . '&deposit=' . (int)$deposit;
+    $terms = '<div class="highlight-box"><p><strong>Approval terms</strong></p>'
+        . '<p><strong>Deposit required for approval:</strong> ' . e(formatRand($deposit)) . '</p>'
+        . '<p><strong>Vehicle price:</strong> ' . e(formatRand((float)$app['price'])) . '</p></div>'
+        . '<p>To be approved, please fill in the finance application form again for this vehicle with this deposit. '
+        . 'Your deposit invoice is payable within ' . INV_PAY_HOURS . ' hours of receiving it.</p>'
+        . '<p><a href="' . e($apply) . '" class="cta-btn">Apply again with this deposit</a></p>';
+    $pdo->prepare("UPDATE client_outbox SET status = 'discarded', decided_by = ?, decided_at = NOW()
+                   WHERE app_id = ? AND status = 'pending' AND tag IN ('new_quotation', 'decline_letter')")
+        ->execute([$by, (int)$app['id']]);
+    $ok = finMailClient($app, 'NEW QUOTATION — Approval Terms',
+        finLetterHtml($letter) . $terms, 'View My Application', 'result', 'new_quotation');
+    finRecordMail($app, 'NEW QUOTATION — approval deposit ' . formatRand($deposit), $ok);
+    if (!$ok) return 'The NEW QUOTATION could not be put in the Outbox.';
+    $app['details']['declined']['proposed'] = ['deposit' => $deposit, 'at' => date('Y-m-d H:i:s'), 'by' => $by, 'sent_at' => null];
+    $app['details']['declined']['letter']['queued_at'] = date('Y-m-d H:i:s');
+    $app['details']['declined']['letter']['sent_at'] = null;
+    finLog($app, 'NEW QUOTATION put in the Outbox — approval deposit ' . formatRand($deposit), $by);
+    return '';
+}
 
 function finApprove(array &$app, string $by): string {
     if ($app['status'] !== 'invoiced') return 'Only an application with a deposit invoice can be approved.';

@@ -179,8 +179,11 @@ function outboxAfter(array $row, string $status, string $by): void {
     $what = ['sent' => 'Approved & emailed', 'failed' => 'Approved but the email FAILED', 'discarded' => 'Discarded (not sent)'][$status] . ': ' . $row['subject'];
     finLog($app, $what, $by);
     $app['details']['emails'][] = ['at' => date('Y-m-d H:i:s'), 'what' => $what, 'ok' => $status !== 'failed'];
-    if ($row['tag'] === 'decline_letter' && $status === 'sent') $app['details']['declined']['letter']['sent_at'] = date('Y-m-d H:i:s');
-    if ($row['tag'] === 'decline_letter' && $status !== 'sent') unset($app['details']['declined']['letter']['queued_at']);
+    if (in_array($row['tag'], ['decline_letter', 'new_quotation'], true)) {
+        if ($status === 'sent') $app['details']['declined']['letter']['sent_at'] = date('Y-m-d H:i:s');
+        else unset($app['details']['declined']['letter']['queued_at']);
+    }
+    if ($row['tag'] === 'new_quotation' && $status === 'sent') $app['details']['declined']['proposed']['sent_at'] = date('Y-m-d H:i:s');
     finSave($app);
 }
 
