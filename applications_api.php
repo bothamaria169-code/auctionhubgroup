@@ -6,6 +6,8 @@
 //   finance:     approve_deposit · counter_deposit · approve · resend
 //   pre-auction: pa_invoice (→ preauction_invoices) · pa_approve (Buyer Code)
 //   both:        decline · doc · viewing · complete · note · settings
+//   finance decline letter: decline_letter (build · save · queue)
+//   Outbox (client emails wait for approval): outbox_send · outbox_discard · outbox_retry
 // ============================================================
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
@@ -42,6 +44,46 @@ if ($action === 'settings') {
     exit;
 }
 
+if ($action === 'letter_template') {
+    // Decline letter template + the "what you can do" text for each reason
+    $tpl = trim(str_replace("\r\n", "\n", (string)($_POST['tpl_fin_decline_letter'] ?? '')));
+    leadSaveSetting('tpl_fin_decline_letter', ($tpl === '' || $tpl === FIN_DECLINE_LETTER_DEFAULT || !empty($_POST['reset'])) ? null : mb_substr($tpl, 0, 12000));
+    foreach (FIN_DECLINE_REASONS as $k => [, $default]) {
+        if ($k === 'other' || !isset($_POST['fix_' . $k])) continue;
+        $fix = trim(preg_replace('/\s+/', ' ', (string)$_POST['fix_' . $k]));
+        leadSaveSetting('fin_fix_' . $k, ($fix === '' || $fix === $default || !empty($_POST['reset'])) ? null : mb_substr($fix, 0, 2000));
+    }
+    finFlash('success', !empty($_POST['reset']) ? 'Decline letter template reset to the AHG default.' : 'Decline letter template saved. New letters use it.');
+    header('Location: admin_dashboard.php?tab=applications&view=settings#letter');
+    exit;
+}
+
+// ── Outbox: client emails wait here until an admin approves them ──
+if (in_array($action, ['outbox_send', 'outbox_discard', 'outbox_retry'], true)) {
+    $oid = (int)($_POST['outbox_id'] ?? 0);
+    $row = outboxRow($oid);
+    $back = (string)($_POST['back'] ?? '') === 'app' && $row && $row['app_id'] ? 'admin_dashboard.php?tab=applications&app=' . (int)$row['app_id'] : 'admin_dashboard.php?tab=applications&view=outbox';
+    if ($action === 'outbox_send') {
+        $err = outboxSend($oid, $by, isset($_POST['subject']) ? (string)$_POST['subject'] : null, isset($_POST['body']) ? (string)$_POST['body'] : null);
+        $done = 'Approved and emailed to ' . ($row['to_email'] ?? 'the client') . '.';
+    } elseif ($action === 'outbox_discard') {
+        $err = outboxDiscard($oid, $by);
+        $done = 'Discarded — the client does not receive it.';
+    } else {
+        $err = outboxRetry($oid);
+        $done = 'Back in the Outbox — check it and press Send.';
+    }
+    if ($err === '') {
+        try {
+            $pdo->prepare("INSERT INTO admin_activity_log (admin_id, admin_name, action, auction_id, item_name, details) VALUES (?, ?, ?, ?, ?, ?)")
+                ->execute([(int)$admin['sub'], $by, $action, null, $row['subject'] ?? '', ($row['to_email'] ?? '') . ' #' . $oid]);
+        } catch (Throwable $e) { /* optional */ }
+    }
+    finFlash($err === '' ? 'success' : 'error', e($err === '' ? $done : $err));
+    header('Location: ' . $back);
+    exit;
+}
+
 $app = finGet((int)($_POST['id'] ?? 0));
 if (!$app) {
     finFlash('error', 'Application not found.');
@@ -55,12 +97,12 @@ $isFin = $app['kind'] === 'finance';
 switch ($action) {
     case 'approve_deposit':
         $err = $isFin ? finApproveDeposit($app, $by) : 'Not a finance application.';
-        $done = 'Deposit approved — the client has been asked for their documents and deposit.';
+        $done = 'Deposit approved — the invoice email is in the Outbox: check it and press Send.';
         break;
     case 'counter_deposit':
         if (!$isFin || !in_array($app['status'], ['review', 'quoted', 'chosen'], true)) { $err = 'A deposit can only be suggested before approval.'; break; }
         $err = finCounterDeposit($app, finMoneyInput((string)($_POST['deposit'] ?? '')), $note, $by);
-        $done = 'Updated quote sent at the suggested deposit.';
+        $done = 'Updated quote at the suggested deposit is in the Outbox — check it and press Send.';
         break;
     case 'bureau':
         // Office enters the score from the client's credit bureau report → re-score; a higher
@@ -84,7 +126,7 @@ switch ($action) {
             finQuoteFromAssessment($app, $offered, false);
             $app['details']['quote']['note'] = $note;
             finSendQuote($app);
-            $done = $app['status'] === 'review' ? 'Re-scored — still referred.' : 'Re-scored — new quote at ' . formatRand((float)$app['details']['quote']['deposit']) . ' deposit emailed to the client.';
+            $done = $app['status'] === 'review' ? 'Re-scored — still referred.' : 'Re-scored — new quote at ' . formatRand((float)$app['details']['quote']['deposit']) . ' deposit is in the Outbox for approval.';
         } else {
             finMarkAffordable($app);
             $done = 'Re-scored: ' . $as['score'] . '/100 — the deposit and quote stay the same.';
@@ -92,20 +134,46 @@ switch ($action) {
         break;
     case 'approve':
         $err = $isFin ? finApprove($app, $by) : 'Not a finance application.';
-        $done = 'Approved — Buyer Code ' . ($app['buyer_code'] ?? '') . ' emailed.';
+        $done = 'Approved — Buyer Code ' . ($app['buyer_code'] ?? '') . '. The approval email is in the Outbox for you to send.';
         break;
     case 'pa_invoice':
         $err = $isFin ? 'Not a pre-auction request.' : paIssueInvoice($app, (int)($_POST['percent'] ?? 0), $note, (int)$admin['sub'], $by);
-        $done = 'Proforma invoice issued and emailed (valid 24 hours). It is also in the Deal Builder → Pre-Auction.';
+        $done = 'Proforma invoice issued (valid 24 hours) — the email is in the Outbox for approval. It is also in the Deal Builder → Pre-Auction.';
         break;
     case 'pa_approve':
         $err = $isFin ? 'Not a pre-auction request.' : paApproveInvoice($app, $note, $by);
-        $done = 'Approved — vehicle Presold, Buyer Code ' . ($app['buyer_code'] ?? '') . ' emailed.';
+        $done = 'Approved — vehicle Presold, Buyer Code ' . ($app['buyer_code'] ?? '') . '. The Buyer Code email is in the Outbox for approval.';
         break;
     case 'decline':
         if (finClosed($app)) { $err = 'This application is already closed.'; break; }
-        if ($isFin) finDecline($app, $note, $by); else $err = paDecline($app, $note, $by);
-        $done = 'Declined — the client has been notified.';
+        $reasons = array_map('strval', (array)($_POST['reasons'] ?? []));
+        if ($isFin) {
+            if (!$reasons && $note === '') { $err = 'Tick at least one reason (or write one).'; break; }
+            finDecline($app, $note, $by, $reasons);
+            // Start the decline letter straight away from the template
+            finDeclineLetterSave($app, finDeclineLetterBuild($app, $reasons, $note), $reasons, $by);
+            $done = 'Declined. Nothing has been emailed yet — check the decline letter below, then put it in the Outbox.';
+        } else {
+            $err = paDecline($app, $note, $by);
+            $done = 'Declined — the notice to the client is in the Outbox for approval.';
+        }
+        break;
+    case 'decline_letter':
+        if (!$isFin || $app['status'] !== 'declined') { $err = 'Decline the finance application first.'; break; }
+        $mode = (string)($_POST['mode'] ?? 'save');
+        $reasons = array_map('strval', (array)($_POST['reasons'] ?? []));
+        if ($mode === 'build') {
+            $err = finDeclineLetterSave($app, finDeclineLetterBuild($app, $reasons, $note), $reasons, $by);
+            $done = 'Letter rebuilt from the template — check it, then put it in the Outbox.';
+        } else {
+            $err = finDeclineLetterSave($app, (string)($_POST['letter'] ?? ''), $reasons, $by);
+            if ($err === '' && $mode === 'queue') {
+                $err = finDeclineLetterQueue($app, $by);
+                $done = 'Decline letter is in the Outbox — review it there and press Send to email it.';
+            } else {
+                $done = 'Letter saved (draft — not sent).';
+            }
+        }
         break;
     case 'doc':
         $kind = (string)($_POST['doc'] ?? '');
@@ -121,11 +189,11 @@ switch ($action) {
                 . '<p>Upload a new copy on your application page — it only takes a minute.</p>', 'Upload Again', 'documents');
             finRecordMail($app, 'Re-upload requested: ' . FIN_DOCS[$kind][0], $ok);
         }
-        $done = FIN_DOCS[$kind][0] . ' ' . $status . '.';
+        $done = FIN_DOCS[$kind][0] . ' ' . $status . ($status === 'rejected' ? ' — the re-upload request is in the Outbox for approval.' : '.');
         break;
     case 'viewing':
         $err = finConfirmViewing($app, (string)($_POST['date'] ?? ''), substr((string)($_POST['time'] ?? ''), 0, 5), $note, $by);
-        $done = 'Test drive confirmed and emailed to the client.';
+        $done = 'Test drive confirmed — the email is in the Outbox for approval.';
         break;
     case 'complete':
         if (!in_array($app['status'], ['approved', 'paid'], true)) { $err = 'Only an approved / Presold application can be completed.'; break; }
@@ -135,7 +203,7 @@ switch ($action) {
         $done = 'Completed. Remember to mark the lot sold on the Auctions tab (sale channel: pre-auction / private).';
         break;
     case 'resend':
-        if ($isFin && !empty($app['details']['quote'])) { finSendQuote($app); $done = 'Quote emailed again.'; }
+        if ($isFin && !empty($app['details']['quote'])) { finSendQuote($app); $done = 'Quote put in the Outbox again — check it and press Send.'; }
         else $err = 'Nothing to resend at this stage.';
         break;
     case 'note':

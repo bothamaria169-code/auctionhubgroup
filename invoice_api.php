@@ -222,7 +222,7 @@ switch ($action) {
                 ]);
             }
 
-            ok(['message' => 'Invoice declined and buyer notified.']);
+            ok(['message' => 'Invoice declined. The notice to the buyer is in the Outbox (Finance & Pre-Auction) for approval.']);
         } catch (PDOException $e) {
             error_log('AHG Invoice Decline Error: ' . $e->getMessage());
             fail('Database error during declination.');

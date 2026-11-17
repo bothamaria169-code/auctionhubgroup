@@ -91,6 +91,8 @@ require_once __DIR__ . '/leads_helper.php';
 $stats['leads_waiting'] = leadWaitingCount();
 $stats['applications_waiting'] = 0;   // finance / pre-auction applications waiting on the office
 try { if (ahgSchemaReady()) $stats['applications_waiting'] = (int)$pdo->query("SELECT COUNT(*) FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed')")->fetchColumn(); } catch (Exception $e) {}
+$stats['outbox_waiting'] = function_exists('outboxPendingCount') ? outboxPendingCount() : 0;   // client emails waiting for approval
+$stats['applications_waiting'] += $stats['outbox_waiting'];
 $stats['bank_requests'] = 0;
 try { $stats['bank_requests'] = (int)$pdo->query("SELECT COUNT(*) FROM bank_detail_requests WHERE status = 'pending'")->fetchColumn(); } catch (Exception $e) {}
 
@@ -769,7 +771,8 @@ require_once 'header.php';
     <!-- Waiting on you: the jobs only a person can do, each one tap away (idea from BidCo's Today page) -->
     <?php $todo = [
         ['leads',   'fa-user-plus',     (int)$stats['leads_waiting'],   'lead(s) to contact'],
-        ['applications', 'fa-handshake', (int)$stats['applications_waiting'], 'finance / pre-auction application(s) to action'],
+        ['applications&amp;view=outbox', 'fa-inbox', (int)$stats['outbox_waiting'], 'client email(s) waiting for your approval (Outbox)'],
+        ['applications', 'fa-handshake', (int)$stats['applications_waiting'] - (int)$stats['outbox_waiting'], 'finance / pre-auction application(s) to action'],
         ['pop',     'fa-file-invoice',  (int)$stats['pending_pops'],    'proof(s) of payment to approve'],
         ['banking', 'fa-university',    (int)$stats['bank_requests'],   'banking request(s)'],
         ['refunds', 'fa-rotate-left',   (int)$stats['pending_refunds'], 'refund(s) to process'],

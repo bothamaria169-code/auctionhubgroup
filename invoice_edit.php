@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $err = invSendPreauction($app, $by);
         }
-        if ($err === '') finFlash('success', 'Invoice ' . e($inv['invoice_number']) . ' sent to ' . e((string)$inv['buyer_email']) . '.');
+        if ($err === '') finFlash('success', 'Invoice ' . e($inv['invoice_number']) . ' is ready — the email to ' . e((string)$inv['buyer_email']) . ' is in the <a href="admin_dashboard.php?tab=applications&view=outbox">Outbox</a>: check it and press Send.');
     } elseif ($err === '' && $action === 'save') {
         finFlash('success', 'Invoice saved.' . ($inv['status'] === 'draft' ? ' It has not been sent yet.' : ' The client\'s link shows the changes.'));
     } elseif ($action === 'resend' && $app && $inv['status'] !== 'draft') {
@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         finRecordMail($app, 'Invoice link re-sent', $ok);
         finLog($app, 'Invoice link re-sent', $by);
         finSave($app);
-        finFlash($ok ? 'success' : 'error', $ok ? 'The invoice link was emailed again.' : 'The email could not be sent.');
+        finFlash($ok ? 'success' : 'error', $ok ? 'The invoice link email is in the Outbox — approve it there to send.' : 'The email could not be prepared.');
     } elseif ($action === 'signature' && !empty($_FILES['signature']['tmp_name'])) {
         $f = $_FILES['signature'];
         $type = @mime_content_type($f['tmp_name']);

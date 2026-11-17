@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isFin && $action === 'choose' && in_array($s, ['quoted', 'chosen'], true)) {
         $m = (int)($_POST['months'] ?? 0);
         $plan = null;
-        foreach ($app['details']['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m && finPlanAllowed($p)) $plan = $p;
+        foreach ($app['details']['quote']['plans'] ?? [] as $p) if ((int)$p['months'] === $m) $plan = $p;
         if ($plan) {
             $app['details']['choice'] = ['months' => $m, 'at' => date('Y-m-d H:i:s')];
             $app['months'] = $m;
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             finMailOffice($app, "Term chosen: $m months at " . formatRand($plan['monthly']) . ' — approve the deposit');
             finFlash('success', "You chose <strong>$m months at " . e(formatRand($plan['monthly'])) . ' per month</strong>. Our finance team is reviewing your deposit — we email you as soon as it is approved.');
         } else {
-            finFlash('error', 'Please choose one of the terms that fit your budget.');
+            finFlash('error', 'Please choose a payment plan.');
         }
         $to = 'plans';
     } elseif ($isFin && $action === 'upload' && in_array($s, ['invoiced', 'approved'], true)) {
@@ -133,7 +133,10 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
         <p><?= !empty($d['declined']['institution'])
             ? 'The financial institution holding this vehicle has determined that the pre-auction commitment cannot be processed at this time. This is not a reflection of your creditworthiness.'
             : 'We are sorry — we are not able to proceed with this ' . ($isFin ? 'finance application' : 'request') . ' on this vehicle. This is not a reflection of your creditworthiness.' ?></p>
-        <?php if (!empty($d['declined']['reason'])): ?><div class="ap-notice"><i class="fas fa-circle-info"></i><div><?= nl2br(e($d['declined']['reason'])) ?></div></div><?php endif; ?>
+        <?php if ($isFin && !empty($d['declined']['letter']['sent_at'])): ?>
+          <div class="ap-notice"><i class="fas fa-envelope-open-text"></i><div><strong>Your letter — what you can do to qualify</strong><?= finLetterHtml($d['declined']['letter']['text']) ?>
+            <a class="btn btn-outline btn-sm" href="<?= e(finDocLink($app, 'decline')) ?>" target="_blank"><i class="fas fa-print"></i> Print / save letter</a></div></div>
+        <?php elseif (!$isFin && !empty($d['declined']['reason'])): ?><div class="ap-notice"><i class="fas fa-circle-info"></i><div><?= nl2br(e($d['declined']['reason'])) ?></div></div><?php endif; ?>
         <?php if (!$isFin && $inv && $inv['pop_file_path']): ?><p class="ap-help">Any commitment fee paid is refunded within 3–5 business days, less R<?= number_format(PA_REFUND_FEE, 2) ?> admin and bank charges.</p><?php endif; ?>
         <div class="ap-row" style="margin-top:1rem"><a class="btn btn-primary btn-sm" href="<?= APP_URL ?>/preauction.php">Browse Pre-Auction Vehicles</a>
           <a class="btn btn-outline btn-sm" href="<?= APP_URL ?>/auctions.php">Live Auctions</a></div>
@@ -190,10 +193,11 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
             <div class="ap-rowline fee"><span class="lbl"><?= !empty($q['startup']) ? 'Start-up deposit' : 'Your deposit' ?></span><span class="val">− <?= $R($q['deposit']) ?></span></div>
             <div class="ap-rowline big"><span class="lbl">Amount financed</span><span class="val"><?= $R($q['financed']) ?></span></div>
           </div>
-          <?php foreach ($q['plans'] as $p): $on = (int)($d['choice']['months'] ?? 0) === (int)$p['months']; $ok = finPlanAllowed($p); ?>
-            <label class="ap-plan<?= $on ? ' chosen' : '' ?>"<?= $ok ? '' : ' style="opacity:.5;cursor:not-allowed" title="This instalment is more than your budget allows"' ?>>
-              <input type="radio" name="months" value="<?= (int)$p['months'] ?>"<?= $on ? ' checked' : '' ?><?= $ok ? '' : ' disabled' ?> required>
-              <span><span class="m"><?= (int)$p['months'] ?> Months</span> <?= (int)$p['months'] === 12 && $ok ? '<span class="pop">Popular</span>' : '' ?><br><span class="t"><?= $ok ? 'Total ' . $R($p['total']) : 'Over your budget' ?></span></span>
+          <p class="ap-help" style="margin:0 0 .6rem">You choose the payment plan that suits you — pick any term below.</p>
+          <?php foreach ($q['plans'] as $p): $on = (int)($d['choice']['months'] ?? 0) === (int)$p['months']; $ok = finPlanInBudget($p); ?>
+            <label class="ap-plan<?= $on ? ' chosen' : '' ?>">
+              <input type="radio" name="months" value="<?= (int)$p['months'] ?>"<?= $on ? ' checked' : '' ?> required>
+              <span><span class="m"><?= (int)$p['months'] ?> Months</span> <?= (int)$p['months'] === 12 ? '<span class="pop">Popular</span>' : '' ?><br><span class="t">Total <?= $R($p['total']) ?><?= $ok ? '' : ' · <span style="color:#a15c00">above the budget guide from your assessment</span>' ?></span></span>
               <span class="p"><?= $R($p['monthly']) ?><small> /month</small></span>
             </label>
           <?php endforeach; ?>

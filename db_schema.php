@@ -176,6 +176,30 @@ const AHG_SCHEMA_TABLES = [
             INDEX idx_ca_email (email),
             INDEX idx_ca_auction (auction_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    // Client documents waiting for an admin to approve them before they are emailed (outbox_helper.php)
+    'client_outbox' => "
+        CREATE TABLE IF NOT EXISTS client_outbox (
+            id            INT AUTO_INCREMENT PRIMARY KEY,
+            kind          VARCHAR(40)   NOT NULL,
+            tag           VARCHAR(40)   NULL,
+            app_id        INT           NULL,
+            to_email      VARCHAR(190)  NOT NULL,
+            to_name       VARCHAR(190)  NULL,
+            extra         TEXT          NULL,
+            subject       VARCHAR(255)  NOT NULL,
+            title         VARCHAR(255)  NULL,
+            body_inner    MEDIUMTEXT    NULL,
+            body_html     MEDIUMTEXT    NOT NULL,
+            alt_body      TEXT          NULL,
+            status        VARCHAR(12)   NOT NULL DEFAULT 'pending',
+            error         VARCHAR(255)  NULL,
+            created_by    VARCHAR(150)  NULL,
+            created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            decided_by    VARCHAR(150)  NULL,
+            decided_at    DATETIME      NULL,
+            INDEX idx_ob_status (status),
+            INDEX idx_ob_app (app_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 ];
 
 // Columns added to existing tables (table => [column => ALTER statement])

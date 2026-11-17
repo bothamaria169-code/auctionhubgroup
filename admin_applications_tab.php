@@ -5,6 +5,10 @@
 // admin_dashboard.php. Same layout as the Refunds tab.
 //   Finance: approve deposit / suggest a higher one / decline,
 //     review documents, verify deposit → Buyer Code, confirm test drive.
+//   Outbox: every client document (quote, invoice, decline letter,
+//     Buyer Code…) waits here until an admin checks it and presses Send.
+//   Declined finance → decline letter built from a template (what the
+//     client can do to qualify), edited, then put in the Outbox.
 //   Pre-auction:      issue the proforma invoice (→ preauction_invoices,
 //     the same invoices as the Deal Builder), approve the POP → Buyer Code
 //     email, or decline (financial institution notice).
@@ -43,6 +47,27 @@ try {
 } catch (Throwable $e) { error_log('[AHG applications tab] ' . $e->getMessage()); }
 
 /** A small action form posting to applications_api.php. */
+$faOutboxN = outboxPendingCount();
+
+/** One held email: preview, edit subject/body, Send or Discard. $back = 'app' returns to the application. */
+$faOutboxCard = function (array $o, string $back = '') use ($faCsrf): string {
+    $oid = (int)$o['id'];
+    $hidden = '<input type="hidden" name="csrf" value="' . $faCsrf . '"><input type="hidden" name="outbox_id" value="' . $oid . '"><input type="hidden" name="back" value="' . e($back) . '">';
+    $app = $o['app_id'] ? finGet((int)$o['app_id']) : null;
+    return '<div class="fa2-ob">'
+        . '<div class="fa2-ob-top"><div><strong>' . e($o['subject']) . '</strong><br><small class="text-muted">To ' . e(trim(($o['to_name'] ?? '') . ' <' . $o['to_email'] . '>')) . ' · ' . e(outboxKindLabel($o['kind'])) . ($o['tag'] === 'decline_letter' ? ' · decline letter' : '')
+        . ($app && $back !== 'app' ? ' · <a href="?tab=applications&amp;app=' . (int)$app['id'] . '">' . e(finRef($app)) . '</a>' : '') . ' · held ' . safeDate('d M H:i', $o['created_at']) . ' by ' . e((string)$o['created_by']) . '</small></div>'
+        . '<span class="badge badge-pending">Waiting for approval</span></div>'
+        . '<iframe class="fa2-ob-frame" sandbox="" srcdoc="' . e($o['body_html']) . '" title="Email preview"></iframe>'
+        . '<form method="post" action="applications_api.php">' . $hidden . '<input type="hidden" name="action" value="outbox_send">'
+        . '<details style="margin:.5rem 0"><summary style="cursor:pointer;font-weight:700;font-size:.85rem;color:#005BA1"><i class="fas fa-pen"></i> Edit before sending</summary>'
+        . '<label style="display:block;font-size:.75rem;font-weight:700;color:#556;margin-top:.5rem">Subject<input class="form-control" name="subject" value="' . e($o['subject']) . '"></label>'
+        . '<label style="display:block;font-size:.75rem;font-weight:700;color:#556;margin-top:.5rem">' . ($o['body_inner'] !== null ? 'Message (HTML — the AHG header and footer are added around it)' : 'Email HTML') . '<textarea class="form-control" name="body" rows="10" style="font-family:monospace;font-size:.78rem">' . e($o['body_inner'] ?? $o['body_html']) . '</textarea></label></details>'
+        . '<button class="btn btn-sm btn-success" type="submit" onclick="return confirm(\'Send this email to the client now?\')"><i class="fas fa-paper-plane"></i> Approve &amp; Send</button></form>'
+        . '<form method="post" action="applications_api.php" style="margin-top:.4rem">' . $hidden . '<input type="hidden" name="action" value="outbox_discard"><button class="btn btn-sm btn-outline" type="submit" onclick="return confirm(\'Discard this email? The client will not receive it.\')"><i class="fas fa-trash"></i> Discard</button></form>'
+        . '</div>';
+};
+
 $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 'btn-primary', string $confirm = '') =>
     '<form method="post" action="applications_api.php" class="fa2-act"><input type="hidden" name="csrf" value="' . $faCsrf . '"><input type="hidden" name="id" value="' . $id . '"><input type="hidden" name="action" value="' . $action . '">'
     . $inner . '<button class="btn btn-sm ' . $cls . '" type="submit"' . ($confirm !== '' ? ' onclick="return confirm(\'' . e($confirm) . '\')"' : '') . '>' . $btn . '</button></form>';
@@ -82,6 +107,12 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
 .fa2-act label { font-size:.75rem; font-weight:700; color:#556; }
 .fa2-act .form-control { padding:.4rem .6rem; font-size:.85rem; }
 .fa2-log { font-size:.8rem; color:#556; max-height:280px; overflow:auto; margin:0; padding-left:1rem; }
+.fa2-ob { border:1.5px solid #f5c842; background:#fffdf6; border-radius:10px; padding:1rem; margin-bottom:1rem; }
+.fa2-ob-top { display:flex; justify-content:space-between; gap:.75rem; align-items:flex-start; flex-wrap:wrap; margin-bottom:.6rem; }
+.fa2-ob-frame { width:100%; height:420px; border:1px solid #e0e8f0; border-radius:8px; background:#fff; }
+.fa2-reasons { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:.3rem .9rem; margin:.4rem 0 .6rem; }
+.fa2-reasons label { display:flex; gap:.4rem; align-items:flex-start; font-size:.82rem; font-weight:600; color:#334; }
+.fa2-letter { width:100%; min-height:380px; font-size:.86rem; line-height:1.55; }
 </style>
 
 <div class="dashboard-header">
@@ -92,12 +123,38 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
   <div style="display:flex;gap:.5rem;flex-wrap:wrap">
     <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/finance_apply.php" target="_blank"><i class="fas fa-up-right-from-square"></i> Finance form</a>
     <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/preauction_request.php" target="_blank"><i class="fas fa-up-right-from-square"></i> Pre-auction form</a>
+    <a class="btn btn-sm <?= $faOutboxN ? 'btn-warning' : 'btn-outline' ?>" href="?tab=applications&amp;view=outbox"><i class="fas fa-inbox"></i> Outbox<?= $faOutboxN ? ' (' . $faOutboxN . ' to approve)' : '' ?></a>
     <a class="btn btn-sm btn-outline" href="?tab=applications&amp;view=settings"><i class="fas fa-sliders"></i> Settings</a>
   </div>
 </div>
 <?= finFlashHtml() ?>
 
-<?php if ($faView === 'settings' && !$faOne): [$mn, $mx, $df] = paRange(); ?>
+<?php if ($faView === 'outbox' && !$faOne): $faPending = outboxPending(); ?>
+  <p><a href="?tab=applications"><i class="fas fa-arrow-left"></i> All applications</a></p>
+  <div class="card" style="overflow:visible;margin-bottom:1.25rem">
+    <div class="fa2-head"><h4><i class="fas fa-inbox"></i> Outbox — client documents waiting for approval</h4><span class="badge" style="color:#003f73"><?= count($faPending) ?></span></div>
+    <div class="fa2-body">
+      <p class="text-muted" style="font-size:.85rem;margin-top:0">Nothing is emailed to a client automatically. Quotes, invoices, decline letters, Buyer Codes, test-drive confirmations, refund and winner letters wait here until you check them and press <strong>Approve &amp; Send</strong>. Password resets, bid alerts and office alerts still go straight out.</p>
+      <?php if (!$faPending): ?><p style="text-align:center;color:#888;padding:1.5rem 0"><i class="fas fa-circle-check" style="color:#1a9e4e"></i> Nothing waiting — every client email has been dealt with.</p><?php endif; ?>
+      <?php foreach ($faPending as $o) echo $faOutboxCard($o); ?>
+    </div>
+  </div>
+  <?php $faRecent = outboxRecent(30); if ($faRecent): ?>
+  <div class="card" style="overflow:visible">
+    <div class="fa2-head"><h4><i class="fas fa-clock-rotate-left"></i> Recently approved / discarded</h4></div>
+    <div style="overflow-x:auto"><table class="fa2-table"><thead><tr><th>Email</th><th>To</th><th>Status</th><th>By</th><th></th></tr></thead><tbody>
+      <?php foreach ($faRecent as $o): ?>
+        <tr style="cursor:default"><td><?= e($o['subject']) ?><br><small class="text-muted"><?= e(outboxKindLabel($o['kind'])) ?><?= $o['app_id'] ? ' · <a href="?tab=applications&amp;app=' . (int)$o['app_id'] . '">application</a>' : '' ?></small></td>
+          <td><?= e($o['to_email']) ?></td>
+          <td><span class="badge <?= ['sent' => 'badge-approved', 'failed' => 'badge-rejected', 'discarded' => 'badge-registered'][$o['status']] ?? 'badge-pending' ?>"><?= e($o['status']) ?></span><?= $o['error'] ? '<br><small>' . e($o['error']) . '</small>' : '' ?></td>
+          <td><small><?= e((string)$o['decided_by']) ?><br><?= safeDate('d M H:i', $o['decided_at']) ?></small></td>
+          <td><?php if ($o['status'] === 'failed'): ?><form method="post" action="applications_api.php"><input type="hidden" name="csrf" value="<?= $faCsrf ?>"><input type="hidden" name="outbox_id" value="<?= (int)$o['id'] ?>"><input type="hidden" name="action" value="outbox_retry"><button class="btn btn-sm btn-outline" type="submit">Try again</button></form><?php endif; ?></td></tr>
+      <?php endforeach; ?>
+    </tbody></table></div>
+  </div>
+  <?php endif; ?>
+
+<?php elseif ($faView === 'settings' && !$faOne): [$mn, $mx, $df] = paRange(); ?>
   <form class="card" method="post" action="applications_api.php" style="overflow:visible">
     <div class="fa2-head"><h4><i class="fas fa-sliders"></i> Finance &amp; Pre-Auction Settings</h4></div>
     <div class="fa2-body">
@@ -147,8 +204,31 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
     </div>
   </form>
 
+  <form class="card" id="letter" method="post" action="applications_api.php" style="overflow:visible;margin-top:1.25rem">
+    <div class="fa2-head"><h4><i class="fas fa-envelope-open-text"></i> Finance Decline Letter Template</h4></div>
+    <div class="fa2-body">
+      <input type="hidden" name="csrf" value="<?= $faCsrf ?>"><input type="hidden" name="action" value="letter_template">
+      <p class="text-muted" style="font-size:.85rem;margin-top:0">When you decline a finance application, the letter is built from this template. It tells the client why, and what they can do to qualify. You can still change every letter before it goes to the Outbox.<br>
+        Placeholders: <code><?= e(implode(' ', FIN_DECLINE_PLACEHOLDERS)) ?></code>. <code>{reasons}</code> lists the reasons you ticked; <code>{steps}</code> lists the matching "what you can do" texts below. Lines starting with <code>- </code> or <code>1. </code> become a list in the email.</p>
+      <textarea class="form-control fa2-letter" name="tpl_fin_decline_letter"><?= e(finDeclineTemplate()) ?></textarea>
+      <h5 style="color:#003f73;margin:1.1rem 0 .3rem">What the client can do — per reason</h5>
+      <?php foreach (FIN_DECLINE_REASONS as $k => [$label]): if ($k === 'other') continue; ?>
+        <label style="display:block;font-size:.78rem;font-weight:700;color:#556;margin:.5rem 0 .15rem"><?= e($label) ?></label>
+        <textarea class="form-control" name="fix_<?= $k ?>" rows="2" style="font-size:.84rem"><?= e(finDeclineFix($k)) ?></textarea>
+      <?php endforeach; ?>
+      <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Letter Template</button>
+        <button class="btn btn-outline" type="submit" name="reset" value="1" onclick="return confirm('Reset the template and all reason texts to the AHG default?')">Reset to default</button></div>
+    </div>
+  </form>
+
 <?php elseif ($faOne): $a = $faOne; $d = $a['details']; $isFin = $a['kind'] === 'finance'; $plan = $isFin ? finChosenPlan($a) : null; $inv = $isFin ? invForApp($a) : paInvoiceRow($a); $invLabel = $inv ? (['draft' => 'Draft — not sent yet', 'pending' => 'Sent', 'pop_uploaded' => 'Proof of payment uploaded', 'approved' => 'Paid', 'declined' => 'Declined'][$inv['status']] ?? $inv['status']) : ''; $wa = finAdminWhatsAppUrl($a); $id = (int)$a['id']; ?>
   <p><a href="?tab=applications"><i class="fas fa-arrow-left"></i> All applications</a></p>
+  <?php $faAppPending = outboxPending($id); if ($faAppPending): ?>
+  <div class="card" style="overflow:visible;margin-bottom:1.25rem">
+    <div class="fa2-head"><h4><i class="fas fa-inbox"></i> Waiting for your approval — not sent to the client yet</h4><span class="badge" style="color:#003f73"><?= count($faAppPending) ?></span></div>
+    <div class="fa2-body"><?php foreach ($faAppPending as $o) echo $faOutboxCard($o, 'app'); ?></div>
+  </div>
+  <?php endif; ?>
   <div class="fa2-grid">
     <div>
       <div class="card" style="overflow:visible;margin-bottom:1.25rem">
@@ -197,7 +277,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
             <a class="btn btn-sm btn-outline" href="<?= e(finLink($a)) ?>" target="_blank"><i class="fas fa-eye"></i> Client page</a>
             <a class="btn btn-sm btn-primary" href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>"><i class="fas fa-file-pen"></i> <?= $inv && $inv['status'] !== 'draft' ? 'Invoice' : 'Review &amp; edit invoice' ?></a>
             <?php if ($inv): ?><a class="btn btn-sm btn-outline" href="invoice_view.php?id=<?= (int)$inv['id'] ?>" target="_blank"><i class="fas fa-print"></i> View / print</a><?php endif; ?>
-            <?php if ($isFin): foreach (['quote' => 'Quote', 'approval' => 'Approval', 'decline' => 'Decline notice'] as $k => $l): ?>
+            <?php if ($isFin): foreach (['quote' => 'Quote', 'approval' => 'Approval', 'decline' => 'Decline letter'] as $k => $l): ?>
               <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/application_doc.php?id=<?= $id ?>&amp;doc=<?= $k ?>" target="_blank"><?= $l ?></a>
             <?php endforeach; elseif ($inv): ?>
               <?php if ($inv['pop_file_path']): ?><a class="btn btn-sm btn-outline" href="serve_pop.php?file=<?= urlencode(basename($inv['pop_file_path'])) ?>" target="_blank"><i class="fas fa-paperclip"></i> Proof of payment</a><?php endif; ?>
@@ -213,11 +293,11 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
         <?php if ($isFin && $a['status'] === 'review'): ?>
           <p style="font-size:.88rem">The assessment <strong>referred</strong> this application: <?= e(implode(' ', $d['assessment']['reasons'] ?? [])) ?> Call the client — then enter a bureau score below, suggest a deposit (this opens the terms to the client), or decline.</p>
         <?php elseif ($isFin && $a['status'] === 'quoted'): ?>
-          <p class="text-muted" style="font-size:.86rem">Waiting for the client to choose a term.</p>
-          <?= $faForm($id, 'resend', '<input type="hidden" name="what" value="quote">', '<i class="fas fa-paper-plane"></i> Email the quote again', 'btn-outline') ?>
+          <p class="text-muted" style="font-size:.86rem">Waiting for the client to choose their payment plan — the client chooses, we never choose it for them.</p>
+          <?= $faForm($id, 'resend', '<input type="hidden" name="what" value="quote">', '<i class="fas fa-paper-plane"></i> Email the quote again (via Outbox)', 'btn-outline') ?>
         <?php elseif ($isFin && $a['status'] === 'chosen'): ?>
           <p style="font-size:.88rem">Client chose <strong><?= $plan ? (int)$plan['months'] . ' months at ' . formatRand($plan['monthly']) : '—' ?></strong> on a deposit of <strong><?= formatRand((float)$a['amount']) ?></strong>.</p>
-          <p style="font-size:.85rem;margin:.2rem 0 .5rem">Approving emails the client the deposit invoice<?= $inv ? ' <strong>' . e($inv['invoice_number']) . '</strong>' : '' ?>. <a href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>">Review &amp; edit it first</a>.</p>
+          <p style="font-size:.85rem;margin:.2rem 0 .5rem">Approving puts the deposit invoice email in the Outbox for you to send<?= $inv ? ' <strong>' . e($inv['invoice_number']) . '</strong>' : '' ?>. <a href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>">Review &amp; edit it first</a>.</p>
           <?= $faForm($id, 'approve_deposit', '', '<i class="fas fa-check"></i> Approve Deposit &amp; Request Documents', 'btn-success') ?>
         <?php elseif ($isFin && $a['status'] === 'invoiced'): $sum = finDocsSummary($a); ?>
           <p style="font-size:.88rem">Deposit invoice <?= e($d['invoice']['number']) ?> (due <?= safeDate('d M', $d['invoice']['due']) ?>). Documents: <strong><?= $sum['uploaded'] ?>/<?= $sum['total'] ?></strong> uploaded, <?= $sum['accepted'] ?> accepted.</p>
@@ -242,10 +322,43 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
         <?php endif; ?>
 
         <?php if (!in_array($a['status'], ['paid', 'approved'], true)): ?>
-          <details style="margin-top:.6rem"><summary style="cursor:pointer;color:#a1271b;font-weight:700;font-size:.85rem">Decline…</summary>
-            <?= $faForm($id, 'decline', '<label>' . (!$isFin && $inv ? 'Reason from the financial institution (emailed)' : 'Reason (emailed politely)') . '<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label>', 'Decline &amp; Notify', 'btn-danger', 'Decline and notify the client?') ?>
+          <details style="margin-top:.6rem"<?= $isFin && $a['status'] === 'review' ? ' open' : '' ?>><summary style="cursor:pointer;color:#a1271b;font-weight:700;font-size:.85rem"><?= $isFin ? 'Decline this finance application…' : 'Decline…' ?></summary>
+            <?php if ($isFin): $faRs = ''; foreach (FIN_DECLINE_REASONS as $k => [$l]) $faRs .= '<label><input type="checkbox" name="reasons[]" value="' . $k . '"' . (($k === 'debt_review' && !empty($d['finances']['debt_review'])) || ($k === 'judgments' && !empty($d['finances']['judgments'])) || ($k === 'affordability' && ($d['assessment']['grade'] ?? '') === 'R') ? ' checked' : '') . '> ' . e($l) . '</label>'; ?>
+              <p style="font-size:.82rem;margin:.4rem 0 0">Tick the reason(s). Nothing is emailed yet — next you check the <strong>decline letter</strong> (built from the template, with what the client can do to qualify) and put it in the Outbox.</p>
+              <?= $faForm($id, 'decline', '<div style="width:100%"><div class="fa2-reasons">' . $faRs . '</div><label>Other reason / your own words (optional)<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label></div>', 'Decline &amp; Write Letter', 'btn-danger', 'Decline this finance application?') ?>
+            <?php else: ?>
+              <?= $faForm($id, 'decline', '<label>' . ($inv ? 'Reason from the financial institution' : 'Reason (polite)') . ' — the notice waits in the Outbox for approval<br><textarea class="form-control" name="note" rows="2" style="width:340px"></textarea></label>', 'Decline', 'btn-danger', 'Decline this request? The notice to the client goes to the Outbox for approval.') ?>
+            <?php endif; ?>
           </details>
         <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($isFin && $a['status'] === 'declined'): $dl = $d['declined'] ?? []; $lt = $dl['letter'] ?? []; $ltReasons = $lt['reasons'] ?? ($dl['reasons'] ?? []); $ltWaiting = !empty($lt['queued_at']) && empty($lt['sent_at']); ?>
+      <div class="card" style="overflow:visible;margin-bottom:1.25rem">
+        <div class="fa2-head"><h4><i class="fas fa-envelope-open-text"></i> Decline Letter — What the Client Can Do</h4>
+          <span class="badge" style="color:<?= !empty($lt['sent_at']) ? '#1a9e4e' : ($ltWaiting ? '#856404' : '#a1271b') ?>"><?= !empty($lt['sent_at']) ? 'Sent ' . safeDate('d M H:i', $lt['sent_at']) : ($ltWaiting ? 'In the Outbox' : (!empty($lt['text']) ? 'Draft — not sent' : 'Not written')) ?></span></div>
+        <div class="fa2-body">
+          <p class="text-muted" style="font-size:.84rem;margin-top:0">Declined <?= safeDate('d M Y H:i', $dl['at'] ?? $a['updated_at']) ?><?= !empty($dl['by']) ? ' by ' . e($dl['by']) : '' ?>. The letter is built from the <a href="?tab=applications&amp;view=settings#letter">decline letter template</a>. Edit it freely, save, then put it in the Outbox — it is only emailed when you approve it there.</p>
+          <form method="post" action="applications_api.php">
+            <input type="hidden" name="csrf" value="<?= $faCsrf ?>"><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="action" value="decline_letter">
+            <div class="fa2-reasons"><?php foreach (FIN_DECLINE_REASONS as $k => [$l]): ?><label><input type="checkbox" name="reasons[]" value="<?= $k ?>"<?= in_array($k, $ltReasons, true) ? ' checked' : '' ?><?= $ltWaiting ? ' disabled' : '' ?>> <?= e($l) ?></label><?php endforeach; ?></div>
+            <?php if (!$ltWaiting): ?>
+              <div class="fa2-act"><label>Other reason (for "Rebuild")<br><input class="form-control" name="note" value="<?= e((string)($dl['reason'] ?? '')) ?>" style="width:320px"></label>
+                <button class="btn btn-sm btn-outline" type="submit" name="mode" value="build" onclick="return confirm('Rebuild the letter from the template? Your edits to the text below are replaced.')"><i class="fas fa-rotate"></i> Rebuild from template</button></div>
+            <?php endif; ?>
+            <textarea class="form-control fa2-letter" name="letter"<?= $ltWaiting ? ' readonly' : '' ?>><?= e($lt['text'] ?? finDeclineLetterBuild($a, $ltReasons, (string)($dl['reason'] ?? ''))) ?></textarea>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem">
+              <?php if (!$ltWaiting): ?>
+                <button class="btn btn-sm btn-outline" type="submit" name="mode" value="save"><i class="fas fa-save"></i> Save draft</button>
+                <button class="btn btn-sm btn-success" type="submit" name="mode" value="queue"><i class="fas fa-inbox"></i> <?= !empty($lt['sent_at']) ? 'Save &amp; send an updated letter (Outbox)' : 'Save &amp; put in Outbox for approval' ?></button>
+              <?php else: ?>
+                <span style="font-size:.85rem;color:#856404"><i class="fas fa-hourglass-half"></i> Waiting in the Outbox — approve or discard it at the top of this page.</span>
+              <?php endif; ?>
+              <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/application_doc.php?id=<?= $id ?>&amp;doc=decline" target="_blank"><i class="fas fa-print"></i> Preview / print letter</a>
+            </div>
+          </form>
+        </div>
       </div>
       <?php endif; ?>
 
@@ -301,7 +414,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
       <div class="card" style="overflow:visible;margin-bottom:1.25rem">
         <div class="fa2-head"><h4>Quote <?= e($d['quote']['number']) ?></h4></div>
         <table class="fa2-table"><thead><tr><th>Term</th><th>p/m</th><th>Monthly</th></tr></thead><tbody>
-          <?php foreach ($d['quote']['plans'] as $p): ?><tr style="cursor:default<?= $plan && $plan['months'] === $p['months'] ? ';background:#f1fbf5;font-weight:700' : '' ?><?= finPlanAllowed($p) ? '' : ';opacity:.5' ?>"><td><?= $p['months'] ?> months<?= finPlanAllowed($p) ? '' : ' <small>(over budget)</small>' ?></td><td><?= $p['rate'] ?>%</td><td><?= formatRand($p['monthly']) ?></td></tr><?php endforeach; ?>
+          <?php foreach ($d['quote']['plans'] as $p): ?><tr style="cursor:default<?= $plan && $plan['months'] === $p['months'] ? ';background:#f1fbf5;font-weight:700' : '' ?>"><td><?= $p['months'] ?> months<?= finPlanInBudget($p) ? '' : ' <small style="color:#a15c00">(above budget guide)</small>' ?></td><td><?= $p['rate'] ?>%</td><td><?= formatRand($p['monthly']) ?></td></tr><?php endforeach; ?>
         </tbody></table>
       </div>
       <?php endif; ?>
@@ -318,7 +431,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
         <div class="fa2-head"><h4><i class="fas fa-clock-rotate-left"></i> History</h4></div>
         <div class="fa2-body"><ul class="fa2-log">
           <?php foreach (array_reverse($d['log'] ?? []) as $l): ?><li><?= safeDate('d M H:i', $l['at']) ?> · <?= e($l['by']) ?> — <?= e($l['what']) ?></li><?php endforeach; ?>
-          <?php foreach (array_reverse($d['emails'] ?? []) as $m): ?><li><?= safeDate('d M H:i', $m['at']) ?> · email — <?= e($m['what']) ?> <?= $m['ok'] ? '✓' : '<strong style="color:#c00">FAILED</strong>' ?></li><?php endforeach; ?>
+          <?php foreach (array_reverse($d['emails'] ?? []) as $m): ?><li><?= safeDate('d M H:i', $m['at']) ?> · email — <?= e($m['what']) ?> <?= $m['ok'] ? (str_contains($m['what'], 'waiting for admin approval') ? '⏳' : '✓') : '<strong style="color:#c00">FAILED</strong>' ?></li><?php endforeach; ?>
         </ul></div>
       </div>
     </div>

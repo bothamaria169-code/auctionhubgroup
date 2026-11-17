@@ -73,8 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'New Finance Application — REFERRED (score ' . $as['score'] . '/100): please call the client'
                 : 'New Finance Application — score ' . $as['score'] . '/100, grade ' . $as['grade']);
             finFlash('success', $app['status'] === 'review'
-                ? 'Thank you — your application is in. Our finance team will call you within one business day to discuss your options (we have emailed you the details).'
-                : 'Your result and quote have been emailed to <strong>' . e($f['email']) . '</strong>. Choose your repayment term below.');
+                ? 'Thank you — your application is in. Our finance team will call you within one business day to discuss your options. Keep the link to this page — it is private to you.'
+                : 'Your result and quote are below — choose the payment plan that suits you. Our finance team also emails you a copy at <strong>' . e($f['email']) . '</strong> once they have checked it.');
             header('Location: ' . finLink($app, 'plans'));
             exit;
         } catch (Throwable $e) {

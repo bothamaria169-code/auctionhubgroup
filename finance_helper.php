@@ -11,8 +11,10 @@
 //     quote          credit profile, consent) → scored out of 100 (finAssess):
 //                    grade A approved in principle; B–D need a start-up deposit;
 //                    R (no room in the budget) referred to the office. Instant
-//                    quote at the required deposit; only affordable terms open.
-//   2 Term           the client chooses 6–48 months (up to 72 on trucks & plant).
+//                    quote at the required deposit; every term is offered (terms
+//                    above the budget guide are flagged, never blocked).
+//   2 Term           the CLIENT chooses 6–48 months (up to 72 on trucks & plant) —
+//                    the office never chooses the payment plan for them.
 //   3 Documents &    office approves the deposit (deposit invoice), suggests a
 //     deposit        higher one, or declines. Client uploads SA ID, proof of
 //                    address, 3 months' bank statements, payslip, licence and
@@ -587,8 +589,13 @@ function finMarkAffordable(array &$app): void {
     unset($p);
 }
 
-/** True when the client may choose this plan (old applications have no assessment: all plans). */
+/** The client chooses their own payment plan: every quoted term can be chosen. */
 function finPlanAllowed(array $plan): bool {
+    return true;
+}
+
+/** Guide only: is the instalment within the budget from the assessment? (No assessment: yes.) */
+function finPlanInBudget(array $plan): bool {
     return !array_key_exists('affordable', $plan) || $plan['affordable'];
 }
 
@@ -1002,8 +1009,9 @@ function finViewingLabel(?array $v): string {
 
 // ── Email (AHG template from email_helper.php) ────────────────
 
-function finMailClient(array $app, string $subject, string $bodyHtml, string $button = 'View my application', string $anchor = ''): bool {
+function finMailClient(array $app, string $subject, string $bodyHtml, string $button = 'View my application', string $anchor = '', string $tag = ''): bool {
     try {
+        if (function_exists('outboxTakeHeld')) outboxTakeHeld();
         $mail = _buildMailer();
         $mail->addAddress($app['email'], $app['name']);
         $mail->Subject = $subject . ' | ' . finRef($app);
@@ -1013,6 +1021,8 @@ function finMailClient(array $app, string $subject, string $bodyHtml, string $bu
               . '<p style="font-size:13px;color:#888;">This link is private to you. Questions? Contact us at <a href="mailto:' . COMPANY_EMAIL . '">' . COMPANY_EMAIL . '</a> or ' . COMPANY_PHONE . '.</p>';
         $mail->Body = _emailTemplate($subject, $body);
         $mail->AltBody = strip_tags(str_replace(['</p>', '<br>', '</li>'], "\n", $bodyHtml)) . "\n\nYour application: " . finLink($app, $anchor);
+        // Held in the Outbox until an admin approves it (outbox_helper.php); the admin can edit $body there.
+        if (function_exists('outboxContext')) outboxContext(['app_id' => (int)$app['id'], 'inner' => $body, 'title' => $subject, 'tag' => $tag ?: null]);
         return _sendMail($mail, 'fin_' . $app['kind']);
     } catch (Throwable $e) {
         error_log('[AHG fin] client mail: ' . $e->getMessage());
@@ -1040,15 +1050,16 @@ function finMailOffice(array $app, string $what): void {
 }
 
 function finRecordMail(array &$app, string $what, bool $ok): void {
-    $app['details']['emails'][] = ['at' => date('Y-m-d H:i:s'), 'what' => $what, 'ok' => $ok];
+    $held = function_exists('outboxTakeHeld') ? outboxTakeHeld() : 0;
+    $app['details']['emails'][] = ['at' => date('Y-m-d H:i:s'), 'what' => $held ? $what . ' — in the Outbox, waiting for admin approval' : $what, 'ok' => $ok];
 }
 
 function finSendQuote(array &$app): bool {
     $q = $app['details']['quote'];
     $review = $app['status'] === 'review';
     $rows = '';
-    foreach ($q['plans'] as $p) if (finPlanAllowed($p)) $rows .= '<p><strong>' . $p['months'] . ' months:</strong> ' . formatRand($p['monthly']) . ' / month</p>';
-    if ($rows === '') $rows = '<p>None of the terms fit your budget at this deposit yet — our finance team will call you.</p>';
+    foreach ($q['plans'] as $p) $rows .= '<p><strong>' . $p['months'] . ' months:</strong> ' . formatRand($p['monthly']) . ' / month'
+        . (finPlanInBudget($p) ? '' : ' <span style="color:#a15c00">(above the budget guide from your assessment)</span>') . '</p>';
     $intro = !empty($q['counter'])
         ? '<p>Thank you for your patience. We are not able to approve a deposit of ' . formatRand((float)(end($app['details']['quotes_old'])['deposit'] ?? 0))
           . ' on this vehicle, but we <strong>can approve a deposit of ' . formatRand($q['deposit']) . '</strong>. Your updated quote is below.</p>'
@@ -1064,7 +1075,7 @@ function finSendQuote(array &$app): bool {
         . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand($q['price']) . '</p><p><strong>Your deposit:</strong> ' . formatRand($q['deposit']) . '</p><p><strong>Amount financed:</strong> ' . formatRand($q['financed']) . '</p></div>'
         . '<h3 style="color:#005BA1;font-size:16px;">Your monthly options</h3><div class="highlight-box">' . $rows . '</div>'
         . ($review ? '<p>Our finance team will call you within one business day to talk through your options.</p>'
-                   : '<p><strong>Next:</strong> choose your repayment term on your application page. Quote valid until ' . date('j F Y', strtotime($q['valid'])) . '.</p>');
+                   : '<p><strong>Next:</strong> you choose the payment plan that suits you on your application page. Quote valid until ' . date('j F Y', strtotime($q['valid'])) . '.</p>');
     $ok = finMailClient($app, $review ? 'Your Finance Application — We Will Call You' : (!empty($q['counter']) ? 'Your Updated Finance Quote' : 'Your Finance Result & Quote'),
         $body, $review ? 'View My Application' : 'Choose My Term', $review ? 'result' : 'plans');
     finRecordMail($app, 'Quote ' . $q['number'], $ok);
@@ -1124,12 +1135,19 @@ function finCounterDeposit(array &$app, float $deposit, string $note, string $by
     return '';
 }
 
-/** Polite decline (finance, or a pre-auction request before any invoice). */
-function finDecline(array &$app, string $reason, string $by): void {
+/**
+ * Decline. Finance: nothing is emailed — the office then builds the decline letter
+ * (what the client can do to fix it) and approves it in the Outbox.
+ * Pre-auction request before any invoice: a polite email (held in the Outbox).
+ */
+function finDecline(array &$app, string $reason, string $by, array $reasons = []): void {
     $app['status'] = 'declined';
-    $app['details']['declined'] = ['at' => date('Y-m-d H:i:s'), 'reason' => $reason];
-    finLog($app, 'Declined' . ($reason !== '' ? ': ' . $reason : ''), $by);
+    $app['details']['declined'] = ['at' => date('Y-m-d H:i:s'), 'reason' => $reason,
+        'reasons' => array_values(array_intersect($reasons, array_keys(FIN_DECLINE_REASONS))), 'by' => $by];
+    $labels = array_map(fn($k) => FIN_DECLINE_REASONS[$k][0], $app['details']['declined']['reasons']);
+    finLog($app, 'Declined' . ($labels ? ' (' . implode('; ', $labels) . ')' : '') . ($reason !== '' ? ': ' . $reason : ''), $by);
     $isFin = $app['kind'] === 'finance';
+    if ($isFin) return;   // the office writes the decline letter next (finDeclineLetterBuild)
     $ok = finMailClient($app, $isFin ? 'Your Finance Application' : 'Your Pre-Auction Purchase Request',
         '<p>Thank you for your trust in Auction Hub Group. We are sorry to let you know that we are <strong>not able to proceed</strong> with your '
         . ($isFin ? 'finance application' : 'pre-auction request') . ' on this vehicle.</p>'
@@ -1139,6 +1157,145 @@ function finDecline(array &$app, string $reason, string $by): void {
         'View my application');
     finRecordMail($app, 'Decline', $ok);
 }
+
+// ── Finance: decline letter (what the client can do) ─────────
+
+/** Reason => [label shown to the office, default "what you can do" text]. The office can change the text in Settings. */
+const FIN_DECLINE_REASONS = [
+    'affordability' => ['The instalment is more than the budget allows',
+        "Choose a vehicle with a lower price, or pay a bigger deposit so that the monthly instalment fits your budget. Paying off or closing small accounts (store cards, clothing accounts, personal loans) also frees up money each month."],
+    'credit_score'  => ['Credit score below our minimum',
+        "Get your free credit report (you are entitled to one free report a year from TransUnion, Experian, XDS or Compuscan). Check it for mistakes and dispute any you find. Pay every account on time for the next 3 to 6 months and keep credit-card and store-card balances low; your score improves month by month."],
+    'adverse'       => ['Adverse listings / accounts in arrears',
+        "Contact the creditors on your credit report and settle the accounts in arrears, or agree on a payment plan. Ask each creditor for a paid-up letter; the credit bureau updates the listing once the account is settled."],
+    'judgments'     => ['Civil judgment(s) on the credit record',
+        "Settle the judgment debt and ask the creditor for a letter of consent to rescind the judgment. Once the judgment is rescinded it is removed from your credit record."],
+    'debt_review'   => ['Client is under debt review',
+        "Vehicle finance cannot be granted while you are under debt review. When the debts in your plan are paid up, your debt counsellor issues a clearance certificate. Send it to us with your new application."],
+    'income'        => ['Income could not be verified',
+        "Send your latest 3 months' payslips together with 3 months' bank statements that show your salary being paid in. If you are self-employed, send 6 months' bank statements and a letter from your accountant."],
+    'employment'    => ['Time in current employment too short / not permanent',
+        "Apply again once you have been in your current job for at least 6 months, or send a letter from your employer confirming that your position is permanent."],
+    'documents'     => ['Documents incomplete or not readable',
+        "Upload clear, complete copies: SA ID (both sides), proof of address not older than 3 months, latest 3 months' bank statements, latest payslip and your driver's licence."],
+    'deposit'       => ['Deposit too low for approval',
+        "Save towards the start-up deposit we quoted, then apply again. Remember: every invoice is payable within 24 hours of receiving it."],
+    'other'         => ['Other (write the reason below)', ''],
+];
+
+const FIN_DECLINE_LETTER_DEFAULT = "Dear {name},
+
+FINANCE APPLICATION {reference} — {vehicle}
+
+Thank you for applying for vehicle finance with {company}. After assessing your application, we are unfortunately not able to approve it at this time ({date}).
+
+The reason(s):
+{reasons}
+
+What you can do to qualify:
+{steps}
+
+This decision applies to this application only. Once you have dealt with the point(s) above you are welcome to apply again at {apply_link}. New bank-stock vehicles arrive every week, and our consultants will gladly help you choose a vehicle that fits your budget.
+
+If you have any questions, call us on {phone}, WhatsApp {whatsapp} or email {email}.
+
+Kind regards,
+The Finance Team
+{company}";
+
+/** Placeholders the template may use. */
+const FIN_DECLINE_PLACEHOLDERS = ['{name}', '{reference}', '{vehicle}', '{date}', '{reasons}', '{steps}', '{company}', '{phone}', '{whatsapp}', '{email}', '{apply_link}'];
+
+/** The "what you can do" text for a reason (the office edits it in Settings). */
+function finDeclineFix(string $key): string {
+    return finSetting('fin_fix_' . $key, FIN_DECLINE_REASONS[$key][1] ?? '');
+}
+
+function finDeclineTemplate(): string {
+    return finSetting('tpl_fin_decline_letter', FIN_DECLINE_LETTER_DEFAULT);
+}
+
+/** Builds the letter text from the template and the chosen reasons. $extra = the office's own words. */
+function finDeclineLetterBuild(array $app, array $reasons, string $extra = ''): string {
+    $reasons = array_values(array_intersect($reasons, array_keys(FIN_DECLINE_REASONS)));
+    $why = $steps = [];
+    $n = 0;
+    foreach ($reasons as $k) {
+        if ($k === 'other') continue;
+        $why[] = '- ' . FIN_DECLINE_REASONS[$k][0];
+        $fix = finDeclineFix($k);
+        if ($fix !== '') $steps[] = (++$n) . '. ' . $fix;
+    }
+    if (trim($extra) !== '') $why[] = '- ' . preg_replace('/\s+/', ' ', trim($extra));
+    if (!$why) $why[] = '- The application did not meet our current finance criteria.';
+    if (!$steps) $steps[] = '1. Contact our finance team: we will explain what is needed and help you with a new application.';
+    $vars = ['{name}' => $app['name'], '{reference}' => finRef($app), '{vehicle}' => $app['vehicle'],
+             '{date}' => date('j F Y', strtotime($app['details']['declined']['at'] ?? 'now')),
+             '{reasons}' => implode("\n", $why), '{steps}' => implode("\n", $steps),
+             '{company}' => COMPANY_NAME, '{phone}' => COMPANY_PHONE, '{whatsapp}' => defined('COMPANY_WHATSAPP') ? COMPANY_WHATSAPP : COMPANY_PHONE,
+             '{email}' => COMPANY_EMAIL, '{apply_link}' => APP_URL . '/finance_apply.php'];
+    return strtr(finDeclineTemplate(), $vars);
+}
+
+/** Plain-text letter → safe HTML (paragraphs, "- " bullets, "1. " numbered steps, a capitals line as a heading). */
+function finLetterHtml(string $text): string {
+    $out = '';
+    foreach (preg_split('/\R{2,}/', trim($text)) as $block) {
+        $lines = preg_split('/\R/', $block);
+        $head = '';
+        // "Heading:\n- item" → heading paragraph + list
+        if (count($lines) > 1 && !preg_match('/^\s*(-|\d+\.)\s+/', $lines[0])) {
+            $rest = array_slice($lines, 1);
+            if (count(array_filter($rest, fn($l) => preg_match('/^\s*(-|\d+\.)\s+/', $l))) === count($rest)) {
+                $head = '<p><strong>' . e($lines[0]) . '</strong></p>';
+                $lines = $rest;
+            }
+        }
+        $isList = count(array_filter($lines, fn($l) => preg_match('/^\s*(-|\d+\.)\s+/', $l))) === count($lines);
+        if ($isList) {
+            $tag = preg_match('/^\s*\d+\./', $lines[0]) ? 'ol' : 'ul';
+            $out .= $head . '<' . $tag . ' style="margin:0 0 12px 20px;padding:0;line-height:1.7">';
+            foreach ($lines as $l) $out .= '<li>' . e(preg_replace('/^\s*(-|\d+\.)\s+/', '', $l)) . '</li>';
+            $out .= '</' . $tag . '>';
+        } elseif (count($lines) === 1 && mb_strlen($lines[0]) > 6 && mb_strtoupper($lines[0]) === $lines[0] && preg_match('/[A-Z]/', $lines[0])) {
+            $out .= '<p><strong>' . e($lines[0]) . '</strong></p>';
+        } else {
+            $out .= '<p>' . nl2br(e($block)) . '</p>';
+        }
+    }
+    return $out;
+}
+
+/** Saves the letter on the application (a draft — nothing is sent). */
+function finDeclineLetterSave(array &$app, string $text, array $reasons, string $by): string {
+    if ($app['status'] !== 'declined') return 'Decline the application first.';
+    $text = trim(mb_substr(str_replace("\r\n", "\n", $text), 0, 12000));
+    if ($text === '') return 'The letter is empty.';
+    $old = $app['details']['declined']['letter'] ?? [];
+    if (!empty($old['queued_at']) && empty($old['sent_at'])) return 'This letter is waiting in the Outbox — send or discard it there before changing it.';
+    $app['details']['declined']['letter'] = ['text' => $text,
+        'reasons' => array_values(array_intersect($reasons, array_keys(FIN_DECLINE_REASONS))),
+        'by' => $by, 'updated_at' => date('Y-m-d H:i:s'), 'sent_at' => $old['sent_at'] ?? null];
+    return '';
+}
+
+/** Puts the letter in the Outbox — it is emailed only when an admin approves it there. */
+function finDeclineLetterQueue(array &$app, string $by): string {
+    $l = $app['details']['declined']['letter'] ?? null;
+    if (empty($l['text'])) return 'Write the letter first.';
+    if (!empty($l['queued_at']) && empty($l['sent_at'])) return 'This letter is already waiting in the Outbox.';
+    $ok = finMailClient($app, 'Your Finance Application — What You Can Do Next',
+        finLetterHtml($l['text'])
+        . '<p><a href="' . e(finDocLink($app, 'decline')) . '">View &amp; download this letter</a></p>',
+        'View My Application', '', 'decline_letter');
+    finRecordMail($app, 'Decline letter', $ok);
+    if (!$ok) return 'The letter could not be put in the Outbox.';
+    $app['details']['declined']['letter']['queued_at'] = date('Y-m-d H:i:s');
+    $app['details']['declined']['letter']['sent_at'] = null;
+    finLog($app, 'Decline letter put in the Outbox for approval', $by);
+    return '';
+}
+
 
 function finApprove(array &$app, string $by): string {
     if ($app['status'] !== 'invoiced') return 'Only an application with a deposit invoice can be approved.';

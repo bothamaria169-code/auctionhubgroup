@@ -36,7 +36,10 @@ $q     = $d['quote'] ?? [];
 $plan  = finChosenPlan($app);
 $vin   = $doc === 'approval' ? vinForAuction((int)$app['auction_id']) : '';
 $R     = fn($n) => 'R' . number_format((float)$n, 2, '.', ',');
-$tag   = ['quote' => 'Finance Quote', 'invoice' => 'Deposit Invoice', 'approval' => 'Finance Approval', 'decline' => 'Notice'][$doc];
+$tag   = ['quote' => 'Finance Quote', 'invoice' => 'Deposit Invoice', 'approval' => 'Finance Approval', 'decline' => 'Decline Letter'][$doc];
+// The decline letter written by the office; clients only see it once an admin has sent it.
+$letter = $doc === 'decline' ? ($d['declined']['letter'] ?? []) : [];
+$showLetter = !empty($letter['text']) && (!empty($_GET['id']) || !empty($letter['sent_at']));
 $num   = match ($doc) { 'quote' => $q['number'], 'invoice' => $d['invoice']['number'], default => finRef($app) };
 $date  = match ($doc) { 'quote' => $q['issued'], 'invoice' => $d['invoice']['issued'], 'approval' => $d['approved_at'] ?? $app['updated_at'], default => $d['declined']['at'] ?? $app['updated_at'] };
 header('X-Robots-Tag: noindex, nofollow');
@@ -169,7 +172,7 @@ header('X-Robots-Tag: noindex, nofollow');
   </table></div>
   <h3>Your Repayment Options</h3>
   <table class="items"><thead><tr><th>Term</th><th>Rate (p/m)</th><th>Monthly</th><th>Total repayable</th></tr></thead><tbody>
-    <?php foreach (array_filter($q['plans'], 'finPlanAllowed') as $p): $on = $plan && (int)$plan['months'] === (int)$p['months']; ?>
+    <?php foreach ($q['plans'] as $p): $on = $plan && (int)$plan['months'] === (int)$p['months']; ?>
       <tr class="<?= $on ? 'on' : '' ?>"><td><?= (int)$p['months'] ?> months<?= $on ? ' ✓' : '' ?></td><td><?= rtrim(rtrim(number_format($p['rate'], 2), '0'), '.') ?>%</td><td class="money"><?= $R($p['monthly']) ?></td><td class="money"><?= $R($p['total']) ?></td></tr>
     <?php endforeach; ?>
   </tbody></table>
@@ -213,6 +216,9 @@ header('X-Robots-Tag: noindex, nofollow');
     <li>Bring your ID and driver's licence. You have 1 hour 30 minutes to test drive and inspect.</li><li>Sign your finance agreement and drive away.</li></ol>
   <div class="sign"><div><div class="line"></div><div class="sl">For <?= e(COMPANY_NAME) ?></div></div><div><div class="line"></div><div class="sl">Client: <?= e($app['name']) ?></div></div></div>
 
+<?php elseif ($showLetter): ?>
+  <?php if (!empty($_GET['id']) && empty($letter['sent_at'])): ?><div class="box" style="border-color:#f5c842;background:#fffaf0">Draft — not sent to the client yet (approve it in the Outbox).</div><?php endif; ?>
+  <div class="body letter" style="margin-top:12px"><?= finLetterHtml($letter['text']) ?></div>
 <?php else: ?>
   <p class="body" style="margin-top:12px">Dear <?= e($app['name']) ?>,</p>
   <p class="body">Thank you for your trust in Auction Hub Group. We regret that we are <strong>not able to proceed</strong> with your finance application on the vehicle above.</p>

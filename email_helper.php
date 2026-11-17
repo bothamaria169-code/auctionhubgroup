@@ -9,6 +9,8 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
+require_once __DIR__ . '/outbox_helper.php';   // client documents wait for an admin before they are emailed
+
 // ── Internal: build a configured PHPMailer instance ──────────
 function _buildMailer(string $fromEmail = MAIL_FROM_EMAIL, string $fromName = MAIL_FROM_NAME, string $username = MAIL_USERNAME, string $password = MAIL_PASSWORD): PHPMailer {
     $mail = new PHPMailer(true);
@@ -124,6 +126,8 @@ function _emailTemplate(string $title, string $bodyContent, bool $replyable = fa
 
 // ── Internal: safe send with error logging ────────────────────
 function _sendMail(PHPMailer $mail, string $context = ''): bool {
+    // Client documents (quotes, invoices, letters…) wait in the Outbox until an admin approves them.
+    if (outboxShouldHold($context) && outboxHold($mail, $context)) return true;
     // If email is disabled (e.g. local dev without SMTP), skip silently
     if (!defined('EMAIL_ENABLED') || !EMAIL_ENABLED) {
         error_log("AHG Email SKIPPED [{$context}]: EMAIL_ENABLED is false");

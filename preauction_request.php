@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             finRecordMail($app, 'Request received', $ok);
             finSave($app);
             finMailOffice($app, 'New Pre-Auction Request — issue the proforma invoice');
-            finFlash('success', 'Your request is in. Our team issues your proforma invoice shortly — you can follow every step on this page (we have emailed you the link).');
+            finFlash('success', 'Your request is in. Our team issues your proforma invoice shortly — you can follow every step on this page. Keep the link to this page — it is private to you.');
             header('Location: ' . finLink($app));
             exit;
         } catch (Throwable $e) {
