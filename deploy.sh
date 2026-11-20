@@ -147,6 +147,20 @@ HTACCESS
     echo "Security block added to .htaccess (backup saved next to it)."
 fi
 
+# ── 4. Real 404 page (added once) ──────────────────────────────────
+# Missing URLs used to show the homepage with status 200 (a "soft 404" to
+# Google). Point Apache/LiteSpeed's 404 handler at 404.php. index.php also
+# hands non-homepage URLs to 404.php, in case another rule routes them there.
+if [ -f .htaccess ] && ! grep -qF "# BEGIN AHG-404" .htaccess; then
+    cp .htaccess ".htaccess.bak-$(date +%Y%m%d%H%M%S)"
+    printf '
+# BEGIN AHG-404 - added by deploy.sh; keep this block
+ErrorDocument 404 /404.php
+# END AHG-404
+' >> .htaccess
+    echo "404 page enabled in .htaccess (backup saved next to it)."
+fi
+
 if [ -f "$DEPLOYPATH/config.secrets.php" ] && [ ! -f "$HOME/config.secrets.php" ]; then
     echo "Tip: move config.secrets.php from public_html to $HOME (safer; config.php finds it there)."
 fi

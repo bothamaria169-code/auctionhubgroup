@@ -5,6 +5,16 @@
 // why Auction Hub Group, live bid activity, upcoming CTA, contact, footer
 // ============================================================
 
+// The live server sends every missing URL to this file. Anything that is not
+// the homepage itself gets the real 404 page (status 404, noindex) instead of
+// a copy of the homepage, which Google treats as a "soft 404".
+$ahgBase = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
+$ahgPath = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+if (!in_array($ahgPath, [$ahgBase, $ahgBase . '/', $ahgBase . '/index.php'], true)) {
+    require __DIR__ . '/404.php';
+    return;
+}
+
 $pageTitle       = 'Bank Repossessed Car Auctions in South Africa';
 $pageDescription = 'Browse repossessed and bank auction vehicles. Register to bid on quality cars across South Africa. DEKRA inspected, verified, and priced below market value.';
 $bodyClass       = 'page-home';
