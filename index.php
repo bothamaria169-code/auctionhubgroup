@@ -9,7 +9,7 @@ $pageTitle       = 'Bank Repossessed Car Auctions in South Africa';
 $pageDescription = 'Browse repossessed and bank auction vehicles. Register to bid on quality cars across South Africa. DEKRA inspected, verified, and priced below market value.';
 $bodyClass       = 'page-home';
 
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 
 // ── DATA QUERIES ──────────────────────────────────────────────
 
@@ -1334,4 +1334,4 @@ function scrollTestimonials(dir) {
 </section>
 
 
-<?php require_once 'footer.php'; ?>
+<?php require_once __DIR__ . '/footer.php'; ?>

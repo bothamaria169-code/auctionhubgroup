@@ -42,8 +42,32 @@ umask 022
 cd "$SRC"
 FILES="$(mktemp)"
 git ls-files | grep -vE '^(\.gitignore|\.gitattributes|\.editorconfig|\.cpanel\.yml|deploy\.sh|\.htaccess|composer\.(json|lock)|config\.secrets\.example\.php|[^/]+\.md)$|^(\.claude|docs|tools|private)/' > "$FILES"
-tar -cf - -T "$FILES" | tar -xf - -C "$DEPLOYPATH" --no-same-owner --no-same-permissions
+# --touch: give every copied file a fresh modified time, so LiteSpeed's PHP
+# opcache sees the change and recompiles (20 Nov 2026: the live index.php
+# kept serving old code after a deploy and the homepage went white).
+# A tar error no longer stops the deploy silently: step 1b lists any file
+# that did not update, by name, in the deploy log.
+tar -cf - -T "$FILES" | tar -xf - -C "$DEPLOYPATH" --no-same-owner --no-same-permissions --touch     || echo "WARNING: tar reported errors while copying (see the check below)."
 echo "Files copied ($(wc -l < "$FILES") files)."
+
+# ── 1b. Check: every live file must now match the git copy ─────────
+BAD=0
+while IFS= read -r f; do
+    if ! cmp -s "$SRC/$f" "$DEPLOYPATH/$f"; then
+        # Retry once after removing the old file (a read-only or wrongly
+        # owned file can block an overwrite but not a delete-and-copy).
+        rm -f -- "$DEPLOYPATH/$f" 2>/dev/null || true
+        mkdir -p "$DEPLOYPATH/$(dirname "$f")"
+        cp -f -- "$SRC/$f" "$DEPLOYPATH/$f" 2>/dev/null || true
+        if ! cmp -s "$SRC/$f" "$DEPLOYPATH/$f"; then
+            echo "  NOT UPDATED: $f (check its permissions in File Manager)"
+            BAD=$((BAD + 1))
+        else
+            echo "  fixed on retry: $f"
+        fi
+    fi
+done < "$FILES"
+if [ "$BAD" -eq 0 ]; then echo "Check passed: all live files match git."; else echo "Check FAILED: $BAD file(s) did not update."; fi
 
 # Standard cPanel permissions for everything the deploy manages:
 # public_html and folders 755, files 644. uploads/, vendor/ etc. untouched.
