@@ -479,7 +479,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
                 ['4','fa-id-badge','#25D366','Receive Your Unique Buyer Code',
                  'Once payment is verified with the financial institution, you receive your unique <strong>Buyer Code</strong> by email. This code is your exclusive access pass to the vehicle — <strong>no Buyer Code, no entry</strong>.'],
                 ['5','fa-car-side','#ef4444','Test Drive &amp; Inspect — Then Decide',
-                 'Arrive at our premises with your Buyer Code. You have a full <strong>1 hour 30 minutes</strong> to test drive and inspect the vehicle — bring your own mechanic. You can <strong>proceed with the purchase, cancel the deal for a full refund, or switch to your nominated alternative vehicle</strong>.'],
+                 'Arrive at our premises with your Buyer Code. You have a full <strong>1 hour 30 minutes</strong> to test drive and inspect the vehicle — bring your own mechanic. You can <strong>proceed with the purchase, cancel the deal for a full refund, or switch to your nominated alternative vehicle</strong>. Once you are happy with the vehicle, you sign off your final decision.'],
             ];
             foreach ($steps as [$num, $icon, $color, $title, $desc]):
             ?>

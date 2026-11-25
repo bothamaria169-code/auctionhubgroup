@@ -1040,6 +1040,7 @@ function finMailOffice(array $app, string $what): void {
                  ['Price', formatRand((float)$app['price'])],
                  [$app['kind'] === 'finance' ? 'Deposit' : 'Commitment fee', $app['kind'] === 'finance' ? formatRand((float)$app['amount']) : paPercent($app) . '% = ' . formatRand(paCommitment($app))],
                  ['Status', finStatusLabel($app)]];
+        if (!empty($app['details']['bank']['name'])) $rows[] = ['Client bank', $app['details']['bank']['name']];
         $body = '<h2>' . e($what) . '</h2><div class="highlight-box">';
         foreach ($rows as [$k, $v]) $body .= '<p><strong>' . e($k) . ':</strong> ' . e($v) . '</p>';
         $body .= '</div><a class="cta-btn" href="' . APP_URL . '/admin_dashboard.php?tab=applications&app=' . (int)$app['id'] . '">Open in Admin</a>';
@@ -1363,7 +1364,7 @@ function finApprove(array &$app, string $by): string {
         . '<p style="margin:0;font-size:24px;font-weight:900;color:#005BA1;letter-spacing:.1em;">' . e($code) . '</p></div>'
         . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
         . '<li>Our team contacts you to book your test-drive date</li><li>Present your <strong>Buyer Code</strong> at ' . e(COMPANY_ADDRESS) . '</li>'
-        . '<li>Bring your ID and driver\'s licence</li><li>Sign your finance agreement and drive away</li></ol>',
+        . '<li>Bring your ID and driver\'s licence</li><li>Test drive and inspect the vehicle, then sign off your final decision once you are happy with it</li><li>Sign your finance agreement and drive away</li></ol>',
         'View My Application', 'viewing');
     finRecordMail($app, 'Approval + Buyer Code', $ok);
     return '';

@@ -44,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL))   $errors['email'] = 'Please enter a valid email — your invoice and Buyer Code are sent there.';
     if (!finValidPhone($phone))                       $errors['phone'] = 'Please enter a number we can call or WhatsApp.';
     if (mb_strlen($address) < 8)                      $errors['address'] = 'Please enter your physical address.';
+    $bankName = (string)($_POST['bank_name'] ?? '');
+    if (!in_array($bankName, FIN_BANKS, true))        $errors['bank_name'] = 'Please tell us which bank you bank with.';
     if (!$vehicle)                                    $errors['auction_id'] = 'Please choose the vehicle you want to secure.';
     if (empty($_POST['agree']))                       $errors['agree'] = 'Please tick to confirm.';
     if (!$errors && enquiryRateLimited(6, 900))       $errors['form'] = 'You have sent several requests already — we will be in touch. For anything urgent call ' . COMPANY_PHONE . '.';
@@ -53,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $app = finCreate('preauction', ['name' => $name, 'email' => $email, 'phone' => $phone, 'user_id' => $pageUser['sub'] ?? null], $vehicle, 0, null, [
                 'id_number' => $idNo,
                 'address'   => $address,
+                'bank'      => ['name' => $bankName],
                 'mechanic'  => !empty($_POST['mechanic']),
                 'alt'       => $alt ? ['id' => (int)$alt['id'], 'title' => finVehicleTitle($alt), 'price' => finPrice($alt)] : null,
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
@@ -68,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . '<li>Our team issues your personalised <strong>proforma invoice</strong>, with your commitment fee and outstanding balance — usually within the hour</li>'
                 . '<li>Pay the commitment fee within <strong>24 hours of receiving your invoice</strong>, otherwise the vehicle will be sold to another buyer, and upload your proof of payment</li>'
                 . '<li>The vehicle is marked <strong>Presold</strong> under your name and your <strong>Buyer Code</strong> is emailed to you</li>'
-                . '<li>Our team contacts you to book your test drive: <strong>1 hour 30 minutes</strong> — then proceed, switch to your alternative, or cancel for a refund</li></ol>',
+                . '<li>Our team contacts you to book your test drive and inspection: <strong>1 hour 30 minutes</strong></li><li>Once you are happy with the vehicle, you sign off your final decision: proceed, switch to your alternative, or cancel for a refund</li></ol>',
                 'Follow My Request');
             finRecordMail($app, 'Request received', $ok);
             finSave($app);
@@ -127,6 +130,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
           <div class="<?= $grp('phone') ?>"><label class="form-label" for="phone">Cellphone <span class="required">*</span></label><input class="form-control" id="phone" type="tel" name="phone" autocomplete="tel" required value="<?= $val('phone') ?>"><?= $err('phone') ?></div>
           <div class="<?= $grp('email') ?>"><label class="form-label" for="email">Email <span class="required">*</span></label><input class="form-control" id="email" type="email" name="email" autocomplete="email" required value="<?= $val('email', $pageUser['email'] ?? '') ?>"><?= $err('email') ?></div>
           <div class="full <?= $grp('address') ?>"><label class="form-label" for="address">Physical address <span class="required">*</span></label><input class="form-control" id="address" name="address" autocomplete="street-address" required value="<?= $val('address') ?>"><?= $err('address') ?></div>
+          <div class="<?= $grp('bank_name') ?>"><label class="form-label" for="bank_name">Which bank do you bank with? <span class="required">*</span></label><select class="form-control" id="bank_name" name="bank_name" required><option value="">Choose…</option><?= $opt2(FIN_BANKS, 'bank_name') ?></select><?= $err('bank_name') ?></div>
           <div class="full form-group"><label class="form-label" for="message">Anything else? <span style="font-weight:400;color:#889">optional</span></label><textarea class="form-control" id="message" name="message" rows="2"><?= $val('message') ?></textarea></div>
           <div class="full <?= isset($errors['agree']) ? 'ap-err' : '' ?>">
             <label class="ap-check"><input type="checkbox" name="mechanic" value="1"<?= !empty($old['mechanic']) ? ' checked' : '' ?>><span>I will bring my own mechanic to the test drive</span></label>
@@ -147,7 +151,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
             <li><strong>Review your proforma invoice</strong> — total price, commitment fee and outstanding balance. Valid for 24 hours.</li>
             <li><strong>Pay the commitment fee</strong> — the vehicle goes Presold under your name. Upload your proof of payment.</li>
             <li><strong>Receive your Buyer Code</strong> — your access pass. No Buyer Code, no entry.</li>
-            <li><strong>Test drive &amp; inspect for 1h30</strong> — our team books the date with you; then proceed, switch to your alternative, or cancel.</li>
+            <li><strong>Test drive &amp; inspect for 1h30</strong> — our team books the date with you.</li><li><strong>Sign off your decision</strong> — once you are happy with the vehicle, proceed, switch to your alternative, or cancel.</li>
           </ol>
         </div>
       </div>
