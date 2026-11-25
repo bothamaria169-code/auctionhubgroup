@@ -439,7 +439,7 @@ function leadWaDefaults(): array {
     $sign = "\n\nKind regards,\n{agent}\n*Auction Hub Group* · {phone}";
     return [
         'enquiry' => ['Vehicle enquiry',
-            "Good day {name},\n\nThis is {agent} from *Auction Hub Group*. Thank you for your enquiry about the *{vehicle}*.\n{vehicle_url}\n\nWould you like more photos, the DEKRA report, or help registering to bid?" . $sign],
+            "Good day {name},\n\nThis is {agent} from *Auction Hub Group*. Thank you for your enquiry about the *{vehicle}*.\n{vehicle_url}\n\nWould you like more photos, to book a time to view the vehicle and its inspection report at our office with one of our team, or help registering to bid?" . $sign],
         'signup' => ['New sign-up (bidder number)',
             "Good day {name},\n\nThis is {agent} from *Auction Hub Group*. Thank you for registering with us.\n\nTo bid you need a bidder number:\n1. Pay the refundable *{deposit}* registration deposit\n2. Upload the proof of payment in your dashboard\n3. We activate your bidder number, usually the same day\n\nWhich vehicle are you looking for? I'll send you the best matches." . $sign],
         'bank' => ['Banking details',
@@ -562,7 +562,7 @@ function leadCallScripts(): array {
         ['Open', '"Hi [Name], this is [Agent] from Auction Hub Group. Am I speaking to the right person? Do you have a quick minute?"'],
     ];
     $close = [
-        ['Next step', 'Agree ONE next step: send the banking details, send a vehicle link, send the DEKRA report, or a call-back date. Log it with "Log call".'],
+        ['Next step', 'Agree ONE next step: send the banking details, send a vehicle link, book a viewing of the inspection report at our office, or a call-back date. Never send the DEKRA report by WhatsApp or email. Log it with "Log call".'],
     ];
     return [
         'enquiry' => ['title' => 'Website enquiry', 'steps' => array_merge($common, [
