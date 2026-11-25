@@ -67,18 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
             ]);
             finLog($app, 'Submitted details');
-            $ok = finMailClient($app, 'We Have Your Pre-Auction Request',
-                '<p>Thank you for choosing a <strong>Pre-Auction Purchase</strong> on the <strong>' . e($app['vehicle']) . '</strong> at ' . formatRand((float)$app['price']) . '.</p>'
-                . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand((float)$app['price']) . '</p>'
-                . '<p><strong>Your commitment fee offer:</strong> ' . (int)$offerPct . '% (our team confirms it on your proforma invoice)</p>'
-                . ($alt ? '<p><strong>Alternative vehicle:</strong> ' . e($alt ? finVehicleTitle($alt) : '') . '</p>' : '')
-                . '</div>'
-                . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
-                . '<li>Our team issues your personalised <strong>proforma invoice</strong>, with your commitment fee and outstanding balance — usually within the hour</li>'
-                . '<li>Pay the commitment fee within <strong>24 hours of receiving your invoice</strong>, otherwise the vehicle will be sold to another buyer, and upload your proof of payment</li>'
-                . '<li>The vehicle is marked <strong>Presold</strong> under your name and your <strong>Buyer Code</strong> is emailed to you</li>'
-                . '<li>Our team contacts you to book your test drive and inspection: <strong>1 hour 30 minutes</strong></li><li>Once you are happy with the vehicle, you sign off your final decision: proceed, switch to your alternative, or cancel for a refund</li></ol>',
-                'Follow My Request');
+            $ok = finMailClient($app, 'Your Commitment Fee Letter — please confirm before we issue your invoice', paTermsLetterHtml($app), 'Follow My Request');
             finRecordMail($app, 'Request received', $ok);
             finSave($app);
             finMailOffice($app, 'New Pre-Auction Request — issue the proforma invoice');

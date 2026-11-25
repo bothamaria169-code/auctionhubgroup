@@ -720,6 +720,46 @@ function paCommitment(array $app): float {
     return round((float)$app['price'] * paPercent($app) / 100, 2);
 }
 
+/** The commitment-fee letter a pre-auction client reads and confirms before the invoice is issued. */
+function paTermsLetterHtml(array $app): string {
+    $d      = $app['details'] ?? [];
+    $price  = (float)$app['price'];
+    $pct    = (int)($d['offer_pct'] ?? $d['usual_pct'] ?? paBandPercent($price));
+    $fee    = round($price * $pct / 100, 2);
+    $bal    = round($price - $fee, 2);
+    $bank   = $d['bank']['name'] ?? '';
+    $alt    = !empty($d['alt']) ? '<li>Alternative vehicle nominated: <strong>' . e($d['alt']['title']) . '</strong>. You can switch to it after your inspection.</li>' : '';
+    $link   = APP_URL . '/confirm_terms.php?t=' . $app['token'];
+    $R      = fn($n) => 'R' . number_format((float)$n, 2, '.', ',');
+    return '<p>Dear ' . e($app['name']) . ',</p>'
+        . '<p>Thank you for requesting a <strong>Pre-Auction Purchase</strong> on the <strong>' . e($app['vehicle']) . '</strong>. Please read this letter carefully before we issue your invoice.</p>'
+        . '<div class="highlight-box">'
+        . '<p><strong>Vehicle price:</strong> ' . $R($price) . '</p>'
+        . '<p><strong>Commitment fee you offered:</strong> ' . $pct . '% = <strong>' . $R($fee) . '</strong></p>'
+        . '<p><strong>Outstanding balance on collection:</strong> ' . $R($bal) . '</p>'
+        . ($bank !== '' ? '<p><strong>Your bank:</strong> ' . e($bank) . '</p>' : '')
+        . '</div>'
+        . '<h3 style="color:#005BA1;font-size:16px;">What the commitment fee is for</h3>'
+        . '<p>It reserves the vehicle for you. Once your commitment fee is paid and verified, the vehicle is marked <strong>Presold</strong> under your name with the financial institution, and no other buyer can bid on or access it.</p>'
+        . '<h3 style="color:#005BA1;font-size:16px;">What it means for you</h3><ul style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:1.9;">'
+        . '<li>Our office confirms the final percentage on your proforma invoice. If it differs from your offer, the invoice shows the final figure.</li>'
+        . '<li>The invoice is valid for <strong>24 hours</strong>. If the fee is not paid in that time, the vehicle may be sold to another buyer.</li>'
+        . '<li>Once the fee is verified you receive your <strong>Buyer Code</strong>. You need it to come to our premises.</li>'
+        . '<li>You then have <strong>1 hour 30 minutes</strong> to test drive and inspect the vehicle. You may bring your own mechanic. The full DEKRA report can be viewed at our office.</li>'
+        . '<li>Once you are happy with the vehicle, you <strong>sign off your final decision</strong>: pay the outstanding balance and proceed, switch to your alternative vehicle, or cancel for a refund.</li>'
+        . '<li>If you cancel, a refund is paid less <strong>' . $R(PA_REFUND_FEE) . '</strong> admin fee and bank charges.</li>'
+        . $alt
+        . '<li>Vehicles are sold <em>voetstoots</em>, and each one is only available while it is advertised.</li></ul>'
+        . '<p><strong>Please confirm you have read and understood these terms:</strong></p>'
+        . '<p><a href="' . e($link) . '" style="display:inline-block;background:#005BA1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;">Confirm and proceed with my invoice</a></p>'
+        . '<p style="font-size:13px;color:#555;">Not ready to proceed? You are welcome to <a href="' . APP_URL . '/register-to-bid.php">register and bid</a> on vehicles at auction instead.</p>';
+}
+
+/** True once the client has confirmed the commitment-fee letter. */
+function paTermsConfirmed(array $app): bool {
+    return !empty($app['details']['terms_confirmed_at']);
+}
+
 function paInvoiceRow(array $app): ?array {
     global $pdo;
     $id = (int)($app['details']['pa_invoice_id'] ?? 0);
@@ -777,6 +817,7 @@ function paIssueInvoice(array &$app, int $percent, string $note, int $adminId, s
     global $pdo;
     [$min, $max] = paRange();
     if (!in_array($app['status'], ['requested', 'expired'], true)) return 'An invoice has already been issued.';
+    if (!paTermsConfirmed($app)) return 'The client has not confirmed the commitment-fee letter yet, so the invoice cannot be sent.';
     if ($percent < $min || $percent > $max) return "Choose a commitment fee between $min% and $max%.";
     $draft = invForApp($app);
     if ($app['status'] === 'requested' && !$draft) $draft = invCreateDraft($app);
