@@ -269,7 +269,10 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
           <?php if (!empty($d['alt'])): ?><div class="ap-rowline"><span class="lbl">Alternative vehicle</span><span class="val"><?= e($d['alt']['title']) ?></span></div><?php endif; ?>
           <?php if ($inv): ?><div class="ap-rowline"><span class="lbl">Invoice</span><span class="val"><?= e($inv['invoice_number']) ?></span></div><?php endif; ?>
 
-          <?php if ($s === 'requested'): ?>
+          <?php if ($s === 'requested' && !paTermsConfirmed($app)): ?>
+            <div class="ap-notice" style="margin-top:1rem"><i class="fas fa-file-signature"></i><div><strong>Confirm your commitment fee</strong> — read what the fee is for and what it means for you, then request your invoice.</div></div>
+            <a class="btn btn-primary btn-lg btn-block" href="<?= e(APP_URL) ?>/confirm_terms.php?t=<?= e($app['token']) ?>"><i class="fas fa-file-signature"></i> Read &amp; Confirm — Request My Invoice</a>
+          <?php elseif ($s === 'requested'): ?>
             <div class="alert alert-info" style="margin:1rem 0 0"><i class="fas fa-hourglass-half"></i><span>Our team is preparing your personalised proforma invoice — usually within the hour. It comes to you by email and appears here.</span></div>
           <?php elseif ($s === 'invoiced' && $inv): ?>
             <div class="ap-notice"><i class="fas fa-clock"></i><div><strong>Valid for 24 hours</strong> — until <?= safeDate('l j F, H:i', $inv['expires_at']) ?>. This window is set by the financial institution; once it closes the vehicle returns to the auction process.</div></div>

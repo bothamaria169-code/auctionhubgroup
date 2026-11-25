@@ -731,11 +731,13 @@ function paTermsLetterHtml(array $app): string {
     $alt    = !empty($d['alt']) ? '<li>Alternative vehicle nominated: <strong>' . e($d['alt']['title']) . '</strong>. You can switch to it after your inspection.</li>' : '';
     $link   = APP_URL . '/confirm_terms.php?t=' . $app['token'];
     $R      = fn($n) => 'R' . number_format((float)$n, 2, '.', ',');
+    $usual  = paBandPercent($price);
     return '<p>Dear ' . e($app['name']) . ',</p>'
-        . '<p>Thank you for requesting a <strong>Pre-Auction Purchase</strong> on the <strong>' . e($app['vehicle']) . '</strong>. Please read this letter carefully before we issue your invoice.</p>'
+        . '<p>Thank you for enquiring about a <strong>Pre-Auction Purchase</strong>. This letter explains the commitment fee for the vehicle you selected, <strong>' . e($app['vehicle']) . '</strong>, and what it means for you. Please read it carefully before you request your invoice.</p>'
         . '<div class="highlight-box">'
         . '<p><strong>Vehicle price:</strong> ' . $R($price) . '</p>'
         . '<p><strong>Commitment fee you offered:</strong> ' . $pct . '% = <strong>' . $R($fee) . '</strong></p>'
+        . '<p style="font-size:13px;color:#555;">The usual commitment fee for a vehicle at this price is ' . $usual . '%. Our office confirms the final percentage on your invoice.</p>'
         . '<p><strong>Outstanding balance on collection:</strong> ' . $R($bal) . '</p>'
         . ($bank !== '' ? '<p><strong>Your bank:</strong> ' . e($bank) . '</p>' : '')
         . '</div>'
@@ -750,9 +752,9 @@ function paTermsLetterHtml(array $app): string {
         . '<li>If you cancel, a refund is paid less <strong>' . $R(PA_REFUND_FEE) . '</strong> admin fee and bank charges.</li>'
         . $alt
         . '<li>Vehicles are sold <em>voetstoots</em>, and each one is only available while it is advertised.</li></ul>'
-        . finCompanyDetailsHtml()
+        . '<h3 style="color:#005BA1;font-size:16px;">Verify our company details</h3>' . finCompanyDetailsTableHtml()
         . '<p><strong>Please confirm you have read and understood these terms:</strong></p>'
-        . '<p><a href="' . e($link) . '" style="display:inline-block;background:#005BA1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;">Confirm and proceed with my invoice</a></p>'
+        . '<p><a href="' . e($link) . '" style="display:inline-block;background:#005BA1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;">Confirm and request my invoice</a></p>'
         . '<p style="font-size:13px;color:#555;">Not ready to proceed? You are welcome to <a href="' . APP_URL . '/register-to-bid.php">register and bid</a> on vehicles at auction instead.</p>';
 }
 

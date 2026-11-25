@@ -60,7 +60,7 @@ require_once __DIR__ . '/header.php';
         <input type="hidden" name="t" value="<?= e($app['token']) ?>">
         <p class="ap-sub" style="margin:0 0 1rem">By confirming, you say you have read and understood the commitment fee, what it is for, and what it means for you.</p>
         <div class="ap-row">
-          <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Confirm and proceed with my invoice</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Confirm and request my invoice</button>
           <a class="btn btn-outline" href="<?= e(APP_URL) ?>/register-to-bid.php"><i class="fas fa-gavel"></i> Not ready? Register and bid instead</a>
         </div>
       </div>
