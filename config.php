@@ -185,6 +185,7 @@ define('COMPANY_ADDRESS', '80 Sterling Rd, Kosmosdal, Centurion, 0187');
 define('AHG_OPEN_BRANCH_CITIES', ['Centurion', 'Boksburg']);
 define('AUCTION_GROUND',  '80 Sterling Rd, Kosmosdal, Centurion, 0187');
 define('COMPANY_EMAIL',   'info@auctionhubgroup.co.za');
+define('COMPANY_WEBSITE', 'auctionhubgroup.co.za');
 define('COMPANY_PHONE',   '+27 10 516 0683');
 define('COMPANY_PHONE2',  '+27 10 516 0681');
 

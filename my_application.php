@@ -54,6 +54,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             finFlash('error', 'Please choose a payment plan.');
         }
         $to = 'plans';
+    } elseif ($isFin && $action === 'request_invoice' && $s === 'chosen' && !empty($app['details']['choice'])) {
+        $app['details']['invoice_requested_at'] = date('Y-m-d H:i:s');
+        finLog($app, 'Requested the deposit invoice');
+        finSave($app);
+        finMailOffice($app, 'Client requested the deposit invoice for ' . (int)$app['details']['choice']['months'] . ' months');
+        finFlash('success', 'Thank you. Your invoice request has been sent to our finance team, and we will email your deposit invoice shortly.');
+        $to = 'invoice-request';
     } elseif ($isFin && $action === 'upload' && in_array($s, ['invoiced', 'approved'], true)) {
         $kind = (string)($_POST['doc'] ?? '');
         [$n, $err] = finDocUpload($app, $kind, $_FILES['files'] ?? []);
@@ -209,6 +216,13 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
           <?php if ($s === 'chosen'): ?><div class="alert alert-info" style="margin:1rem 0 0"><i class="fas fa-hourglass-half"></i><span>You chose <?= (int)$d['choice']['months'] ?> months. Our finance team is reviewing your deposit — next you submit your documents.</span></div><?php endif; ?>
         </div>
       </form>
+      <?php if ($s === 'chosen' && !empty($d['choice'])): ?>
+      <form method="post" class="ap-card" id="invoice-request"><div class="ap-card-body">
+        <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="request_invoice">
+        <p class="ap-sub" style="margin:0 0 .8rem">You have chosen <strong><?= (int)$d['choice']['months'] ?> months</strong>. When you are ready, request your deposit invoice and we will send it to you.</p>
+        <button class="btn btn-primary" type="submit"><i class="fas fa-file-invoice"></i> Request my invoice</button>
+      </div></form>
+      <?php endif; ?>
       <?php endif; ?>
 
       <?php if (in_array($s, ['invoiced', 'approved', 'completed'], true)): ?>

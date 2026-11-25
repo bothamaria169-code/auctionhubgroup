@@ -121,7 +121,19 @@ header('X-Robots-Tag: noindex, nofollow');
   .sign .sl{ font-size:7pt; font-weight:700; color:#5b6b7f; text-transform:uppercase; letter-spacing:.06em; }
   .sign .thanks{ text-align:right; font-size:8pt; color:var(--muted); }
   .sign .thanks b{ color:var(--navy); }
+  @media(max-width:700px){ table.items{ display:block; overflow-x:auto; white-space:nowrap; } }
   @media(max-width:700px){ .sheet{ padding:16px; min-height:0; margin:0; } .head,.info-row,.pay{ flex-direction:column; } .doc-title{ text-align:left; } .meta,.note{ flex:none; width:100%; } .veh{ flex-direction:column; align-items:flex-start; } .veh img{ width:100%; height:auto; aspect-ratio:3/2; } .totals table{ width:100%; } table.items th, table.items td{ padding:7px 8px; } .toolbar{ position:static; } .toolbar h2{ font-size:.85rem; } .brand img{ width:52px; height:52px; } .co-name{ font-size:13pt; } .doc-title .tag{ font-size:14pt; } .bank-grid{ grid-template-columns:minmax(0,auto) minmax(0,1fr); } .bank-grid .bv{ overflow-wrap:anywhere; } }
+  .sec{ margin-top:6px; }
+  .pagebreak{ page-break-before:always; break-before:page; margin-top:18px; }
+  .ticks{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:6px 0 10px; }
+  .tick{ border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:9pt; }
+  .tick.on{ border-color:#1a9e4e; background:#f1fbf5; }
+  .tick span{ display:block; color:var(--muted); font-size:8pt; margin-top:2px; }
+  .ok{ color:#1a7a3d; font-weight:800; }
+  .todo{ color:#b45309; font-weight:800; }
+  table.docs td:last-child{ text-align:left; }
+  table.verify td{ text-align:left; font-size:8.5pt; }
+  table.verify td:first-child{ font-weight:800; color:var(--muted); width:32%; }
   @media print{ body{ background:#fff; } .toolbar{ display:none; } .sheet{ box-shadow:none; margin:0; width:auto; min-height:0; padding:0; } @page{ size:A4; margin:12mm; } }
 </style>
 </head>
@@ -150,42 +162,7 @@ header('X-Robots-Tag: noindex, nofollow');
       <tr><td class="k">No.</td><td class="v"><?= e($num) ?></td></tr>
       <tr><td class="k">Date</td><td class="v"><?= safeDate('d M Y', $date) ?></td></tr>
       <tr><td class="k">Reference</td><td class="v"><?= e(finRef($app)) ?></td></tr>
-      <?php if ($doc === 'quote'): ?><tr><td class="k">Valid until</td><td class="v"><?= safeDate('d M Y', $q['valid']) ?></td></tr><?php endif; ?>
-      <?php if ($doc === 'invoice'): ?><tr><td class="k">Due</td><td class="v"><?= safeDate('d M Y', $d['invoice']['due']) ?></td></tr><?php endif; ?>
-    </table>
-    <?php if ($doc === 'invoice'): ?><div class="balance"><div class="lbl" style="margin:0">Amount Due</div><div class="a"><?= $R($d['invoice']['amount']) ?></div></div><?php endif; ?>
-    </div>
-  </div>
-
-  <table class="items"><thead><tr><th>Vehicle</th><th>Price</th></tr></thead><tbody><tr>
-    <td><div class="veh"><?php if (!empty($v['image'])): ?><img src="<?= e(cldImg($v['image'], CLD_CARD)) ?>" alt=""><?php endif; ?>
-      <div><div class="it-name"><?= e($app['vehicle']) ?></div>
-      <div class="it-spec"><?= e(implode(' · ', array_filter([!empty($v['mileage']) ? number_format((int)$v['mileage']) . ' km' : '', $v['transmission'] ?? '', $v['fuel'] ?? '', $v['colour'] ?? '', !empty($v['grade']) ? 'DEKRA ' . $v['grade'] : '']))) ?></div>
-      <?php if ($doc === 'approval'): ?><div class="it-spec"><strong>VIN:</strong> <?= $vin !== '' ? e($vin) : 'shown on site, on the vehicle' ?></div><?php endif; ?></div></div></td>
-    <td class="money"><?= $R($app['price']) ?></td></tr></tbody></table>
-
-<?php if ($doc === 'quote'): ?>
-  <div class="totals"><table>
-    <tr><td class="k">Vehicle price</td><td class="v"><?= $R($q['price']) ?></td></tr>
-    <tr><td class="k">Less: <?= !empty($q['startup']) ? 'start-up deposit' : 'deposit' ?></td><td class="v">− <?= $R($q['deposit']) ?></td></tr>
-    <tr class="grand"><td class="k">Amount financed</td><td class="v"><?= $R($q['financed']) ?></td></tr>
-  </table></div>
-  <h3>Your Repayment Options</h3>
-  <table class="items"><thead><tr><th>Term</th><th>Rate (p/m)</th><th>Monthly</th><th>Total repayable</th></tr></thead><tbody>
-    <?php foreach ($q['plans'] as $p): $on = $plan && (int)$plan['months'] === (int)$p['months']; ?>
-      <tr class="<?= $on ? 'on' : '' ?>"><td><?= (int)$p['months'] ?> months<?= $on ? ' ✓' : '' ?></td><td><?= rtrim(rtrim(number_format($p['rate'], 2), '0'), '.') ?>%</td><td class="money"><?= $R($p['monthly']) ?></td><td class="money"><?= $R($p['total']) ?></td></tr>
-    <?php endforeach; ?>
-  </tbody></table>
-  <h3>Documents Required</h3>
-  <ul class="small"><?php foreach (['id', 'address', 'bank', 'income', 'licence'] as $k): ?><li><?= e(FIN_DOCS[$k][0]) ?></li><?php endforeach; ?></ul>
-  <?php if (!empty($app['details']['assessment'])): $as = $app['details']['assessment']; ?>
-  <div class="box"><strong>Finance assessment: <?= (int)$as['score'] ?> / 100 — <?= e($as['label']) ?>.</strong>
-    Only terms whose instalment fits your budget (up to <?= $R($as['max_instalment']) ?> per month) are shown.<?= !empty($q['startup']) ? ' Approval requires the start-up deposit above.' : '' ?>
-    Subject to your documents and a credit bureau check.</div>
-  <?php endif; ?>
-  <div class="box">This quote is indicative and becomes binding only when your finance agreement is signed. The deposit is deducted from the price — it is not an extra cost.</div>
-  <?= finDepositGrantsHtml($app) ?>
-  <?= finCompanyDetailsHtml() ?>
+      <?php if ($doc === 'quote'): echo finQuoteBodyHtml($app); ?>
 
 <?php elseif ($doc === 'invoice'): ?>
   <div class="totals"><table>

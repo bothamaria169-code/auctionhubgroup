@@ -1114,17 +1114,128 @@ function finCompanyDetailsHtml(): string {
         . '</div>';
 }
 
-/** What the deposit grants the client, shown on the quote so they know before they choose a term. */
+/** What the deposit grants the client, as plain points. Shared by the quote email, the quote document and the test harness. */
+function finDepositPoints(float $deposit): array {
+    return [
+        'The deposit is part of the vehicle price. It is deducted from the price, not added on top.',
+        'Once your deposit is verified you receive your Buyer\'s Code. It is your access pass to the vehicle. No Buyer\'s Code, no entry.',
+        'Your Buyer\'s Code confirms your test drive and inspection at our head office. Bring your own mechanic if you wish.',
+        'After the test drive you sign off your final decision. If you are happy, you sign your finance agreement and drive away.',
+        'If you change your mind before you sign, your deposit is refunded less our flat R' . number_format(PA_REFUND_FEE, 2) . ' admin fee.',
+        'Paying the deposit does not commit you to buy. The approval is subject to credit assessment and your documents.',
+        'Vehicles are sold voetstoots. Each vehicle is only available while it is advertised.',
+    ];
+}
+
+/** What the deposit grants the client, shown on the quote email. */
 function finDepositGrantsHtml(array $app): string {
     $dep = formatRand((float)($app['details']['quote']['deposit'] ?? $app['amount']));
+    $items = '';
+    foreach (finDepositPoints((float)($app['details']['quote']['deposit'] ?? $app['amount'])) as $p) $items .= '<li>' . e($p) . '</li>';
     return '<div class="highlight-box"><p><strong>What your deposit of ' . $dep . ' grants you</strong></p><ul style="margin:0 0 0 20px;padding:0;font-size:14px;line-height:1.8;">'
-        . '<li>The deposit is part of the vehicle price. It is deducted from the price, not added on top.</li>'
-        . '<li>Once your deposit is verified you receive your <strong>Buyer\'s Code</strong>. It is your access pass to the vehicle. No Buyer\'s Code, no entry.</li>'
-        . '<li>Your Buyer\'s Code confirms your <strong>test drive and inspection</strong> at our head office. Bring your own mechanic if you wish.</li>'
-        . '<li>After the test drive you <strong>sign off your final decision</strong>. If you are happy, you sign your finance agreement and drive away.</li>'
-        . '<li>If you change your mind before you sign, your deposit is refunded less our flat R' . number_format(PA_REFUND_FEE, 2) . ' admin fee.</li>'
-        . '<li>Vehicles are sold <em>voetstoots</em>. Each vehicle is only available while it is advertised.</li></ul>'
+        . $items . '</ul>'
         . '<p style="margin:.8rem 0 0"><strong>Choose your repayment term</strong> from the options below on your application page. Your instalment is based on the amount you qualify for.</p></div>';
+}
+
+/**
+ * The finance quotation document body (application_doc.php, doc=quote): three pages in the
+ * same layout as the office quotation — terms, deposit and documents, then confirmation.
+ * Classes come from application_doc.php's stylesheet. Every figure comes from the quote.
+ */
+function finQuoteBodyHtml(array $app): string {
+    $q      = $app['details']['quote'] ?? [];
+    $plans  = $q['plans'] ?? [];
+    $plan   = finChosenPlan($app);
+    $docs   = $app['details']['docs'] ?? [];
+    $R      = fn($n) => 'R' . number_format((float)$n, 2, '.', ',');
+    $rate   = $plans ? rtrim(rtrim(number_format($plans[0]['rate'], 2), '0'), '.') : '';
+    $minM   = $plans ? min(array_column($plans, 'months')) : 0;
+    $maxM   = $plans ? max(array_column($plans, 'months')) : 0;
+    $validTo = !empty($q['valid']) ? safeDate('j F Y', $q['valid']) : '—';
+
+    // Page 1 — terms
+    $rows = '';
+    foreach ($plans as $p) {
+        $on = $plan && (int)$plan['months'] === (int)$p['months'];
+        $rows .= '<tr class="' . ($on ? 'on' : '') . '"><td>' . (int)$p['months'] . ' months' . ($on ? ' ✓' : '') . '</td>'
+            . '<td>' . rtrim(rtrim(number_format($p['rate'], 2), '0'), '.') . '%</td>'
+            . '<td class="money">' . $R($p['monthly']) . '</td>'
+            . '<td class="money">' . $R($p['total']) . '</td>'
+            . '<td class="money">' . $R($p['interest']) . '</td></tr>';
+    }
+    $page1 = '<div class="sec">'
+        . '<p class="body">Dear ' . e($app['name']) . ',</p>'
+        . '<p class="body">Thank you for your documents. Here is your personalised finance quotation for <strong>' . e($app['vehicle']) . '</strong>, with repayment terms from <strong>' . $minM . ' to ' . $maxM . ' months</strong>, structured around a deposit of <strong>' . $R($q['deposit'] ?? 0) . '</strong>.</p>'
+        . '<div class="totals"><table>'
+        . '<tr><td class="k">Vehicle price</td><td class="v">' . $R($q['price'] ?? $app['price']) . '</td></tr>'
+        . '<tr><td class="k">Less: ' . (!empty($q['startup']) ? 'start-up deposit' : 'deposit') . '</td><td class="v">− ' . $R($q['deposit'] ?? 0) . '</td></tr>'
+        . '<tr class="grand"><td class="k">Amount financed</td><td class="v">' . $R($q['financed'] ?? 0) . '</td></tr>'
+        . '</table></div>'
+        . '<h3>Your repayment options</h3>'
+        . '<table class="items"><thead><tr><th>Term</th><th>Rate p.m.</th><th>Monthly</th><th>Total repayable</th><th>Total interest</th></tr></thead><tbody>' . $rows . '</tbody></table>'
+        . '<div class="box">Indicative estimates at a flat rate of ' . e($rate) . '% per month on the amount financed, for the term shown. Each figure is an estimate. Your final rate depends on your credit profile and lender approval. A larger deposit reduces your instalment.</div>';
+    if (!empty($app['details']['assessment'])) {
+        $as = $app['details']['assessment'];
+        $page1 .= '<div class="box"><strong>Finance assessment: ' . (int)$as['score'] . ' / 100 — ' . e($as['label']) . '.</strong> Only terms whose instalment fits your budget (up to ' . $R($as['max_instalment']) . ' per month) are shown.'
+            . (!empty($q['startup']) ? ' Approval requires the start-up deposit above.' : '') . '</div>';
+    }
+    $page1 .= '</div>';
+
+    // Page 2 — deposit, documents, general terms
+    $pts = '';
+    foreach (finDepositPoints((float)($q['deposit'] ?? 0)) as $p) $pts .= '<li>' . e($p) . '</li>';
+    $docRows = '';
+    foreach (['id', 'address', 'bank', 'income', 'licence'] as $k) {
+        $d = $docs[$k] ?? [];
+        $got = !empty($d['files']) || (($d['status'] ?? '') === 'accepted');
+        $docRows .= '<tr><td>' . e(FIN_DOCS[$k][0]) . '</td><td class="' . ($got ? 'ok' : 'todo') . '">' . ($got ? '✓ Received' : '■ Outstanding') . '</td></tr>';
+    }
+    $page2 = '<div class="sec pagebreak">'
+        . '<h3>Your deposit — what it grants and what it does not commit you to</h3>'
+        . '<ul class="small">' . $pts . '</ul>'
+        . '<h3>Your documents</h3>'
+        . '<table class="items docs"><thead><tr><th>Document</th><th>Status</th></tr></thead><tbody>' . $docRows . '</tbody></table>'
+        . '<h3>General terms</h3><ul class="small">'
+        . '<li>All figures in this quotation are estimates for planning purposes, subject to final credit approval, lender terms and confirmation at the point of sale.</li>'
+        . '<li>This vehicle is sold voetstoots (as-is).</li>'
+        . '<li>This quotation is valid until ' . e($validTo) . '. We recommend confirming your slot as soon as possible.</li>'
+        . '<li>Vehicle previews and test drives are strictly by appointment for registered buyers only.</li>'
+        . '<li>We will never pressure you into a decision or request payment without proper verification. If anything about this process feels off, contact us using the details below.</li>'
+        . '</ul></div>';
+
+    // Page 3 — confirm, verify company, next step
+    $chosen = $plan
+        ? '<div class="box"><strong>Your selected term:</strong> ' . (int)$plan['months'] . ' months at ' . $R($plan['monthly']) . ' per month (total repayable ' . $R($plan['total']) . ').</div>'
+        : '<div class="box"><strong>Your selected term:</strong> not chosen yet.</div>';
+    $page3 = '<div class="sec pagebreak">'
+        . '<h3>Confirm your deposit &amp; select your term</h3>'
+        . '<p class="body">Your repayment term is selected on your application page, not on this printout. Sign in there, choose the term that suits you, then request your deposit invoice. We will send the invoice for the ' . $R($q['deposit'] ?? 0) . ' start-up deposit.</p>'
+        . $chosen
+        . '<div class="box"><strong>Next steps:</strong> 1) choose your term on your application page. 2) Request your deposit invoice. 3) Pay the deposit and upload your proof of payment. 4) Receive your Buyer\'s Code and book your test drive.</div>'
+        . '<h3>Verify our company details</h3>'
+        . finCompanyDetailsTableHtml()
+        . '<p class="small">Banking details are issued only on your official invoice. Please confirm them with us by phone before making any payment.</p>'
+        . '<div class="box"><strong>Ready to make it yours?</strong> Choose your term and request your invoice on your <a href="' . e(finLink($app, 'plans')) . '">application page</a>.</div>'
+        . '</div>';
+
+    return $page1 . $page2 . $page3;
+}
+
+/** Company details as a table, for the quotation document. */
+function finCompanyDetailsTableHtml(): string {
+    $rows = [
+        ['Registered name', COMPANY_REGISTERED_NAME . ' (Pty) Ltd, trading as ' . COMPANY_TRADING_AS],
+        ['Registration no.', COMPANY_REG_NO . ' (registered ' . COMPANY_REG_DATE . ')'],
+        ['SARS tax no.', COMPANY_SARS_NO],
+        ['Address', COMPANY_ADDRESS],
+        ['Phone', COMPANY_PHONE . ' / ' . COMPANY_PHONE2],
+        ['WhatsApp', COMPANY_WHATSAPP],
+        ['Email', COMPANY_EMAIL],
+        ['Website', COMPANY_WEBSITE],
+    ];
+    $h = '<table class="items verify"><tbody>';
+    foreach ($rows as [$k, $v]) $h .= '<tr><td>' . e($k) . '</td><td>' . e($v) . '</td></tr>';
+    return $h . '</tbody></table><p class="small">You are welcome to verify these details with us directly.</p>';
 }
 
 function finSendQuote(array &$app): bool {
