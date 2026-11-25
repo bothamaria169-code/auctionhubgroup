@@ -1105,17 +1105,6 @@ function finRecordMail(array &$app, string $what, bool $ok): void {
     $app['details']['emails'][] = ['at' => date('Y-m-d H:i:s'), 'what' => $held ? $what . ' — in the Outbox, waiting for admin approval' : $what, 'ok' => $ok];
 }
 
-/** Company details on every first-stage client document, so clients can check we are genuine. */
-function finCompanyDetailsHtml(): string {
-    return '<div style="margin:1rem 0;padding:.8rem 1rem;border:1px solid #d9e3ee;border-radius:8px;font-size:12.5px;line-height:1.6;color:#334155;">'
-        . '<strong>' . e(COMPANY_REGISTERED_NAME) . '</strong> t/a ' . e(COMPANY_TRADING_AS) . ' · ' . e(COMPANY_TYPE) . '<br>'
-        . 'Reg no. ' . e(COMPANY_REG_NO) . ' (registered ' . e(COMPANY_REG_DATE) . ') · SARS tax no. ' . e(COMPANY_SARS_NO) . '<br>'
-        . e(COMPANY_ADDRESS) . '<br>'
-        . 'Tel ' . e(COMPANY_PHONE) . ' · WhatsApp ' . e(COMPANY_WHATSAPP) . ' · ' . e(COMPANY_EMAIL) . '<br>'
-        . 'To verify us, call the numbers above or check our registration details with CIPC. Only pay into the account on an official Auction Hub Group invoice.'
-        . '</div>';
-}
-
 /** What the deposit grants the client, as plain points. Shared by the quote email, the quote document and the test harness. */
 function finDepositPoints(float $deposit): array {
     return [
@@ -1237,7 +1226,7 @@ function finCompanyDetailsTableHtml(): string {
     ];
     $h = '<table class="items verify"><tbody>';
     foreach ($rows as [$k, $v]) $h .= '<tr><td>' . e($k) . '</td><td>' . e($v) . '</td></tr>';
-    return $h . '</tbody></table><p class="small">You are welcome to verify these details with us directly.</p>';
+    return $h . '</tbody></table><p class="small">You are welcome to verify these details with us directly, or check our registration with CIPC.</p>';
 }
 
 function finSendQuote(array &$app): bool {
