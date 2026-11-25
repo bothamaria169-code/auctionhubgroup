@@ -1801,7 +1801,9 @@ switch ($action) {
             // Insert bid — ip_address uses ADMIN:{id} tag (fits in VARCHAR 45)
             // The internal note is stored in bidder_name suffix if provided
             $ipTag = 'ADMIN:' . $admin['sub'];
-            $displayName = $targetUser['full_name'] . ($note ? ' [Note: ' . substr($note, 0, 80) . ']' : '');
+            // The public bid shows only the bidder's own name and number, like any other bid.
+            // The office note is kept in the internal change log, never on the public bid.
+            $displayName = $targetUser['full_name'];
             $pdo->prepare("
                 INSERT INTO bids
                     (auction_id, user_id, bid_amount, amount, bidder_name, bidder_number,
@@ -1817,6 +1819,12 @@ switch ($action) {
                 $ipTag,
             ]);
             $newBidId = (int)$pdo->lastInsertId();
+            if ($note !== '') {
+                try {
+                    $pdo->prepare("INSERT INTO admin_activity_log (admin_id, admin_name, action, auction_id, item_name, details) VALUES (?, ?, ?, ?, ?, ?)")
+                        ->execute([(int)$admin['sub'], $admin['full_name'] ?? 'Admin', 'admin_bid_note', $auctionId, 'Bid #' . $newBidId, substr($note, 0, 190)]);
+                } catch (Throwable $e) { /* internal log is optional */ }
+            }
 
             // Update auction current price
             $pdo->prepare("UPDATE auctions SET current_price = ? WHERE id = ?")
