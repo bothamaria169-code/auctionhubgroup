@@ -166,7 +166,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
         <label>Min deposit — trucks &amp; plant (R)<br><input class="form-control" name="fin_min_deposit_heavy" value="<?= e(finSetting('fin_min_deposit_heavy', '50000')) ?>"></label>
         <label>NEW QUOTATION approval deposit (R)<br><input class="form-control" name="fin_reapproval_deposit" value="<?= e((string)(int)finReapprovalDefault()) ?>"></label>
       </div>
-      <p class="text-muted" style="font-size:.85rem">Rate per month by term — the same tiers as the calculator on financing.php. All vehicles 6–72 months (trucks &amp; plant were previously up to 72.</p>
+      <p class="text-muted" style="font-size:.85rem">Rate per month by term — the same tiers as the calculator on financing.php. All vehicles 6–72 months.</p>
       <div class="fa2-act">
         <?php foreach (finTiers(['body_type' => 'truck']) as $m => $r): ?>
           <label><?= $m ?> months (% p/m)<br><input class="form-control" name="fin_rate_<?= $m ?>" value="<?= e((string)$r) ?>" style="width:100px"></label>
