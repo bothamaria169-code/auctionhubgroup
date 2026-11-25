@@ -627,7 +627,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
             <span class="pa-section-label"><i class="fas fa-coins"></i> Commitment Fee</span>
             <h2 class="pa-section-title">What Is the Commitment Fee — and Why Does It Exist?</h2>
             <p class="pa-section-sub" style="margin-bottom:1.25rem;">
-                The commitment fee is a <strong>reservation deposit</strong> — typically 30–50% of the total vehicle price — that you pay to formally commit to the pre-auction purchase.
+                The commitment fee is a <strong>reservation deposit</strong> — usually 50% of the total price for vehicles up to R100,000, 40% from R100,000 to R150,000, and 30% above that. You offer a percentage within 30–50%, and our office approves or adjusts it — that you pay to formally commit to the pre-auction purchase.
             </p>
             <p class="pa-section-sub" style="margin-bottom:1.25rem;">
                 Once your commitment fee is received, <strong>the vehicle is immediately marked as Presold and registered under your name with the financial institution.</strong>

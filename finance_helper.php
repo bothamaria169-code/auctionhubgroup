@@ -122,6 +122,11 @@ function finPlans(float $financed, array $tiers): array {
     return $plans;
 }
 
+/** The usual commitment fee % for a vehicle at this price: 50% up to R100,000, 40% to R150,000, 30% above. */
+function paBandPercent(float $price): int {
+    return $price <= 100000 ? 50 : ($price <= 150000 ? 40 : 30);
+}
+
 /** @return array{0:int,1:int,2:int} min %, max %, default % commitment fee (preauction.php: 30–50%, invoices default 35%). */
 function paRange(): array {
     $min = max(1, min(100, (int)finSetting('pa_min_percent', '30')));
@@ -1041,6 +1046,7 @@ function finMailOffice(array $app, string $what): void {
                  [$app['kind'] === 'finance' ? 'Deposit' : 'Commitment fee', $app['kind'] === 'finance' ? formatRand((float)$app['amount']) : paPercent($app) . '% = ' . formatRand(paCommitment($app))],
                  ['Status', finStatusLabel($app)]];
         if (!empty($app['details']['bank']['name'])) $rows[] = ['Client bank', $app['details']['bank']['name']];
+        if (isset($app['details']['offer_pct'])) $rows[] = ['Client offer', $app['details']['offer_pct'] . '% (usual ' . ($app['details']['usual_pct'] ?? '—') . '%) — approve or adjust on the proforma'];
         $body = '<h2>' . e($what) . '</h2><div class="highlight-box">';
         foreach ($rows as [$k, $v]) $body .= '<p><strong>' . e($k) . ':</strong> ' . e($v) . '</p>';
         $body .= '</div><a class="cta-btn" href="' . APP_URL . '/admin_dashboard.php?tab=applications&app=' . (int)$app['id'] . '">Open in Admin</a>';

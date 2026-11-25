@@ -196,7 +196,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
       </div>
       <div class="alert alert-info" style="font-size:.84rem"><i class="fas fa-circle-info"></i> <span><strong>Credit bureau checks:</strong> automatic checks need an account with a registered credit bureau (TransUnion, Experian, XDS or Compuscan) and NCR registration as a credit provider. Until an API is connected, pull the client's report on the bureau's portal (the client consented on the form) and enter the score on the application — the result, start-up deposit and quote update automatically.</span></div>
       <h5 style="color:#003f73;margin-top:1rem">Pre-Auction Commitment Fee</h5>
-      <p class="text-muted" style="font-size:.85rem">Clients no longer choose a percentage — you set it when you issue the proforma invoice, within this range.</p>
+      <p class="text-muted" style="font-size:.85rem">Clients offer a percentage within this range (usual: 50% up to R100,000, 40% to R150,000, 30% above). You approve it or set another when you issue the proforma invoice.</p>
       <div class="fa2-act">
         <label>Lowest %<br><input class="form-control" name="pa_min_percent" value="<?= $mn ?>" style="width:90px"></label>
         <label>Highest %<br><input class="form-control" name="pa_max_percent" value="<?= $mx ?>" style="width:90px"></label>

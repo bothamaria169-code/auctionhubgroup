@@ -4,8 +4,8 @@
 // Step 1 of the Pre-Auction Purchase on preauction.php — "Submit Your
 // Details": full name, ID/passport, contact details, physical address,
 // and an alternative vehicle. The client does NOT choose a test-drive date:
-// staff book it in Admin once the commitment fee is verified. Nor does it choose
-// the commitment fee: the office sets the % when it issues the proforma
+// staff book it in Admin once the commitment fee is verified. The client offers a commitment fee % within the range (usual: 50% to R100,000,
+// 40% to R150,000, 30% above); the office approves or adjusts it when it issues the proforma
 // invoice from Admin → Finance & Pre-Auction (a preauction_invoices row,
 // valid 24 hours).
 // ============================================================
@@ -25,6 +25,8 @@ if (($vid = (int)($_GET['id'] ?? $_POST['auction_id'] ?? 0)) > 0) {
 }
 $errors = [];
 $old = $_POST;
+[$paMin, $paMax] = paRange();
+$paBand = $vehicle ? paBandPercent(finPrice($vehicle)) : 50;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (trim($_POST['website'] ?? '') !== '') { header('Location: preauction_request.php?sent=1'); exit; }
@@ -44,6 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL))   $errors['email'] = 'Please enter a valid email — your invoice and Buyer Code are sent there.';
     if (!finValidPhone($phone))                       $errors['phone'] = 'Please enter a number we can call or WhatsApp.';
     if (mb_strlen($address) < 8)                      $errors['address'] = 'Please enter your physical address.';
+    $offerPct = (int)($_POST['offer_pct'] ?? 0);
+    if ($offerPct < $paMin || $offerPct > $paMax)    $errors['offer_pct'] = "Please offer a commitment fee between {$paMin}% and {$paMax}%.";
     $bankName = (string)($_POST['bank_name'] ?? '');
     if (!in_array($bankName, FIN_BANKS, true))        $errors['bank_name'] = 'Please tell us which bank you bank with.';
     if (!$vehicle)                                    $errors['auction_id'] = 'Please choose the vehicle you want to secure.';
@@ -56,6 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'id_number' => $idNo,
                 'address'   => $address,
                 'bank'      => ['name' => $bankName],
+                'offer_pct' => $offerPct,
+                'usual_pct' => $paBand,
                 'mechanic'  => !empty($_POST['mechanic']),
                 'alt'       => $alt ? ['id' => (int)$alt['id'], 'title' => finVehicleTitle($alt), 'price' => finPrice($alt)] : null,
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
@@ -64,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ok = finMailClient($app, 'We Have Your Pre-Auction Request',
                 '<p>Thank you for choosing a <strong>Pre-Auction Purchase</strong> on the <strong>' . e($app['vehicle']) . '</strong> at ' . formatRand((float)$app['price']) . '.</p>'
                 . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand((float)$app['price']) . '</p>'
-                . '<p><strong>Commitment fee:</strong> set by our team on your proforma invoice</p>'
+                . '<p><strong>Your commitment fee offer:</strong> ' . (int)$offerPct . '% (our team confirms it on your proforma invoice)</p>'
                 . ($alt ? '<p><strong>Alternative vehicle:</strong> ' . e($alt ? finVehicleTitle($alt) : '') . '</p>' : '')
                 . '</div>'
                 . '<h3 style="color:#005BA1;font-size:16px;">What happens next?</h3><ol style="margin:0 0 12px 20px;padding:0;font-size:14px;line-height:2;">'
@@ -122,7 +128,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
           <div class="full" id="pa-figures" style="display:none;margin:-.25rem 0 1rem">
             <div style="background:linear-gradient(135deg,#f0f6fc,#e8f4fd);border:1.5px solid #b8d4ee;border-radius:12px;padding:.6rem 1rem">
               <div class="ap-rowline"><span class="lbl">Total price</span><span class="val" id="pa-price"></span></div>
-              <div class="ap-rowline"><span class="lbl">Commitment fee</span><span class="val">Set by our team on your proforma invoice</span></div>
+              <div class="ap-rowline"><span class="lbl">Commitment fee</span><span class="val">Your offer below, approved by our office</span></div>
             </div>
           </div>
           <div class="<?= $grp('name') ?>"><label class="form-label" for="name">Full name <span class="required">*</span></label><input class="form-control" id="name" name="name" autocomplete="name" required value="<?= $val('name', $pageUser['full_name'] ?? '') ?>"><?= $err('name') ?></div>
@@ -130,6 +136,7 @@ finHero('<i class="fas fa-key"></i> Pre-Auction Purchase', 'Secure It Before the
           <div class="<?= $grp('phone') ?>"><label class="form-label" for="phone">Cellphone <span class="required">*</span></label><input class="form-control" id="phone" type="tel" name="phone" autocomplete="tel" required value="<?= $val('phone') ?>"><?= $err('phone') ?></div>
           <div class="<?= $grp('email') ?>"><label class="form-label" for="email">Email <span class="required">*</span></label><input class="form-control" id="email" type="email" name="email" autocomplete="email" required value="<?= $val('email', $pageUser['email'] ?? '') ?>"><?= $err('email') ?></div>
           <div class="full <?= $grp('address') ?>"><label class="form-label" for="address">Physical address <span class="required">*</span></label><input class="form-control" id="address" name="address" autocomplete="street-address" required value="<?= $val('address') ?>"><?= $err('address') ?></div>
+          <div class="<?= $grp('offer_pct') ?>"><label class="form-label" for="offer_pct">Commitment fee you offer (%) <span class="required">*</span></label><input class="form-control" id="offer_pct" name="offer_pct" type="number" inputmode="numeric" min="<?= $paMin ?>" max="<?= $paMax ?>" step="1" required value="<?= $val('offer_pct', (string)$paBand) ?>"><span class="ap-help">Usual for a vehicle at this price: <?= $paBand ?>%. You may offer between <?= $paMin ?>% and <?= $paMax ?>%. Our office approves or adjusts your offer when it issues your proforma invoice.</span><?= $err('offer_pct') ?></div>
           <div class="<?= $grp('bank_name') ?>"><label class="form-label" for="bank_name">Which bank do you bank with? <span class="required">*</span></label><select class="form-control" id="bank_name" name="bank_name" required><option value="">Choose…</option><?= $opt2(FIN_BANKS, 'bank_name') ?></select><?= $err('bank_name') ?></div>
           <div class="full form-group"><label class="form-label" for="message">Anything else? <span style="font-weight:400;color:#889">optional</span></label><textarea class="form-control" id="message" name="message" rows="2"><?= $val('message') ?></textarea></div>
           <div class="full <?= isset($errors['agree']) ? 'ap-err' : '' ?>">

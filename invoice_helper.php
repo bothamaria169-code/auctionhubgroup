@@ -175,8 +175,7 @@ function invCreateDraft(array &$app): ?array {
         $fee = round((float)$app['amount'], 2);
         $pct = $price > 0 ? round($fee / $price * 100, 2) : 0;
     } else {
-        [, , $def] = paRange();
-        $pct = $def;
+        $pct = paBandPercent($price);
         $fee = round($price * $pct / 100, 2);
     }
     $vd = $d['vehicle'] ?? [];
