@@ -547,7 +547,7 @@ $breadcrumbLd = [
                     <p class="vob-text">
                         This vehicle is a <strong>bank repossession / financial institution liquidation</strong>.
                         Own it for <strong>below market value</strong> — all vehicles are sold
-                        <em>voetstoots</em>, DEKRA inspected, and come with a full vehicle condition report.
+                        <em>voetstoots</em>, DEKRA inspected, and the full condition report can be viewed at our office before you buy.
                         Register &amp; bid to drive this home today.
                     </p>
                     <div class="vob-tags">
@@ -790,10 +790,21 @@ $breadcrumbLd = [
                     <?php elseif ($auction['condition_grade'] === 'B'): ?>
                         <span>No roadworthy issues identified &mdash; will pass a roadworthy test.</span>
                     <?php else: ?>
-                        <span>May require specific repairs to pass a roadworthy test. See DEKRA report.</span>
+                        <span>May require specific repairs to pass a roadworthy test. View the full report at our office.</span>
                     <?php endif; ?>
                 </div>
             </div>
+            <details class="dekra-policy" style="margin:.5rem 0 1rem;font-size:.85rem;">
+                <summary style="cursor:pointer;">View the full DEKRA report at our office. <span>Why not on WhatsApp or email?</span></summary>
+                <ol style="padding-left:1.2rem;margin:.6rem 0;">
+                    <?php foreach (DEKRA_REPORT_POLICY as [$why, $text]): ?><li><strong><?= e($why) ?>:</strong> <?= e($text) ?></li><?php endforeach; ?>
+                </ol>
+                <p style="margin:.6rem 0 .3rem;font-weight:600;">The law behind this policy</p>
+                <ul style="padding-left:1.2rem;margin:0;">
+                    <?php foreach (DEKRA_REPORT_LAW as [$act, $text]): ?><li><strong><?= e($act) ?>:</strong> <?= e($text) ?></li><?php endforeach; ?>
+                </ul>
+                <p style="margin:.6rem 0 0;opacity:.8;">A plain-language summary, not legal advice.</p>
+            </details>
             <?php endif; ?>
 
             <!-- Auction status row -->

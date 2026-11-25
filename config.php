@@ -603,3 +603,18 @@ function handleUpload(array $file, string $destination, array $allowedTypes, str
 
     return ['success' => true, 'path' => $relativePath, 'message' => 'Upload successful.'];
 }
+
+/** Why the full DEKRA report is never sent by WhatsApp or email. Shown on vehicle pages. Plain-language summary, not legal advice. */
+const DEKRA_REPORT_POLICY = [
+    ['Fraud prevention', 'Scammers download, edit and reuse DEKRA reports to advertise vehicles that do not exist. We do not send copies out.'],
+    ['Protection against impersonation', 'Inspection documents contain vehicle information that could be misused by people impersonating Auction Hub Group or falsely advertising vehicles.'],
+    ['Document authenticity and accountability', 'You can view the full report at our premises during your preview or test drive, check it against the actual vehicle, and get help from one of our team.'],
+];
+
+/** The law behind the DEKRA report policy, in short. */
+const DEKRA_REPORT_LAW = [
+    ['Cybercrimes Act 19 of 2020, sections 8 and 9', 'Cyber fraud, and creating, altering or passing off a false document or data to deceive, are crimes. An edited report used to sell a vehicle falls under both.'],
+    ['Consumer Protection Act 68 of 2008, section 41', 'False or misleading claims about a vehicle\'s condition, or about being linked to another business, are unlawful.'],
+    ['Protection of Personal Information Act 4 of 2013, section 19', 'We must keep personal information secure. A report can carry a vehicle\'s registration, VIN and owner details.'],
+    ['Copyright Act 98 of 1978', 'The report is DEKRA\'s work, so we do not hand out copies freely.'],
+];
