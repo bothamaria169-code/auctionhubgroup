@@ -180,7 +180,7 @@ function invCreateDraft(array &$app): ?array {
         $fee = round($price * $pct / 100, 2);
     }
     $vd = $d['vehicle'] ?? [];
-    $features = implode("\n", [invSticker($vd['grade'] ?? ($v['condition_grade'] ?? '')), 'Sold voetstoots', 'Full vehicle condition report available']);
+    $features = implode("\n", [invSticker($vd['grade'] ?? ($v['condition_grade'] ?? '')), 'Sold voetstoots', 'Condition report viewable at our office']);
     $notes = ($isFin ? 'Online finance application ' : 'Online pre-auction request ') . finRef($app)
            . (!empty($d['alt']) ? ' · Alternative vehicle: ' . $d['alt']['title'] . ' (lot ' . $d['alt']['id'] . ')' : '')
            . (!empty($d['mechanic']) ? ' · Bringing a mechanic' : '');

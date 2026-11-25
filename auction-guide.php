@@ -66,7 +66,7 @@ require_once __DIR__ . '/header.php';
                 ['fa-user-plus','Register Online','Visit <a href="'.APP_URL.'/login.php?tab=register" style="color:#005BA1;font-weight:600;">auctionhubgroup.co.za</a> and create your bidder profile. Complete your FICA documentation online before auction day.','#005BA1'],
                 ['fa-money-bill-transfer','Pay the Registration Deposit','A <strong>refundable deposit of R10,000.00 per vehicle</strong> is required. EFT must reflect on the day, or Credit/Debit Card accepted for deposit. <strong>No cash or cheques.</strong>','#0078d7'],
                 ['fa-file-arrow-up','Submit FICA Documents','Valid ID, Proof of residential address (not older than 3 months), CK1/CM1 for companies, company resolution and letter of authority. Originals or certified copies only.','#005BA1'],
-                ['fa-search','Browse the Full Catalogue','The auction catalogue is available at least <strong>one week</strong> before auction day. View photos, mileage, start prices, and DEKRA inspection reports online.','#0078d7'],
+                ['fa-search','Browse the Full Catalogue','The auction catalogue is available at least <strong>one week</strong> before auction day. View photos, mileage and start prices online. DEKRA reports can be viewed at our office.','#0078d7'],
                 ['fa-gavel','Bid Live &amp; Win','Bid in person at our branch locations or online via webcast. Watch real-time bids, stay competitive, and secure your asset at the hammer price.','#005BA1'],
             ];
             foreach ($steps as $i => [$icon,$title,$desc,$color]):
@@ -420,7 +420,7 @@ require_once __DIR__ . '/header.php';
                     <i class="fas fa-circle-check" style="color:#fff;font-size:1.2rem;"></i>
                 </div>
                 <h4 style="color:#2e7d32;font-size:1rem;margin-bottom:.5rem;">Green Sticker</h4>
-                <p style="color:#555;font-size:.84rem;line-height:1.6;">May require specific repairs to pass a roadworthy test. Full DEKRA report provided.</p>
+                <p style="color:#555;font-size:.84rem;line-height:1.6;">May require specific repairs to pass a roadworthy test. Full DEKRA report viewable at our office.</p>
             </div>
             <div style="background:#fff8e1;border:2px solid #f9a825;border-radius:14px;padding:1.5rem;text-align:center;">
                 <div style="width:48px;height:48px;background:#f9a825;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;">

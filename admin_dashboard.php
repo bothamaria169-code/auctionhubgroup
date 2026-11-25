@@ -4242,7 +4242,7 @@ function insertSampleArticle(){
 <ol>
   <li><strong>Step one:</strong> Register as a bidder on AHG — takes 5 minutes online.</li>
   <li><strong>Step two:</strong> Browse upcoming auctions and shortlist vehicles.</li>
-  <li><strong>Step three:</strong> Attend the inspection day and check DEKRA reports.</li>
+  <li><strong>Step three:</strong> Attend the inspection day and view the DEKRA reports at our office.</li>
   <li><strong>Step four:</strong> Place your bids confidently knowing the reserve price.</li>
 </ol>
 
@@ -5033,7 +5033,7 @@ function buildSmartEmail(){
     const count = document.getElementById('sf-ev-count').value.trim() || '80+';
     const venue = document.getElementById('sf-ev-venue').value.trim() || '80 Sterling Rd, Kosmosdal, Centurion';
     const intro = document.getElementById('sf-ev-intro').value.trim() ||
-      `Over ${count} vehicles going under the hammer — sedans, SUVs, bakkies, and light commercial vehicles. All DEKRA-certified with full inspection reports.`;
+      `Over ${count} vehicles going under the hammer — sedans, SUVs, bakkies, and light commercial vehicles. All DEKRA-certified, with inspection reports viewable at our office.`;
     const ctaView = document.getElementById('sf-ev-view').value.trim() || 'View All Vehicles';
     const ctaReg  = document.getElementById('sf-ev-cta').value.trim()  || 'Register Free';
     html = buildEmailShell(
@@ -5158,7 +5158,7 @@ function loadNlTemplate(key){
            <p style="color:#fff;font-size:18px;font-weight:700;margin:0;">Saturday, [DATE] — 10:00 AM</p>
          </div>
          <div style="padding:18px;">
-           <p style="font-size:14px;color:#334155;line-height:1.7;margin:0 0 14px;">Over 80 vehicles going under the hammer — sedans, SUVs, bakkies, and light commercial vehicles. All DEKRA-certified with full inspection reports.</p>
+           <p style="font-size:14px;color:#334155;line-height:1.7;margin:0 0 14px;">Over 80 vehicles going under the hammer — sedans, SUVs, bakkies, and light commercial vehicles. All DEKRA-certified, with inspection reports viewable at our office.</p>
            <a href="<?= CANONICAL_URL ?>/auctions.php" style="display:inline-block;background:#005DDB;color:#fff;padding:11px 26px;border-radius:50px;font-weight:700;font-size:13px;text-decoration:none;">View All Vehicles &rarr;</a>
          </div>
        </div>

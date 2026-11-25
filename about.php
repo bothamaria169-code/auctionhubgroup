@@ -139,7 +139,7 @@ function aboutInitials(string $name): string {
             <?php
             $points = [
                 ['fa-handshake','Bank-Mandated Auctions','Entrusted by financial institutions to responsibly dispose of repossessed assets &mdash; a mandate we honour with pride.'],
-                ['fa-clipboard-check','DEKRA Sticker Inspections','Every vehicle undergoes a professional DEKRA inspection and receives a Green, Gold, or Platinum sticker. Full condition report provided to all bidders.'],
+                ['fa-clipboard-check','DEKRA Sticker Inspections','Every vehicle undergoes a professional DEKRA inspection and receives a Green, Gold, or Platinum sticker. Full condition report viewable at our office.'],
                 ['fa-hand-holding-dollar','Finance','One application, an instant score out of 100. Strong score: from R10,500 deposit. Low score, blacklisted or under debt review: qualify with a start-up deposit. Terms up to 48 months.'],
                 ['fa-gavel','Professional Auctioneers','Experienced auctioneers who bring energy, transparency, and fairness to every event.'],
                 ['fa-rotate','Regular Fresh Stock','New inventory arrives continuously. Hundreds of vehicles, properties, and assets go under the hammer each month.'],

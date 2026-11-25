@@ -426,7 +426,7 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
             ['fa-tag',            '#005BA1', 'Pay Only the Bank\'s Outstanding Balance',
              'You bypass retail markup, dealership profit margins, and auction premiums entirely. You pay exactly what the bank needs to recover — often <strong>30–60% below what the same vehicle sells for on AutoTrader or at a dealership</strong>.'],
             ['fa-medal',          '#f59e0b', 'DEKRA-Inspected & Certified',
-             'Every pre-auction vehicle undergoes a full DEKRA professional vehicle inspection before it is offered to you. <strong>You receive the full inspection report.</strong> No hidden defects. No surprises at registration.'],
+             'Every pre-auction vehicle undergoes a full DEKRA professional vehicle inspection before it is offered to you. <strong>The full inspection report can be viewed at our office.</strong> No hidden defects. No surprises at registration.'],
             ['fa-truck-fast',     '#25D366', 'Free Delivery — Anywhere in South Africa',
              'Can\'t travel to our premises? We\'ll deliver the vehicle to your door at <strong>no additional cost</strong>. SADC regional delivery is also available for cross-border buyers.'],
             ['fa-stopwatch',      '#8b5cf6', 'Exclusive 24-Hour Commitment Window',
@@ -1064,7 +1064,7 @@ function filterByBranch(branchId, btn) {
                 DEKRA is one of South Africa's most respected independent vehicle inspection bodies. Their certified technicians conduct a comprehensive mechanical, structural, and electrical assessment of every vehicle in our pre-auction inventory.
             </p>
             <p class="pa-section-sub" style="margin-bottom:1.75rem;">
-                You receive the full inspection report before you commit. <strong>No surprises. No hidden defects. What you see is what you get</strong> — and what the roadworthy certificate will confirm.
+                The full inspection report can be viewed at our office before you commit. <strong>No surprises. No hidden defects. What you see is what you get</strong> — and what the roadworthy certificate will confirm.
             </p>
             <div style="display:flex;align-items:center;gap:.75rem;background:#fff;border:1.5px solid #e0e8f0;border-radius:10px;padding:1rem 1.25rem;">
                 <i class="fas fa-user-doctor" style="color:#005BA1;font-size:1.5rem;flex-shrink:0;"></i>
@@ -1080,7 +1080,7 @@ function filterByBranch(branchId, btn) {
             $dekraGrades = [
                 ['Platinum Sticker','fa-crown','#1565c0','#dbeafe','Already passed a formal roadworthy inspection. The vehicle is in exceptional condition and is immediately road-legal. Ready to register and drive away the same day.','Excellent Condition'],
                 ['Gold Sticker','fa-award','#f59e0b','#fff8e1','Roadworthy and in very good condition. Will pass a formal roadworthy inspection without issues. A minor cosmetic imperfection or two — nothing mechanical.','Very Good Condition'],
-                ['Green Sticker','fa-circle-check','#16a34a','#dcfce7','Minor repairs may be needed to obtain a roadworthy certificate. The full DEKRA report details exactly what is required. All repairs are disclosed upfront.','Requires Minor Repairs'],
+                ['Green Sticker','fa-circle-check','#16a34a','#dcfce7','Minor repairs may be needed to obtain a roadworthy certificate. The full DEKRA report, viewable at our office, details exactly what is required. All repairs are disclosed upfront.','Requires Minor Repairs'],
             ];
             foreach ($dekraGrades as [$name, $icon, $color, $bg, $desc, $label]):
             ?>
