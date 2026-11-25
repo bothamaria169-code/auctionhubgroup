@@ -184,6 +184,8 @@ header('X-Robots-Tag: noindex, nofollow');
     Subject to your documents and a credit bureau check.</div>
   <?php endif; ?>
   <div class="box">This quote is indicative and becomes binding only when your finance agreement is signed. The deposit is deducted from the price — it is not an extra cost.</div>
+  <?= finDepositGrantsHtml($app) ?>
+  <?= finCompanyDetailsHtml() ?>
 
 <?php elseif ($doc === 'invoice'): ?>
   <div class="totals"><table>

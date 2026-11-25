@@ -798,7 +798,7 @@ function displayPrice(array $auction): string {
                 <h3>Finance</h3>
                 <p>
                     Instant finance score. Low score or blacklisted? Qualify with a start-up deposit.
-                    From R10,500 deposit — pay more to lower instalments. Flexible terms from 6 to 48 months.
+                    From R10,500 deposit — pay more to lower instalments. Flexible terms from 6 to 72 months.
                 </p>
             </div>
 

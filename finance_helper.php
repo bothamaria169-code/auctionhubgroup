@@ -13,7 +13,7 @@
 //                    R (no room in the budget) referred to the office. Instant
 //                    quote at the required deposit; every term is offered (terms
 //                    above the budget guide are flagged, never blocked).
-//   2 Term           the CLIENT chooses 6–48 months (up to 72 on trucks & plant) —
+//   2 Term           the CLIENT chooses 6–72 months —
 //                    the office never chooses the payment plan for them.
 //   3 Documents &    office approves the deposit (deposit invoice), suggests a
 //     deposit        higher one, or declines. Client uploads SA ID, proof of
@@ -102,7 +102,7 @@ function finMinDeposit(array $a): float {
 /** Terms with the flat monthly rate (% per month) — the same tiers as the calculator on financing.php. */
 function finTiers(array $a = []): array {
     $defaults = [6 => 3.5, 12 => 3.0, 24 => 2.8, 36 => 2.6, 48 => 2.5, 60 => 2.4, 72 => 2.3];
-    $max = finIsHeavy($a) ? 72 : 48;
+    $max = 72;
     $out = [];
     foreach ($defaults as $m => $r) {
         if ($m > $max) continue;
@@ -750,6 +750,7 @@ function paTermsLetterHtml(array $app): string {
         . '<li>If you cancel, a refund is paid less <strong>' . $R(PA_REFUND_FEE) . '</strong> admin fee and bank charges.</li>'
         . $alt
         . '<li>Vehicles are sold <em>voetstoots</em>, and each one is only available while it is advertised.</li></ul>'
+        . finCompanyDetailsHtml()
         . '<p><strong>Please confirm you have read and understood these terms:</strong></p>'
         . '<p><a href="' . e($link) . '" style="display:inline-block;background:#005BA1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;">Confirm and proceed with my invoice</a></p>'
         . '<p style="font-size:13px;color:#555;">Not ready to proceed? You are welcome to <a href="' . APP_URL . '/register-to-bid.php">register and bid</a> on vehicles at auction instead.</p>';
@@ -1102,6 +1103,30 @@ function finRecordMail(array &$app, string $what, bool $ok): void {
     $app['details']['emails'][] = ['at' => date('Y-m-d H:i:s'), 'what' => $held ? $what . ' — in the Outbox, waiting for admin approval' : $what, 'ok' => $ok];
 }
 
+/** Company details on every first-stage client document, so clients can check we are genuine. */
+function finCompanyDetailsHtml(): string {
+    return '<div style="margin:1rem 0;padding:.8rem 1rem;border:1px solid #d9e3ee;border-radius:8px;font-size:12.5px;line-height:1.6;color:#334155;">'
+        . '<strong>' . e(COMPANY_REGISTERED_NAME) . '</strong> t/a ' . e(COMPANY_TRADING_AS) . ' · ' . e(COMPANY_TYPE) . '<br>'
+        . 'Reg no. ' . e(COMPANY_REG_NO) . ' (registered ' . e(COMPANY_REG_DATE) . ') · SARS tax no. ' . e(COMPANY_SARS_NO) . '<br>'
+        . e(COMPANY_ADDRESS) . '<br>'
+        . 'Tel ' . e(COMPANY_PHONE) . ' · WhatsApp ' . e(COMPANY_WHATSAPP) . ' · ' . e(COMPANY_EMAIL) . '<br>'
+        . 'To verify us, call the numbers above or check our registration details with CIPC. Only pay into the account on an official Auction Hub Group invoice.'
+        . '</div>';
+}
+
+/** What the deposit grants the client, shown on the quote so they know before they choose a term. */
+function finDepositGrantsHtml(array $app): string {
+    $dep = formatRand((float)($app['details']['quote']['deposit'] ?? $app['amount']));
+    return '<div class="highlight-box"><p><strong>What your deposit of ' . $dep . ' grants you</strong></p><ul style="margin:0 0 0 20px;padding:0;font-size:14px;line-height:1.8;">'
+        . '<li>The deposit is part of the vehicle price. It is deducted from the price, not added on top.</li>'
+        . '<li>Once your deposit is verified you receive your <strong>Buyer\'s Code</strong>. It is your access pass to the vehicle. No Buyer\'s Code, no entry.</li>'
+        . '<li>Your Buyer\'s Code confirms your <strong>test drive and inspection</strong> at our head office. Bring your own mechanic if you wish.</li>'
+        . '<li>After the test drive you <strong>sign off your final decision</strong>. If you are happy, you sign your finance agreement and drive away.</li>'
+        . '<li>If you change your mind before you sign, your deposit is refunded less our flat R' . number_format(PA_REFUND_FEE, 2) . ' admin fee.</li>'
+        . '<li>Vehicles are sold <em>voetstoots</em>. Each vehicle is only available while it is advertised.</li></ul>'
+        . '<p style="margin:.8rem 0 0"><strong>Choose your repayment term</strong> from the options below on your application page. Your instalment is based on the amount you qualify for.</p></div>';
+}
+
 function finSendQuote(array &$app): bool {
     $q = $app['details']['quote'];
     $review = $app['status'] === 'review';
@@ -1122,6 +1147,8 @@ function finSendQuote(array &$app): bool {
     $body = $intro
         . '<div class="highlight-box"><p><strong>Vehicle price:</strong> ' . formatRand($q['price']) . '</p><p><strong>Your deposit:</strong> ' . formatRand($q['deposit']) . '</p><p><strong>Amount financed:</strong> ' . formatRand($q['financed']) . '</p></div>'
         . '<h3 style="color:#005BA1;font-size:16px;">Your monthly options</h3><div class="highlight-box">' . $rows . '</div>'
+        . ($review ? '' : finDepositGrantsHtml($app))
+        . finCompanyDetailsHtml()
         . ($review ? '<p>Our finance team will call you within one business day to talk through your options.</p>'
                    : '<p><strong>Next:</strong> you choose the payment plan that suits you on your application page. Quote valid until ' . date('j F Y', strtotime($q['valid'])) . '.</p>');
     $ok = finMailClient($app, $review ? 'Your Finance Application — We Will Call You' : (!empty($q['counter']) ? 'Your Updated Finance Quote' : 'Your Finance Result & Quote'),

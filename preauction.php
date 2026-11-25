@@ -1117,7 +1117,7 @@ function filterByBranch(branchId, btn) {
             <p style="color:rgba(255,255,255,.8);font-size:.92rem;line-height:1.75;max-width:580px;margin-bottom:1rem;">
                 Apply once and get your <strong style="color:#fff;">finance score instantly.</strong>
                 Blacklisted? Low credit score? You can still qualify with a start-up deposit.
-                Flexible repayment plans from 6 to 48 months with a deposit from just <strong style="color:#ffd54f;">R10,500</strong>.
+                Flexible repayment plans from 6 to 72 months with a deposit from just <strong style="color:#ffd54f;">R10,500</strong>.
             </p>
             <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
                 <a href="<?= APP_URL ?>/financing.php"
@@ -1131,7 +1131,7 @@ function filterByBranch(branchId, btn) {
             </div>
         </div>
         <div style="display:grid;gap:.65rem;min-width:220px;">
-            <?php $financePoints = [['fa-gauge-high','Instant Finance Score'],['fa-calendar-check','6–48 Month Terms'],['fa-hand-holding-dollar','From R10,500 Deposit'],['fa-coins','Start-Up Deposit Options']]; ?>
+            <?php $financePoints = [['fa-gauge-high','Instant Finance Score'],['fa-calendar-check','6–72 Month Terms'],['fa-hand-holding-dollar','From R10,500 Deposit'],['fa-coins','Start-Up Deposit Options']]; ?>
             <?php foreach ($financePoints as [$icon, $label]): ?>
             <div style="display:flex;align-items:center;gap:.75rem;background:rgba(255,255,255,.1);border-radius:8px;padding:.65rem 1rem;">
                 <i class="fas <?= $icon ?>" style="color:#ffd54f;width:16px;text-align:center;"></i>

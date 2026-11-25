@@ -155,7 +155,7 @@ The R10,000 is fully refundable — it is a deposit, not a fee. Frame this to us
 • Full online application with an instant finance score out of 100 (affordability, credit profile, employment, deposit, stability). Credit and affordability check with the client's consent.
 • Grade A: approved from R10,500 deposit. Lower score, blacklisted or under debt review: can still qualify with a START-UP DEPOSIT (a share of the price; part of the price, not a fee).
 • Pre-check at financing.php#qualify, apply at finance_apply.php
-• Minimum deposit: R10,500 | Terms: 6, 12, 24, 36, or 48 months
+• Minimum deposit: R10,500 | Terms: 6, 12, 24, 36, 48, 60, or 72 months
 • Example: R60,000 vehicle → R10,500 deposit → R49,500 financed over 12 months @ 3%/month = R4,973/month
 
 ═══ FAQ ═══
