@@ -120,9 +120,10 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
 <div class="dashboard-header">
   <div>
     <h1><i class="fas fa-handshake"></i> Finance &amp; Pre-Auction</h1>
-    <p class="text-muted">Online finance applications and pre-auction purchase requests. Pre-auction invoices are the same ones as in the <a href="invoice_generator.php">Deal Builder</a>.</p>
+    <p class="text-muted">Online finance applications and pre-auction purchase requests. For a walk-in or phone client who did not apply online, use <strong>New walk-in deal</strong>.</p>
   </div>
   <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    <a class="btn btn-sm btn-primary" href="invoice_generator.php?tab=builder"><i class="fas fa-plus"></i> New walk-in deal</a>
     <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/finance_apply.php" target="_blank"><i class="fas fa-up-right-from-square"></i> Finance form</a>
     <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/preauction_request.php" target="_blank"><i class="fas fa-up-right-from-square"></i> Pre-auction form</a>
     <a class="btn btn-sm <?= $faOutboxN ? 'btn-warning' : 'btn-outline' ?>" href="?tab=applications&amp;view=outbox"><i class="fas fa-inbox"></i> Outbox<?= $faOutboxN ? ' (' . $faOutboxN . ' to approve)' : '' ?></a>
@@ -275,8 +276,19 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
           <div class="fa2-row"><span class="lbl">Test drive</span><span class="val"><?= !empty($d['viewing']['date']) ? e(finViewingLabel($d['viewing'])) . ' (' . e($d['viewing']['status']) . ')' : '—' ?></span></div>
           <div class="fa2-row"><span class="lbl">Submitted</span><span class="val"><?= safeDate('d M Y H:i', $a['created_at']) ?></span></div>
           <?php if (!empty($d['message'])): ?><div class="fa2-row"><span class="lbl">Message</span><span class="val"><?= nl2br(e($d['message'])) ?></span></div><?php endif; ?>
+          <?php if ($wa): $waDigits = preg_replace('~^https://wa\.me/(\d+).*$~', '$1', $wa); ?>
+          <div class="wa-next" style="margin-top:1rem;border:1px solid #bfe8cc;background:#f2fbf5;border-radius:10px;padding:.8rem 1rem">
+            <div style="font-weight:700;color:#127a3a;margin-bottom:.4rem"><i class="fab fa-whatsapp"></i> Next WhatsApp to <?= e($a['name']) ?> <small style="font-weight:400;color:#55705f">· <?= e(FIN_STATUS_LABELS[$a['kind']][$a['status']] ?? $a['status']) ?></small></div>
+            <textarea id="waNext<?= $id ?>" class="form-control" rows="9" style="width:100%;font-size:.88rem;white-space:pre-wrap"><?= e(finAdminWhatsAppText($a)) ?></textarea>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+              <a class="btn btn-sm btn-success" href="<?= e($wa) ?>" target="_blank" rel="noopener"
+                 onclick="this.href='https://wa.me/<?= e($waDigits) ?>?text='+encodeURIComponent(document.getElementById('waNext<?= $id ?>').value)"><i class="fab fa-whatsapp"></i> Open in WhatsApp</a>
+              <button type="button" class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText(document.getElementById('waNext<?= $id ?>').value);this.textContent='Copied'"><i class="fas fa-copy"></i> Copy</button>
+            </div>
+            <small class="text-muted">The message changes with each step. Edit it here before you send.</small>
+          </div>
+          <?php endif; ?>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
-            <?php if ($wa): ?><a class="btn btn-sm btn-success" href="<?= e($wa) ?>" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> WhatsApp next step</a><?php endif; ?>
             <a class="btn btn-sm btn-outline" href="<?= e(finLink($a)) ?>" target="_blank"><i class="fas fa-eye"></i> Client page</a>
             <a class="btn btn-sm btn-primary" href="invoice_edit.php?<?= $inv ? 'id=' . (int)$inv['id'] : 'app=' . $id ?>"><i class="fas fa-file-pen"></i> <?= $inv && $inv['status'] !== 'draft' ? 'Invoice' : 'Review &amp; edit invoice' ?></a>
             <?php if ($inv): ?><a class="btn btn-sm btn-outline" href="invoice_view.php?id=<?= (int)$inv['id'] ?>" target="_blank"><i class="fas fa-print"></i> View / print</a><?php endif; ?>
@@ -284,7 +296,7 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
               <a class="btn btn-sm btn-outline" href="<?= APP_URL ?>/application_doc.php?id=<?= $id ?>&amp;doc=<?= $k ?>" target="_blank"><?= $l ?></a>
             <?php endforeach; elseif ($inv): ?>
               <?php if ($inv['pop_file_path']): ?><a class="btn btn-sm btn-outline" href="serve_pop.php?file=<?= urlencode(basename($inv['pop_file_path'])) ?>" target="_blank"><i class="fas fa-paperclip"></i> Proof of payment</a><?php endif; ?>
-              <a class="btn btn-sm btn-outline" href="invoice_generator.php?tab=preauction"><i class="fas fa-magic"></i> Deal Builder</a>
+              <a class="btn btn-sm btn-outline" href="invoice_generator.php?tab=preauction"><i class="fas fa-magic"></i> All pre-auction invoices</a>
             <?php endif; ?>
           </div>
         </div>

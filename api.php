@@ -3530,6 +3530,7 @@ switch ($action) {
                 $unsubLink = APP_URL . '/api.php?action=newsletter_unsubscribe&email=' . urlencode($r['email']);
                 $body = $camp['content_html'];
                 $body .= '<div style="text-align:center;padding:20px 0;border-top:1px solid #eee;margin-top:30px;font-size:12px;color:#999;">
+                    ' . companyIdentityHtml() . '
                     <a href="' . htmlspecialchars($unsubLink) . '" style="color:#999;">Unsubscribe</a>
                 </div>';
                 $mail->Body    = $body;

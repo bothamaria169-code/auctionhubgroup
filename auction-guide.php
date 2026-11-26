@@ -361,6 +361,25 @@ require_once __DIR__ . '/header.php';
             </div>
         </div>
 
+        <!-- AFTER YOU WIN -->
+        <div style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);">
+            <h2 style="color:#003f73;font-size:1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.75rem;">
+                <i class="fas fa-trophy" style="color:#e8a000;"></i> After You Win
+            </h2>
+            <ol style="color:#333;font-size:.95rem;line-height:1.7;padding-left:1.25rem;display:flex;flex-direction:column;gap:.6rem;">
+                <li>Receive confirmation that you have won the bid.</li>
+                <li>Receive your sales order / invoice by email.</li>
+                <li>Check the vehicle price and any additional charges.</li>
+                <li>Make full payment by EFT within one business day of receiving the invoice.</li>
+                <li>Send us proof of payment.</li>
+                <li>Wait for payment clearance and verification.</li>
+                <li>Receive your vehicle Release Note.</li>
+                <li>Arrange vehicle collection within 24 hours of the Release Note.</li>
+                <li>Present your ID and sign the delivery note.</li>
+                <li>Complete the ownership-transfer process and receive your registration documents.</li>
+            </ol>
+        </div>
+
         <!-- PRE-AUCTION 3-STEP PROCESS -->
         <div style="background:#fff;border-radius:16px;padding:2.5rem;margin-bottom:2rem;box-shadow:0 2px 20px rgba(0,0,0,.06);">
             <h2 style="color:#003f73;font-size:1.5rem;margin-bottom:2rem;display:flex;align-items:center;gap:.75rem;">

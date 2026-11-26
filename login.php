@@ -243,6 +243,14 @@ require_once 'header.php';
                         <span class="form-hint">Required for bidder verification</span>
                     </div>
 
+                    <div class="form-group">
+                        <label for="reg-bank" class="form-label">Which bank are you with? <span class="req">*</span></label>
+                        <div class="input-icon-wrap">
+                            <i class="fas fa-building-columns input-icon" aria-hidden="true"></i>
+                            <select id="reg-bank" name="bank_name" class="form-input input-with-icon" required><?= clientBankOptions() ?></select>
+                        </div>
+                    </div>
+
                     <div class="form-row-2">
                         <div class="form-group">
                             <label for="reg-password" class="form-label">Password <span class="req">*</span></label>
@@ -585,6 +593,7 @@ require_once 'header.php';
                 fd.append('email',            email);
                 fd.append('phone',            phone);
                 fd.append('id_number',        idNum);
+                fd.append('bank_name',        document.getElementById('reg-bank').value);
                 fd.append('password',         password);
                 fd.append('confirm_password', confirm);
 

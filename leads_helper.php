@@ -632,6 +632,7 @@ function saveEnquiry(array $in): array {
     $name    = trim(mb_substr((string)($in['name'] ?? ''), 0, 150));
     $email   = trim(mb_substr((string)($in['email'] ?? ''), 0, 190));
     $phone   = trim(mb_substr((string)($in['phone'] ?? ''), 0, 30));
+    $bank    = in_array($in['bank_name'] ?? '', CLIENT_BANKS, true) ? $in['bank_name'] : '';
     $type    = isset(ENQUIRY_TYPES[$in['type'] ?? '']) ? $in['type'] : 'general';
     $message = trim(mb_substr((string)($in['message'] ?? ''), 0, 3000));
     $auction = (int)($in['auction_id'] ?? 0) ?: null;
@@ -639,6 +640,7 @@ function saveEnquiry(array $in): array {
     if (mb_strlen($name) < 2)                     return [false, 'Please tell us your name.'];
     if (!leadPhoneKey($phone))                    return [false, 'Please give a phone number we can call or WhatsApp.'];
     if ($email !== '' && !leadCleanEmail($email)) return [false, 'That email address does not look right.'];
+    if ($bank === '')                             return [false, 'Please tell us which bank you bank with.'];
 
     $vehicle = '';
     if ($auction) {
@@ -648,8 +650,8 @@ function saveEnquiry(array $in): array {
         else $auction = null;
     }
 
-    $pdo->prepare("INSERT INTO enquiries (type, name, email, phone, auction_id, message, source_page, attribution, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        ->execute([$type, $name, $email ?: null, $phone, $auction, $message ?: null,
+    $pdo->prepare("INSERT INTO enquiries (type, name, email, phone, bank_name, auction_id, message, source_page, attribution, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        ->execute([$type, $name, $email ?: null, $phone, $bank, $auction, $message ?: null,
                    mb_substr((string)($in['source_page'] ?? ''), 0, 255) ?: null,
                    function_exists('attributionJson') ? (attributionJson() ?: null) : null,
                    $_SERVER['REMOTE_ADDR'] ?? null]);
@@ -662,7 +664,7 @@ function saveEnquiry(array $in): array {
         $mail->addAddress(MAIL_ADMIN);
         if ($email) $mail->addReplyTo($email, $name);
         $mail->Subject = 'New enquiry #' . $id . ': ' . $name . ($vehicle ? ' — ' . $vehicle : '');
-        $rows = [['Name', $name], ['Phone', $phone], ['Email', $email ?: '—'], ['About', ENQUIRY_TYPES[$type]], ['Vehicle', $vehicle ?: '—'], ['Message', $message ?: '—']];
+        $rows = [['Name', $name], ['Phone', $phone], ['Email', $email ?: '—'], ['Bank', $bank], ['About', ENQUIRY_TYPES[$type]], ['Vehicle', $vehicle ?: '—'], ['Message', $message ?: '—']];
         $body = '<h2>New website enquiry</h2><table style="width:100%;border-collapse:collapse">';
         foreach ($rows as [$k, $v]) $body .= '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;color:#777;width:90px">' . $k . '</td><td style="padding:6px 8px;border-bottom:1px solid #eee">' . nl2br(e($v)) . '</td></tr>';
         $body .= '</table><a class="cta-btn" href="' . APP_URL . '/admin_dashboard.php?tab=leads" style="display:inline-block;margin-top:18px;padding:12px 24px;background:#005BA1;color:#fff;border-radius:6px;text-decoration:none">Open Leads</a>';

@@ -619,3 +619,15 @@ const DEKRA_REPORT_LAW = [
     ['Protection of Personal Information Act 4 of 2013, section 19', 'We must keep personal information secure. A report can carry a vehicle\'s registration, VIN and owner details.'],
     ['Copyright Act 98 of 1978', 'The report is DEKRA\'s work, so we do not hand out copies freely.'],
 ];
+
+// Banks clients can choose on every client form (registration, enquiry, finance, pre-auction)
+const CLIENT_BANKS = ['ABSA', 'African Bank', 'Bidvest Bank', 'Capitec', 'Discovery Bank', 'FNB', 'Investec', 'Nedbank', 'Old Mutual', 'Standard Bank', 'TymeBank', 'Other'];
+
+/** The <option> list for a bank <select>, with a "Choose your bank" placeholder. */
+function clientBankOptions(string $selected = ''): string {
+    $h = '<option value="">Choose your bank</option>';
+    foreach (CLIENT_BANKS as $b) {
+        $h .= '<option' . ($b === $selected ? ' selected' : '') . '>' . htmlspecialchars($b, ENT_QUOTES) . '</option>';
+    }
+    return $h;
+}

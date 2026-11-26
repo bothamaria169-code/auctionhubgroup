@@ -335,6 +335,10 @@ $waHeroLink = waLink("Hi Auction Hub Group, I'd like help registering as a bidde
                             <input type="text" id="lp-id" name="id_number" inputmode="numeric" required>
                         </div>
                     </div>
+                    <div class="lp-field">
+                        <label for="lp-bank">Which bank are you with?</label>
+                        <select id="lp-bank" name="bank_name" required><?= clientBankOptions() ?></select>
+                    </div>
                     <div class="lp-field-row">
                         <div class="lp-field">
                             <label for="lp-pass">Password</label>
@@ -579,6 +583,7 @@ $waHeroLink = waLink("Hi Auction Hub Group, I'd like help registering as a bidde
         if (!email.includes('@'))                     return showAlert('Please enter a valid email address.', 'error');
         if (phone.replace(/\D/g, '').length < 10)     return showAlert('Please enter a valid mobile number.', 'error');
         if (idNum.length < 6)                         return showAlert('Please enter your SA ID number.', 'error');
+        if (!document.getElementById('lp-bank').value) return showAlert('Please tell us which bank you bank with.', 'error');
         if (password.length < 8)                      return showAlert('Password must be at least 8 characters.', 'error');
         if (password !== confirm)                     return showAlert('The two passwords do not match.', 'error');
         if (!document.getElementById('lp-terms').checked)
@@ -594,6 +599,7 @@ $waHeroLink = waLink("Hi Auction Hub Group, I'd like help registering as a bidde
             fd.append('email', email);
             fd.append('phone', phone);
             fd.append('id_number', idNum);
+            fd.append('bank_name', document.getElementById('lp-bank').value);
             fd.append('password', password);
             fd.append('confirm_password', confirm);
 

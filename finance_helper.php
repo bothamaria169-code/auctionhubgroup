@@ -634,7 +634,7 @@ function finQuoteFromAssessment(array &$app, float $offered, bool $counter = fal
 
 const FIN_TITLES   = ['Mr', 'Mrs', 'Ms', 'Miss', 'Dr', 'Prof'];
 const FIN_MARITAL  = ['single' => 'Single', 'married' => 'Married', 'cohabiting' => 'Living together', 'divorced' => 'Divorced', 'widowed' => 'Widowed'];
-const FIN_BANKS    = ['ABSA', 'African Bank', 'Bidvest Bank', 'Capitec', 'Discovery Bank', 'FNB', 'Investec', 'Nedbank', 'Old Mutual', 'Standard Bank', 'TymeBank', 'Other'];
+const FIN_BANKS    = CLIENT_BANKS;
 const FIN_PAY_DAYS = ['25th', 'Last working day', '15th', '1st', 'Weekly', 'Fortnightly', 'Other'];
 
 /**
@@ -1587,22 +1587,67 @@ function finWhatsAppUrl(array $app): string {
     return 'https://wa.me/' . COMPANY_WHATSAPP_INTL . '?text=' . rawurlencode($msg);
 }
 
+/** WhatsApp sign-off with the details clients can use to check who they are dealing with. */
+function waSignOff(): string {
+    $agent = function_exists('leadAgentName') ? leadAgentName() : 'Auction Hub Group';
+    return "\n\nKind regards,\n" . $agent . "\n*" . COMPANY_TRADING_AS . "* · " . COMPANY_PHONE
+        . "\n_" . COMPANY_REGISTERED_NAME . " (Pty) Ltd · Reg " . COMPANY_REG_NO . ". We never ask you to pay into a different account — if anyone does, call us first._";
+}
+
+/** The office's next WhatsApp message to the client: what happened and exactly what they do next. */
+function finAdminWhatsAppText(array $app): string {
+    $first = ucfirst(explode(' ', trim((string)$app['name']))[0] ?: 'there');
+    $car   = '*' . ($app['vehicle'] ?: 'your vehicle') . '*';
+    $ref   = finRef($app);
+    $link  = finLink($app);
+    $code  = (string)($app['buyer_code'] ?? '');
+    $fin   = $app['kind'] === 'finance';
+    $d     = $app['details'] ?? [];
+    $open  = "Good day $first,\n\nThis is " . (function_exists('leadAgentName') ? leadAgentName() : 'the team') . " from *" . COMPANY_TRADING_AS . "* about the $car ($ref).\n\n";
+
+    if ($fin) {
+        $body = match ($app['status']) {
+            'review'    => "Thank you for your finance application. I'd like to go through it with you. When is a good time for a quick call today?",
+            'quoted'    => "Your finance quote is ready, with repayment terms from 6 to 72 months.\n\nNext steps:\n1. Open your quote: $link\n2. Choose the term that suits you\n3. Tap *Request my invoice*\n\nAny questions about the terms, just reply here.",
+            'chosen'    => !empty($d['invoice_requested_at'])
+                ? "Thank you, we have your chosen term and your invoice request. We are preparing your deposit invoice now and will send it shortly."
+                : "Thank you for choosing your term. To continue, tap *Request my invoice* on your application page:\n$link",
+            'invoiced'  => "Your deposit invoice has been sent to your email.\n\nNext steps:\n1. Pay the deposit by EFT using the reference on the invoice\n2. Upload your proof of payment and documents here: $link\n\nPaying the deposit does not commit you to buy. Approval is subject to the credit assessment.",
+            'approved'  => "Good news, you are approved! Your Buyer Code is *$code*.\n\nNext steps:\n1. We book your test drive and inspection at our office\n2. Bring your ID and driver's licence\n3. After the test drive and inspection, you sign off your final decision\n\nWhich day suits you?",
+            'completed' => "Thank you for buying with us, and enjoy the $car! If you need anything, we are a message away.",
+            'declined'  => "Unfortunately we could not approve the finance this time. You are still welcome to buy at auction or through pre-auction. Shall I send you the options?",
+            default     => "Here is an update on your application: $link",
+        };
+    } else {
+        $body = match ($app['status']) {
+            'requested' => function_exists('paTermsConfirmed') && !paTermsConfirmed($app)
+                ? "Thank you for your pre-auction request. We emailed you a commitment-fee letter that explains what the fee is for and what it means for you.\n\nNext step: read it and tap *Confirm and request my invoice*:\n" . APP_URL . "/confirm_terms.php?t=" . $app['token'] . "\n\nIf you'd rather not commit now, you can register and bid on auction day instead."
+                : "Thank you for confirming the commitment-fee letter. We are preparing your invoice and will send it shortly.",
+            'invoiced'  => "Your commitment-fee invoice has been sent to your email. It is valid for 24 hours.\n\nNext steps:\n1. Pay by EFT using the reference on the invoice\n2. Upload your proof of payment here: $link\n\nOnce payment is verified you receive your Buyer Code and we book your test drive.",
+            'pop_uploaded' => "Thank you, we have your proof of payment. We are verifying it and will send your Buyer Code as soon as the funds reflect.",
+            'expired'   => "Your invoice for the $car has expired (it is valid for 24 hours). Would you still like the vehicle? I can re-issue the invoice if it is still available.",
+            'paid'      => "Your payment is verified and the $car is reserved in your name. Your Buyer Code is *$code*.\n\nNext steps:\n1. We book your test drive and inspection at our office (1 hour 30 minutes, bring a mechanic if you like)\n2. Bring your ID and driver's licence\n3. After the test drive and inspection, you sign off your final decision\n\nWhich day suits you?",
+            'completed' => "Thank you for buying with us, and enjoy the $car! If you need anything, we are a message away.",
+            'refund'    => "We have your cancellation after the test drive. Your refund is being processed to the account you paid from, less the R" . number_format(PA_REFUND_FEE, 2) . " admin and bank fee. We'll let you know once it is paid.",
+            'declined'  => "Unfortunately we cannot go ahead with this request. You are still welcome to register and bid on auction day. Shall I send you the details?",
+            default     => "Here is an update on your request: $link",
+        };
+    }
+    return $open . $body . waSignOff();
+}
+
+/** wa.me link to the client's number, '' when the number is unusable. */
+function waLink(?string $phone, string $text): string {
+    $digits = preg_replace('/\D/', '', (string)$phone);
+    if (str_starts_with($digits, '00')) $digits = substr($digits, 2);
+    if (str_starts_with($digits, '0')) $digits = '27' . substr($digits, 1);
+    if (strlen($digits) < 11) return '';
+    return 'https://wa.me/' . $digits . '?text=' . rawurlencode($text);
+}
+
 /** The office's WhatsApp to the client with their next step. */
 function finAdminWhatsAppUrl(array $app): string {
-    $digits = preg_replace('/\D/', '', $app['phone']);
-    if (str_starts_with($digits, '0')) $digits = '27' . substr($digits, 1);
-    if (strlen($digits) < 9) return '';
-    $first = explode(' ', trim($app['name']))[0];
-    $next = match ($app['status']) {
-        'quoted'       => 'your finance quote is ready — please choose your repayment term',
-        'chosen'       => 'we are reviewing your deposit now',
-        'invoiced'     => $app['kind'] === 'finance' ? 'your deposit is approved — please upload your documents and proof of payment' : 'your proforma invoice is ready — please pay the commitment fee within 24 hours and upload proof of payment',
-        'pop_uploaded' => 'we have your proof of payment and are verifying it',
-        'approved'     => 'you are approved! Your Buyer Code is ' . $app['buyer_code'] . ' — our team will contact you to book your test drive',
-        'paid'         => 'your vehicle is Presold under your name. Your Buyer Code is ' . $app['buyer_code'],
-        default        => 'here is an update on your application',
-    };
-    return 'https://wa.me/' . $digits . '?text=' . rawurlencode("Hi $first, Auction Hub Group here about the {$app['vehicle']} (" . finRef($app) . "): $next.\n" . finLink($app));
+    return waLink($app['phone'] ?? '', finAdminWhatsAppText($app));
 }
 
 function finForEmail(string $email): array {

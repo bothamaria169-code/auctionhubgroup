@@ -247,6 +247,7 @@ switch ($action) {
         $email     = trim(strtolower($_POST['email'] ?? ''));
         $phone     = trim($_POST['phone']     ?? '');
         $idNumber  = trim($_POST['id_number'] ?? '');
+        $bankName  = trim($_POST['bank_name'] ?? '');
         $password  = $_POST['password']       ?? '';
         $confirm   = $_POST['confirm_password'] ?? '';
 
@@ -256,6 +257,7 @@ switch ($action) {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Valid email address required.';
         if (strlen($phone) < 10)        $errors[] = 'Valid phone number required.';
         if (strlen($idNumber) < 6)      $errors[] = 'ID number is required.';
+        if (!in_array($bankName, CLIENT_BANKS, true)) $errors[] = 'Please tell us which bank you bank with.';
         if (strlen($password) < 8)      $errors[] = 'Password must be at least 8 characters.';
         if ($password !== $confirm)     $errors[] = 'Passwords do not match.';
 
@@ -280,6 +282,14 @@ switch ($action) {
         ");
         $stmt->execute([$fullName, $email, $phone, $idNumber, $hashed]);
         $userId = $pdo->lastInsertId();
+
+        // Client's bank. Separate, so a database without the column still registers users.
+        try {
+            require_once __DIR__ . '/db_schema.php';
+            if (ahgSchemaReady()) $pdo->prepare("UPDATE users SET bank_name = ? WHERE id = ?")->execute([$bankName, $userId]);
+        } catch (Exception $e) {
+            error_log('Bank name not saved: ' . $e->getMessage());
+        }
 
         // Stamp the ad click that produced this bidder, so cost-per-registration
         // can be read straight off the users table. Wrapped because the acq_*

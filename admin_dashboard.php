@@ -88,6 +88,7 @@ try { $stats['pending_refunds'] = $pdo->query("SELECT COUNT(*) FROM refund_reque
 
 // Leads waiting for a first contact (last 7 days) + call-backs due — menu badge and Overview strip
 require_once __DIR__ . '/leads_helper.php';
+require_once __DIR__ . '/finance_helper.php';   // to-do list: application next-step WhatsApp
 $stats['leads_waiting'] = leadWaitingCount();
 $stats['applications_waiting'] = 0;   // finance / pre-auction applications waiting on the office
 try { if (ahgSchemaReady()) $stats['applications_waiting'] = (int)$pdo->query("SELECT COUNT(*) FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed')")->fetchColumn(); } catch (Exception $e) {}
@@ -134,6 +135,41 @@ if ($activeTab === 'overview') {
         'month_from'  => $mStart,
         'month_label' => date('F Y'),
     ];
+    // To-do list: who is waiting, per job (up to 5 names each, oldest first), each with a ready WhatsApp
+    $todoLists = [];
+    $q = function (string $sql) use ($pdo): array { try { return $pdo->query($sql)->fetchAll(); } catch (Throwable $e) { return []; } };
+    $waTpl = function (string $key, array $person): string {
+        $t = leadTemplates('wa')[$key]['body'] ?? '';
+        return $t === '' ? '' : leadFill($t, leadCommonVars() + leadPersonVars($person));
+    };
+    $hi = fn(string $name) => 'Good day ' . ucfirst(explode(' ', trim($name))[0] ?: 'there') . ",\n\nThis is " . leadAgentName() . ' from *' . COMPANY_TRADING_AS . "*. ";
+    $todoLists['pop'] = array_map(fn($r) => [$r['full_name'], 'Uploaded ' . leadTimeAgo((string)($r['pop_uploaded_at'] ?: $r['created_at'])), '?tab=pop',
+            waLink($r['phone'], $hi($r['full_name']) . "Thank you, we have your proof of payment for the registration deposit. We are verifying it and will activate your bidder number as soon as the funds reflect." . waSignOff())],
+        $q("SELECT full_name, phone, pop_uploaded_at, created_at FROM users WHERE bidder_status = 'pending_approval' ORDER BY COALESCE(pop_uploaded_at, created_at) ASC LIMIT 5"));
+    $todoLists['applications'] = array_map(function ($r) {
+            $app = finDecode($r);
+            return [$app['name'], ($app['kind'] === 'finance' ? 'Finance' : 'Pre-auction') . ($app['vehicle'] ? ' · ' . $app['vehicle'] : '') . ' · ' . (FIN_STATUS_LABELS[$app['kind']][$app['status']] ?? $app['status']),
+                    '?tab=applications&app=' . (int)$app['id'], finAdminWhatsAppUrl($app)];
+        }, $q("SELECT * FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed') ORDER BY updated_at ASC LIMIT 5"));
+    $todoLists['outbox'] = array_map(fn($r) => [$r['to_name'] ?: $r['to_email'], $r['subject'], '?tab=applications&view=outbox', ''],
+        $q("SELECT to_name, to_email, subject FROM client_outbox WHERE status = 'pending' ORDER BY id ASC LIMIT 5"));
+    $todoLists['banking'] = array_map(fn($r) => [$r['full_name'], 'Asked ' . leadTimeAgo((string)$r['created_at']), '?tab=banking',
+            waLink($r['phone'], $waTpl('bank', ['name' => $r['full_name'], 'user_id' => $r['user_id']]))],
+        $q("SELECT u.full_name, u.phone, br.user_id, br.created_at FROM bank_detail_requests br JOIN users u ON u.id = br.user_id WHERE br.status = 'pending' ORDER BY br.created_at ASC LIMIT 5"));
+    $todoLists['refunds'] = array_map(fn($r) => [$r['full_name'], 'Asked ' . leadTimeAgo((string)$r['created_at']), '?tab=refunds',
+            waLink($r['phone'], $hi($r['full_name']) . "We have your refund request and are processing it. The refund is paid to the account you paid from. We'll let you know as soon as it is paid." . waSignOff())],
+        $q("SELECT u.full_name, u.phone, r.created_at FROM refund_requests r JOIN users u ON u.id = r.user_id WHERE r.status IN ('pending','under_review') ORDER BY r.created_at ASC LIMIT 5"));
+    $todoLists['leads'] = [];
+    try {
+        foreach (leadPeople(7) as $lp) {
+            $due = $lp['call_back_at'] && $lp['call_back_at'] <= date('Y-m-d') && !in_array($lp['stage'], ['won', 'lost'], true);
+            if ($lp['stage'] !== 'new' && !$due) continue;
+            $tpl = $due ? 'follow_up' : (LEAD_WA_FOR_TYPE[$lp['type']] ?? 'follow_up');
+            $todoLists['leads'][] = [$lp['name'], ($due ? 'Call back due' : 'New') . ' · ' . $lp['detail'], '?tab=leads',
+                                     $lp['wa'] ? 'https://wa.me/' . $lp['wa'] . '?text=' . rawurlencode($waTpl($tpl, $lp)) : ''];
+            if (count($todoLists['leads']) >= 5) break;
+        }
+    } catch (Throwable $e) {}
     ahgSchemaReady(); // creates admin_activity_log on first use
     try {
         $activityRows = $pdo->query("
@@ -620,57 +656,55 @@ require_once 'header.php';
 <?php
   // Admin menu, grouped. Both the desktop sidebar and the phone menu are
   // rendered from this one list. [tab or url, label, icon, badge count]
+  // Pages that share one menu item: each gets a row of tabs at the top (tab => label)
+  $adminSubTabs = [
+    'payments' => ['pop' => 'Proof of payment', 'refunds' => 'Refunds'],
+    'import'   => ['stock' => 'Facebook &amp; stock lists', 'import' => 'CSV spreadsheet', 'ai' => 'AI Photos'],
+    'email'    => ['email' => 'One client or a group', 'newsletter' => 'Newsletter (everyone)'],
+    'content'  => ['news' => 'News &amp; Reviews', 'testimonials' => 'Testimonials', 'team' => 'Meet the Team', 'notifications' => 'Announcements'],
+  ];
+  // [first tab or url, label, icon, badge count, other tabs that light this item up]
   $adminNav = [
-    'Dashboard' => [
-      ['overview',   'Overview',   'fa-th-large',   0],
+    'Today' => [
+      ['overview',   'To-do &amp; Overview', 'fa-list-check', 0],
       ['analytics',  'Analytics',  'fa-chart-line', 0],
     ],
-    'Leads' => [
-      ['leads',      'Leads',                 'fa-user-plus',          (int)$stats['leads_waiting']],
-      ['templates',  'Email &amp; WA Templates',  'fa-pen-to-square',      0],
+    'Clients' => [
+      ['leads',        'Leads',                     'fa-user-plus', (int)$stats['leads_waiting']],
+      ['applications', 'Finance &amp; Pre-Auction', 'fa-handshake', (int)$stats['applications_waiting']],
+      ['users',        'Bidders',                   'fa-users',     0],
     ],
-    'Sales' => [
-      ['applications', 'Finance &amp; Pre-Auction', 'fa-handshake',       (int)$stats['applications_waiting']],
-      ['manual_bid', 'Manual Bids & Floor',   'fa-gavel',              0],
-      ['url:invoice_generator.php?tab=builder', 'Deal Builder', 'fa-magic',       0],
+    'Payments' => [
+      ['pop', 'Payments &amp; Refunds', 'fa-file-invoice', (int)$stats['pending_pops'] + (int)$stats['pending_refunds'], array_keys($adminSubTabs['payments'])],
     ],
-    'Vehicles & Auctions' => [
-      ['auctions',   'Auctions',              'fa-car',                0],
-      ['url:manage_auction.php',                'Add Vehicle',  'fa-plus-circle', 0],
-      ['url:admin_split_stock.php',             'Split Stock',  'fa-shuffle',     0],
-      ['url:admin_relist.php',                  'Relist Vehicles', 'fa-rotate',   0],
-      ['stock',      'Stock Import',          'fa-file-import',        0],
-      ['import',     'CSV Import',            'fa-file-csv',           0],
-      ['ai',         'AI Photos',             'fa-wand-magic-sparkles', 0],
-      ['events',     'Events',                'fa-calendar-alt',       0],
+    'Vehicles' => [
+      ['auctions',   'Auctions',            'fa-car',          0],
+      ['stock',      'Import Vehicles',     'fa-file-import',  0, array_keys($adminSubTabs['import'])],
+      ['manual_bid', 'Manual Bids &amp; Floor', 'fa-gavel',    0],
+      ['events',     'Events',              'fa-calendar-alt', 0],
     ],
-    'Bidders & Payments' => [
-      ['pop',        'POP Approvals',   'fa-file-invoice', (int)$stats['pending_pops']],
-      ['users',      'Users',           'fa-users',        0],
-      ['refunds',    'Refunds',         'fa-rotate-left',  (int)$stats['pending_refunds']],
-      ['banking',    'Banking Details', 'fa-university',   0],
+    'Marketing' => [
+      ['email',     'Send Email',             'fa-envelope',     0, array_keys($adminSubTabs['email'])],
+      ['templates', 'Email &amp; WA Templates', 'fa-pen-to-square', 0],
+      ['news',      'Website Content',        'fa-newspaper',    0, array_keys($adminSubTabs['content'])],
     ],
-    'Marketing & Content' => [
-      ['email',         'Email',             'fa-envelope',           0],
-      ['newsletter',    'Newsletter',        'fa-envelope-open-text', 0],
-      ['notifications', 'Notifications',     'fa-bell',               0],
-      ['news',          'News &amp; Reviews', 'fa-newspaper',         0],
-      ['testimonials',  'Testimonials',      'fa-star',               0],
-      ['team',          'Meet the Team',     'fa-users',              0],
-    ],
-    'People' => [
-      ['careers', 'Job Applications', 'fa-user-tie', 0],
-      ['workers', 'Workers',          'fa-id-badge', 0],
+    'Settings &amp; Staff' => [
+      ['banking', 'Banking Details',  'fa-university', (int)$stats['bank_requests']],
+      ['workers', 'Workers',          'fa-id-badge',   0],
+      ['careers', 'Job Applications', 'fa-user-tie',   0],
     ],
   ];
   $tabLabels = [];
-  foreach ($adminNav as $items) foreach ($items as [$t, $l]) if (strpos($t, 'url:') !== 0) $tabLabels[$t] = $l;
+  foreach ($adminNav as $items) foreach ($items as $it) {
+      if (strpos($it[0], 'url:') === 0) continue;
+      foreach (array_merge([$it[0]], $it[4] ?? []) as $t) $tabLabels[$t] = $it[1];
+  }
   /** One admin menu link (sidebar or phone menu) */
   $navLink = function (array $item, string $cls) use ($activeTab): string {
       [$t, $label, $icon, $badge] = $item;
       $isUrl = strpos($t, 'url:') === 0;
       $href  = $isUrl ? substr($t, 4) : '?tab=' . $t;
-      $on    = !$isUrl && $activeTab === $t ? ' active' : '';
+      $on    = !$isUrl && in_array($activeTab, array_merge([$t], $item[4] ?? []), true) ? ' active' : '';
       $b     = $badge > 0 ? ' <span class="sidebar-badge sidebar-badge-danger">' . $badge . '</span>' : '';
       return '<a href="' . htmlspecialchars($href) . '" class="' . $cls . $on . '"><i class="fas ' . $icon . '"></i><span>' . $label . '</span>' . $b . '</a>';
   };
@@ -714,7 +748,7 @@ require_once 'header.php';
     </div>
     <nav class="sidebar-nav">
       <?php foreach ($adminNav as $group => $items):
-          $groupOn = in_array($activeTab, array_column($items, 0), true); ?>
+          $groupOn = in_array($activeTab, array_merge(array_column($items, 0), ...array_map(fn($i) => $i[4] ?? [], $items)), true); ?>
         <div class="sidebar-group<?= $groupOn ? ' active' : '' ?>"><?= e($group) ?></div>
         <?php foreach ($items as $item) echo $navLink($item, 'sidebar-link'); ?>
       <?php endforeach; ?>
@@ -745,6 +779,15 @@ require_once 'header.php';
 
     <div id="adminToast"></div>
 
+    <?php foreach ($adminSubTabs as $subGroup): if (!isset($subGroup[$activeTab])) continue;
+        $subBadges = ['pop' => (int)$stats['pending_pops'], 'refunds' => (int)$stats['pending_refunds']]; ?>
+    <nav class="admin-subtabs" aria-label="Sections">
+      <?php foreach ($subGroup as $st => $sl): ?>
+        <a href="?tab=<?= $st ?>" class="<?= $st === $activeTab ? 'on' : '' ?>"><?= $sl ?><?php if (!empty($subBadges[$st])): ?> <span class="sidebar-badge sidebar-badge-danger"><?= $subBadges[$st] ?></span><?php endif; ?></a>
+      <?php endforeach; ?>
+    </nav>
+    <?php endforeach; ?>
+
 <!-- ═══════════════════════════════════════════════════════════
      TAB: OVERVIEW
 ═══════════════════════════════════════════════════════════════ -->
@@ -772,22 +815,52 @@ require_once 'header.php';
       </a>
     </div>
 
-    <!-- Waiting on you: the jobs only a person can do, each one tap away (idea from BidCo's Today page) -->
+    <!-- To-do: the jobs only a person can do, with who is waiting. Each name opens the job. -->
     <?php $todo = [
-        ['leads',   'fa-user-plus',     (int)$stats['leads_waiting'],   'lead(s) to contact'],
-        ['applications&amp;view=outbox', 'fa-inbox', (int)$stats['outbox_waiting'], 'client email(s) waiting for your approval (Outbox)'],
-        ['applications', 'fa-handshake', (int)$stats['applications_waiting'] - (int)$stats['outbox_waiting'], 'finance / pre-auction application(s) to action'],
-        ['pop',     'fa-file-invoice',  (int)$stats['pending_pops'],    'proof(s) of payment to approve'],
-        ['banking', 'fa-university',    (int)$stats['bank_requests'],   'banking request(s)'],
-        ['refunds', 'fa-rotate-left',   (int)$stats['pending_refunds'], 'refund(s) to process'],
+        ['leads',        'fa-user-plus',     (int)$stats['leads_waiting'],   'Leads to contact',                   '?tab=leads'],
+        ['applications', 'fa-handshake',     (int)$stats['applications_waiting'] - (int)$stats['outbox_waiting'], 'Finance &amp; pre-auction to action', '?tab=applications'],
+        ['outbox',       'fa-inbox',         (int)$stats['outbox_waiting'],  'Client emails waiting for approval', '?tab=applications&view=outbox'],
+        ['pop',          'fa-file-invoice',  (int)$stats['pending_pops'],    'Proofs of payment to approve',       '?tab=pop'],
+        ['banking',      'fa-university',    (int)$stats['bank_requests'],   'Banking-detail requests',            '?tab=banking'],
+        ['refunds',      'fa-rotate-left',   (int)$stats['pending_refunds'], 'Refunds to process',                 '?tab=refunds'],
     ]; $todoTotal = array_sum(array_column($todo, 2)); ?>
-    <div class="todo-strip<?= $todoTotal ? '' : ' todo-clear' ?>">
-      <strong class="todo-title"><i class="fas fa-list-check"></i> <?= $todoTotal ? 'Waiting on you' : 'All caught up' ?></strong>
-      <?php foreach ($todo as [$tab, $icon, $n, $label]): if (!$n) continue; ?>
-        <a class="todo-item" href="?tab=<?= $tab ?>"><i class="fas <?= $icon ?>"></i> <b><?= $n ?></b> <?= $label ?></a>
-      <?php endforeach; ?>
+    <div class="card todo-card" style="margin-bottom:1.5rem">
+      <h2 style="margin:0 0 .25rem;font-size:1.2rem"><i class="fas fa-list-check" style="color:#005BA1"></i> <?= $todoTotal ? 'Waiting on you (' . $todoTotal . ')' : 'All caught up' ?></h2>
+      <p class="text-muted" style="margin:0 0 1rem;font-size:.88rem"><?= $todoTotal ? 'Oldest first. Tap a name to open it, or the green button to WhatsApp them their next step.' : 'Nothing is waiting. New jobs appear here as they come in.' ?></p>
+      <?php if ($todoTotal): ?>
+      <div class="todo-grid">
+        <?php foreach ($todo as [$key, $icon, $n, $label, $all]): if ($n <= 0) continue; ?>
+        <div class="todo-box">
+          <a class="todo-head" href="<?= e($all) ?>"><i class="fas <?= $icon ?>"></i> <span><?= $label ?></span> <b><?= $n ?></b></a>
+          <?php foreach ($todoLists[$key] ?? [] as [$who, $what, $href, $waUrl]): ?>
+            <div class="todo-line">
+              <a class="todo-row" href="<?= e($href) ?>"><strong><?= e($who) ?></strong><small><?= e($what) ?></small></a>
+              <?php if ($waUrl): ?><a class="todo-wa" href="<?= e($waUrl) ?>" target="_blank" rel="noopener" title="WhatsApp the next step"><i class="fab fa-whatsapp"></i></a><?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+          <?php if ($n > count($todoLists[$key] ?? [])): ?><a class="todo-more" href="<?= e($all) ?>">See all <?= $n ?> &rarr;</a><?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
     </div>
+    <style>
+      .todo-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:1rem; }
+      .todo-box { border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; background:#fff; }
+      .todo-head { display:flex; align-items:center; gap:.5rem; padding:.7rem .9rem; background:#f1f5f9; color:#0d2b7b; font-weight:700; text-decoration:none; }
+      .todo-head span { flex:1; }
+      .todo-head b { background:#dc3545; color:#fff; border-radius:999px; padding:.05rem .55rem; font-size:.8rem; }
+      .todo-line { display:flex; align-items:stretch; border-top:1px solid #eef2f6; }
+      .todo-row { display:block; flex:1; min-width:0; padding:.55rem .9rem; text-decoration:none; color:#222; }
+      .todo-wa { display:flex; align-items:center; justify-content:center; width:46px; flex:none; color:#fff; background:#25D366; font-size:1.2rem; text-decoration:none; }
+      .todo-wa:hover { background:#1da851; }
+      .todo-row:hover { background:#f8fafc; }
+      .todo-row strong { display:block; font-size:.92rem; }
+      .todo-row small { color:#64748b; font-size:.8rem; }
+      .todo-more { display:block; padding:.5rem .9rem; border-top:1px solid #eef2f6; font-size:.85rem; font-weight:600; color:#005BA1; text-decoration:none; }
+    </style>
 
+    <details class="ov-numbers"><summary style="cursor:pointer;font-weight:700;color:#0d2b7b;margin-bottom:1rem">Numbers, sales &amp; change log</summary>
     <!-- Stats Row 1: Auctions -->
     <div class="admin-stats-section">
       <h3 class="admin-section-label">Auctions</h3>
@@ -1098,6 +1171,7 @@ require_once 'header.php';
         </div>
       </div>
     </div>
+    </details><!-- /.ov-numbers -->
 
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -1243,9 +1317,11 @@ require_once 'header.php';
         <h1><i class="fas fa-car"></i> Auction Management</h1>
         <p class="text-muted"><?= $aTotal ?> listing<?= $aTotal!==1?'s':'' ?> total</p>
       </div>
-      <a href="manage_auction.php" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Add Vehicle
-      </a>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <a href="manage_auction.php" class="btn btn-primary"><i class="fas fa-plus"></i> Add Vehicle</a>
+        <a href="admin_split_stock.php" class="btn btn-outline"><i class="fas fa-shuffle"></i> Split Live Stock</a>
+        <a href="admin_relist.php" class="btn btn-outline"><i class="fas fa-rotate"></i> Relist Unsold</a>
+      </div>
     </div>
 
     <!-- ── Inline Set All Times form ───────────────────────── -->

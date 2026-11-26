@@ -41,6 +41,10 @@ $enqId        = 'enq' . substr(md5((string)$enqAuctionId . $enqTitle), 0, 6);
         <span>Email <em>(optional)</em></span>
         <input type="email" name="email" autocomplete="email" maxlength="190" value="<?= e($enqUser['email'] ?? '') ?>">
       </label>
+      <label class="enq-field">
+        <span>Which bank are you with?</span>
+        <select name="bank_name" required><?= clientBankOptions($enqUser['bank_name'] ?? '') ?></select>
+      </label>
       <?php if (!$enqAuctionId): ?>
       <label class="enq-field">
         <span>What is it about?</span>

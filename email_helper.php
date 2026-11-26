@@ -10,6 +10,7 @@ use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
 require_once __DIR__ . '/outbox_helper.php';   // client documents wait for an admin before they are emailed
+require_once __DIR__ . '/reg_invoice_pdf.php';  // registration invoice PDF in the Auction Hub invoice layout
 
 // ── Internal: build a configured PHPMailer instance ──────────
 function _buildMailer(string $fromEmail = MAIL_FROM_EMAIL, string $fromName = MAIL_FROM_NAME, string $username = MAIL_USERNAME, string $password = MAIL_PASSWORD): PHPMailer {
@@ -56,6 +57,66 @@ function _buildMailer(string $fromEmail = MAIL_FROM_EMAIL, string $fromName = MA
 // <style> block kept for Outlook/Apple Mail/Thunderbird.
 // Gmail strips <head> CSS — all layout-critical elements also carry
 // inline styles so rendering survives in every client.
+/** One-line company identity for email footers, so clients can check who they deal with. */
+function companyIdentityHtml(): string {
+    return '<p style="margin:0 0 10px;color:#999999;font-size:11px;">'
+        . e(COMPANY_REGISTERED_NAME) . ' (Pty) Ltd, trading as ' . e(COMPANY_TRADING_AS)
+        . ' &mdash; Reg. no. ' . e(COMPANY_REG_NO) . ' &mdash; SARS tax no. ' . e(COMPANY_SARS_NO) . '</p>';
+}
+
+/** Full company details table, for invoices and the registration email. */
+function companyDetailsBlockHtml(): string {
+    $rows = [
+        ['Registered name', COMPANY_REGISTERED_NAME . ' (Pty) Ltd, trading as ' . COMPANY_TRADING_AS],
+        ['Registration no.', COMPANY_REG_NO . ' (registered ' . COMPANY_REG_DATE . ')'],
+        ['SARS tax no.', COMPANY_SARS_NO],
+        ['Address', COMPANY_ADDRESS],
+        ['Phone', COMPANY_PHONE . ' / ' . COMPANY_PHONE2],
+        ['WhatsApp', COMPANY_WHATSAPP],
+        ['Email', COMPANY_EMAIL],
+        ['Website', COMPANY_WEBSITE],
+    ];
+    $h = '<h3 style="color:#005BA1;margin:22px 0 8px;">Our company details</h3>'
+       . '<p style="font-size:13px;color:#666;margin:0 0 8px;">Check these against the CIPC and SARS records before you pay us.</p>'
+       . '<table role="presentation" width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:13px;">';
+    foreach ($rows as [$k, $v]) {
+        $h .= '<tr><td style="border-bottom:1px solid #e8ecf0;color:#666;width:40%;">' . e($k) . '</td><td style="border-bottom:1px solid #e8ecf0;">' . e($v) . '</td></tr>';
+    }
+    return $h . '</table>';
+}
+
+/** Registration invoice shown in the registration email: tailored to the bidder. */
+function regInvoiceHtml(array $user, string $ref, array $bank): string {
+    $rows = [
+        ['Invoice no.', 'REG-' . (int)$user['id']],
+        ['Date', date('d M Y')],
+        ['Billed to', $user['full_name'] . ' (' . $user['email'] . ')'],
+        ['Description', 'Refundable bidder registration deposit'],
+        ['Amount due', $bank['reg_fee_label']],
+        ['Payment reference', $ref],
+    ];
+    $h = '<h3 style="color:#005BA1;margin:22px 0 8px;">Registration invoice</h3>'
+       . '<table role="presentation" width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:14px;">';
+    foreach ($rows as [$k, $v]) {
+        $h .= '<tr><td style="border-bottom:1px solid #e8ecf0;color:#666;width:40%;">' . e($k) . '</td><td style="border-bottom:1px solid #e8ecf0;font-weight:bold;">' . e($v) . '</td></tr>';
+    }
+    return $h . '</table>';
+}
+
+/** Short bidding guide sent with the registration email (steps shared with the PDF). */
+function biddingGuideHtml(): string {
+    $h = '<h3 style="color:#005BA1;margin:22px 0 8px;">How bidding works</h3><ol style="padding-left:20px;margin:0 0 10px;">';
+    foreach (regBiddingSteps() as [, $s]) $h .= '<li style="margin-bottom:6px;">' . e($s) . '</li>';
+    $h .= '</ol><h3 style="color:#005BA1;margin:22px 0 8px;">After you win</h3><ol style="padding-left:20px;margin:0 0 10px;">';
+    foreach (afterWinSteps() as $s) $h .= '<li style="margin-bottom:6px;">' . e($s) . '</li>';
+    return $h . '</ol><p><a href="' . APP_URL . '/auction-guide.php" style="color:#005BA1;">Read the full bidding guide</a></p>';
+}
+
+/** The steps after a win, as plain sentences. */
+function afterWinSteps(): array {
+    return array_column(regAfterWinSteps(), 1);
+}
+
 function _emailTemplate(string $title, string $bodyContent, bool $replyable = false): string {
     $t = htmlspecialchars($title);
     return '<!DOCTYPE html>
@@ -113,6 +174,7 @@ function _emailTemplate(string $title, string $bodyContent, bool $replyable = fa
           </p>
           <p style="margin:0 0 12px;">+27 10 516 0683 (Main Office Line) &nbsp;|&nbsp; +27 10 516 0681 (Secondary Line)</p>
           <p style="margin:0 0 10px;color:#999999;font-size:11px;">Auction Ground &mdash; 8 Top Rd, O.R. Tambo, Boksburg, 1459</p>
+          ' . companyIdentityHtml() . '
           <p style="margin:0;color:#aaaaaa;font-size:12px;">' . ($replyable ? 'Reply to this email, call us or WhatsApp ' . (defined('COMPANY_WHATSAPP') ? COMPANY_WHATSAPP : '') . ' &mdash; a consultant will help you.' : 'This is an automated message. Please do not reply directly to this email.') . '</p>
         </td>
       </tr>
@@ -164,6 +226,16 @@ function sendWelcomeEmail(array $user): bool {
     <hr class="divider">
     <p>If you have any questions, please email us at
     <a href="mailto:' . COMPANY_EMAIL . '">' . COMPANY_EMAIL . '</a> or call ' . COMPANY_PHONE . '.</p>';
+
+    // Registration invoice for this bidder, the bidding guide and our company details.
+    // Bank account details still follow the request-and-approve step in the dashboard.
+    $bank = getBankSettings();
+    $ref  = eftReference((int)($user['id'] ?? 0));
+    $body .= regInvoiceHtml($user, $ref, $bank)
+           . '<p style="font-size:13px;color:#666;">Your registration invoice is attached as a PDF. To get our bank account details, request them from your dashboard. We send them once the request is approved.</p>'
+           . biddingGuideHtml()
+           . companyDetailsBlockHtml();
+    $mail->addStringAttachment(regInvoicePdf($user, $ref, $bank), 'AHG-Registration-Invoice-REG-' . (int)($user['id'] ?? 0) . '.pdf', 'base64', 'application/pdf');
 
     $mail->Body    = _emailTemplate('Welcome to Auction Hub Group', $body);
     $mail->AltBody = "Welcome {$user['full_name']}! Your account is ready. Log in to complete your bidder registration at " . APP_URL . "/user_dashboard.php";
@@ -312,6 +384,9 @@ function sendBankDetailsEmail(array $user): bool {
 
     <hr class="divider">
     <p>Please do not share these banking details publicly. If you need assistance, contact us via email.</p>';
+
+    // Tailored registration invoice, bidding guide and company details
+    $body .= regInvoiceHtml($user, $ref, $bank) . biddingGuideHtml() . companyDetailsBlockHtml();
 
     $mail->Body    = _emailTemplate('EFT Banking Details', $body);
     $mail->AltBody = "Dear {$user['full_name']}, here are our banking details: Bank: {$bank['bank_name']}, Account: {$bank['bank_account_no']}, Branch: {$bank['bank_branch_code']}, Reference: {$ref}, Amount: {$bank['reg_fee_label']}. Upload POP at " . APP_URL . "/user_dashboard.php";

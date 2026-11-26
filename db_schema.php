@@ -211,6 +211,11 @@ const AHG_SCHEMA_COLUMNS = [
     'users' => [
         // Bidders registered by staff for floor/live auctions: no login, no emails
         'is_floor_bidder' => "ALTER TABLE users ADD COLUMN is_floor_bidder TINYINT(1) NOT NULL DEFAULT 0",
+        // Which bank the client uses (asked on every client form)
+        'bank_name' => "ALTER TABLE users ADD COLUMN bank_name VARCHAR(40) NULL",
+    ],
+    'enquiries' => [
+        'bank_name' => "ALTER TABLE enquiries ADD COLUMN bank_name VARCHAR(40) NULL AFTER phone",
     ],
     'user_email_prefs' => [
         // Reminders & tips (finish registration, first-bid nudge, review request) — mail_engine.php
