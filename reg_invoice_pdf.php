@@ -181,6 +181,15 @@ function regBiddingSteps(): array {
     ];
 }
 
+/** Registration stage only: what happens once the deposit is paid. */
+function regAfterPaySteps(): array {
+    return [
+        ['Pay and upload POP', 'Pay the deposit by EFT using your payment reference, then upload your proof of payment in your dashboard.'],
+        ['We verify',          'We check that your payment has cleared, usually within 1-2 business days.'],
+        ['Bidder number',      'We activate your bidder number and email you. You can then bid in our live auctions.'],
+    ];
+}
+
 /** Steps after a win: [short heading, text]. Shared with the registration email and the guide. */
 function regAfterWinSteps(): array {
     return [
@@ -268,7 +277,7 @@ function regInvoicePdf(array $user, string $ref, array $bank): string {
 
     // Note + signature (left), totals (right)
     $p->label(12, 121, 'Note');
-    $note = 'Pay by EFT using payment reference ' . $ref . ', then upload your proof of payment in your dashboard. Bank account details are sent once your request in the dashboard is approved.';
+    $note = 'This deposit is refundable. If you win, it is deducted from the purchase price. If you do not buy, it is refunded to the account you paid from, less R' . number_format(102, 2) . ' for admin and bank charges.';
     foreach (AhgPdf::wrap($note, 8.3, false, 86) as $i => $l) $p->text(12, 126 + $i * 4.5, $l, 8.3);
     $p->line(12, 148, 84, 148, $ink, 0.6);
     $p->label(12, 151.5, 'Authorised signature');
@@ -284,10 +293,8 @@ function regInvoicePdf(array $user, string $ref, array $bank): string {
     $p->text(198, 144, $amount, 15, true, $navy, 'R');
 
     // Steps
-    $p->label(12, 163, 'How bidding works');
-    $y = regDrawSteps($p, 165.5, regBiddingSteps(), 5);
-    $p->text(12, $y + 5, 'When you win, we email you the steps from payment to collection. They are also in our bidding guide.', 8, false, $muted);
-    $y += 6;
+    $p->label(12, 163, 'What happens after you pay');
+    $y = regDrawSteps($p, 165.5, regAfterPaySteps(), 3);
 
     // Payment box + instructions: on page 1 when it fits, otherwise at the top of page 2
     $drawPay = function (float $top) use ($p, $amount, $ref, $line, $muted) {
@@ -337,7 +344,7 @@ function regInvoicePdf(array $user, string $ref, array $bank): string {
         ['1. General.', 'This invoice is issued by ' . COMPANY_REGISTERED_NAME . ' (Pty) Ltd, trading as ' . COMPANY_TRADING_AS . '. All amounts are in South African Rand (ZAR).'],
         ['2. Payment.', 'Pay by electronic funds transfer (EFT) using the payment reference on this invoice, and upload your proof of payment in your dashboard or email it to ' . COMPANY_EMAIL . '.'],
         ['3. Registration.', 'Your bidder number is issued once your payment is received and verified. You can bid once your registration is approved.'],
-        ['4. Refunds.', 'Where a refund is due, a reasonable administration and bank charge may be deducted. Refunds are processed to the original paying account.'],
+        ['4. Refunds.', 'The deposit is deducted from the purchase price if you win. If you do not buy, it is refunded to the account you paid from, less R102.00 for admin and bank charges.'],
         ['5. Governing Law.', 'This agreement and any dispute arising from it are governed by and construed in accordance with the laws of the Republic of South Africa.'],
     ];
     $lh = 8.2 * 1.6 / 2.834646;
