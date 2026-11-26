@@ -151,11 +151,11 @@ $waHeroLink = waLink("Hi Auction Hub Group, I'd like help registering as a bidde
 .lp-form-note { font-size: .86rem; color: #5b6b7c; margin-bottom: 1.25rem; }
 .lp-field { margin-bottom: .85rem; }
 .lp-field label { display: block; font-size: .8rem; font-weight: 700; color: #33475b; margin-bottom: .3rem; }
-.lp-field input {
-    width: 100%; padding: .72rem .85rem; border: 1.5px solid #d6dee6;
+.lp-field input, .lp-field select {
+    width: 100%; background: #fff; min-height: 44px; padding: .72rem .85rem; border: 1.5px solid #d6dee6;
     border-radius: 9px; font-size: .95rem; font-family: inherit; transition: border-color .15s, box-shadow .15s;
 }
-.lp-field input:focus { outline: none; border-color: #005BA1; box-shadow: 0 0 0 3px rgba(0,91,161,.14); }
+.lp-field input:focus, .lp-field select:focus { outline: none; border-color: #005BA1; box-shadow: 0 0 0 3px rgba(0,91,161,.14); }
 .lp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
 .lp-terms { display: flex; gap: .55rem; align-items: flex-start; font-size: .8rem; color: #5b6b7c; margin: .9rem 0 1.1rem; line-height: 1.45; }
 .lp-terms input { margin-top: .18rem; flex-shrink: 0; }

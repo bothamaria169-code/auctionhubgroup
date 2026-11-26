@@ -781,6 +781,12 @@ require_once 'header.php';
 
     <?php foreach ($adminSubTabs as $subGroup): if (!isset($subGroup[$activeTab])) continue;
         $subBadges = ['pop' => (int)$stats['pending_pops'], 'refunds' => (int)$stats['pending_refunds']]; ?>
+    <style>
+      .admin-subtabs { display:flex; gap:.4rem; flex-wrap:wrap; margin:0 0 1.25rem; padding-bottom:.6rem; border-bottom:1px solid #e2e8f0; }
+      .admin-subtabs a { display:inline-flex; align-items:center; gap:.3rem; min-height:40px; padding:.5rem .9rem; border-radius:8px; background:#f1f5f9; color:#334155; font-weight:600; font-size:.9rem; text-decoration:none; }
+      .admin-subtabs a.on { background:#005BA1; color:#fff; }
+      @media (max-width: 600px) { .admin-subtabs { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; } .admin-subtabs a { flex:none; } }
+    </style>
     <nav class="admin-subtabs" aria-label="Sections">
       <?php foreach ($subGroup as $st => $sl): ?>
         <a href="?tab=<?= $st ?>" class="<?= $st === $activeTab ? 'on' : '' ?>"><?= $sl ?><?php if (!empty($subBadges[$st])): ?> <span class="sidebar-badge sidebar-badge-danger"><?= $subBadges[$st] ?></span><?php endif; ?></a>
