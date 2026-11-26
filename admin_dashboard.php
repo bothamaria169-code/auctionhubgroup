@@ -629,16 +629,20 @@ require_once 'header.php';
       ['leads',      'Leads',                 'fa-user-plus',          (int)$stats['leads_waiting']],
       ['templates',  'Email &amp; WA Templates',  'fa-pen-to-square',      0],
     ],
-    'Sales & Auctions' => [
+    'Sales' => [
       ['applications', 'Finance &amp; Pre-Auction', 'fa-handshake',       (int)$stats['applications_waiting']],
-      ['auctions',   'Auctions',              'fa-car',                0],
-      ['events',     'Events',                'fa-calendar-alt',       0],
       ['manual_bid', 'Manual Bids & Floor',   'fa-gavel',              0],
-      ['stock',      'Stock Import',          'fa-file-import',        0],
-      ['ai',         'AI Photos',             'fa-wand-magic-sparkles', 0],
-      ['import',     'CSV Import',            'fa-file-csv',           0],
-      ['url:manage_auction.php',                'Add Vehicle',  'fa-plus-circle', 0],
       ['url:invoice_generator.php?tab=builder', 'Deal Builder', 'fa-magic',       0],
+    ],
+    'Vehicles & Auctions' => [
+      ['auctions',   'Auctions',              'fa-car',                0],
+      ['url:manage_auction.php',                'Add Vehicle',  'fa-plus-circle', 0],
+      ['url:admin_split_stock.php',             'Split Stock',  'fa-shuffle',     0],
+      ['url:admin_relist.php',                  'Relist Vehicles', 'fa-rotate',   0],
+      ['stock',      'Stock Import',          'fa-file-import',        0],
+      ['import',     'CSV Import',            'fa-file-csv',           0],
+      ['ai',         'AI Photos',             'fa-wand-magic-sparkles', 0],
+      ['events',     'Events',                'fa-calendar-alt',       0],
     ],
     'Bidders & Payments' => [
       ['pop',        'POP Approvals',   'fa-file-invoice', (int)$stats['pending_pops']],

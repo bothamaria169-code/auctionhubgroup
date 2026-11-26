@@ -27,11 +27,12 @@ $faTodo = ['review', 'chosen', 'requested', 'pop_uploaded', 'expired'];
 
 $faRows = [];
 $faCounts = array_fill_keys(['todo', 'open', 'finance', 'preauction', 'done'], 0);
+$faKindTodo = ['finance' => 0, 'preauction' => 0]; // waiting on us, per type
 try {
     // Refresh pre-auction rows from their invoices (Deal Builder approvals etc.)
     foreach ($pdo->query("SELECT * FROM client_applications WHERE kind = 'preauction' AND status IN ('invoiced','pop_uploaded','expired')") as $r) paSync(finDecode($r));
     foreach ($pdo->query("SELECT kind, status, COUNT(*) n FROM client_applications GROUP BY kind, status") as $r) {
-        if (in_array($r['status'], $faTodo, true)) $faCounts['todo'] += $r['n'];
+        if (in_array($r['status'], $faTodo, true)) { $faCounts['todo'] += $r['n']; if (isset($faKindTodo[$r['kind']])) $faKindTodo[$r['kind']] += $r['n']; }
         if (in_array($r['status'], $faOpen, true)) { $faCounts['open'] += $r['n']; $faCounts[$r['kind']] += $r['n']; }
         if (in_array($r['status'], ['completed', 'paid', 'approved'], true)) $faCounts['done'] += $r['n'];
     }
@@ -458,6 +459,11 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
   </div>
   <div class="card" style="overflow:visible">
     <div class="fa2-filters">
+      <?php $faKindLinks = ['' => 'All types', 'finance' => 'Finance' . ($faKindTodo['finance'] ? ' (' . $faKindTodo['finance'] . ' to action)' : ''), 'preauction' => 'Pre-auction' . ($faKindTodo['preauction'] ? ' (' . $faKindTodo['preauction'] . ' to action)' : '')];
+      foreach ($faKindLinks as $k => $l): ?>
+        <a class="chip<?= $faKind === $k ? ' on' : '' ?>" href="?tab=applications&amp;view=<?= e($faView) ?>&amp;kind=<?= e($k) ?>"><?= $l ?></a>
+      <?php endforeach; ?>
+      <span style="width:1px;background:#d0dce8;align-self:stretch"></span>
       <?php foreach (['todo' => 'Waiting on us', 'open' => 'Open', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
         <a class="chip<?= $faView === $k ? ' on' : '' ?>" href="?tab=applications&amp;view=<?= $k ?>&amp;kind=<?= e($faKind) ?>"><?= $l ?></a>
       <?php endforeach; ?>
