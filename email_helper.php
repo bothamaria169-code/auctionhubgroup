@@ -107,9 +107,15 @@ function regInvoiceHtml(array $user, string $ref, array $bank): string {
 function biddingGuideHtml(): string {
     $h = '<h3 style="color:#005BA1;margin:22px 0 8px;">How bidding works</h3><ol style="padding-left:20px;margin:0 0 10px;">';
     foreach (regBiddingSteps() as [, $s]) $h .= '<li style="margin-bottom:6px;">' . e($s) . '</li>';
-    $h .= '</ol><h3 style="color:#005BA1;margin:22px 0 8px;">After you win</h3><ol style="padding-left:20px;margin:0 0 10px;">';
+    return $h . '</ol><p>When you win, we email you the steps from payment to collection.</p>'
+        . '<p><a href="' . APP_URL . '/auction-guide.php" style="color:#005BA1;">Read the full bidding guide</a></p>';
+}
+
+/** The steps after a win, for the winning letter (sent before the invoice). */
+function afterWinStepsHtml(): string {
+    $h = '<h3 style="color:#005BA1;margin:22px 0 8px;">What happens next</h3><ol style="padding-left:20px;margin:0 0 10px;">';
     foreach (afterWinSteps() as $s) $h .= '<li style="margin-bottom:6px;">' . e($s) . '</li>';
-    return $h . '</ol><p><a href="' . APP_URL . '/auction-guide.php" style="color:#005BA1;">Read the full bidding guide</a></p>';
+    return $h . '</ol><p>Your invoice follows by email. Please check it carefully before you pay.</p>';
 }
 
 /** The steps after a win, as plain sentences. */
@@ -566,8 +572,7 @@ function sendAuctionWonEmail(array $data): bool {
       <p><strong>Winning Bid:</strong> <span class="gold" style="font-size:20px;">' . formatRand($data['winning_amount']) . '</span></p>
     </div>
 
-    <p>Our team will be in contact with you shortly to arrange the next steps, 
-    including payment and vehicle collection/delivery.</p>
+    ' . afterWinStepsHtml() . '
 
     <p>If you have any questions in the meantime, please contact us:</p>
     <ul>
@@ -670,12 +675,7 @@ function sendAuctionWinnerEmail(array $user, array $auction, float $winningAmoun
       <p><strong>Status:</strong> <span class="green">Reserve Price Met — Sale Confirmed</span></p>
     </div>
 
-    <p><strong>What happens next?</strong></p>
-    <ul>
-      <li>Our team will contact you within <strong>1 business day</strong> to arrange payment and collection.</li>
-      <li>Full payment is required within <strong>48 hours</strong> of being contacted.</li>
-      <li>The vehicle will be held for you pending payment confirmation.</li>
-    </ul>
+    ' . afterWinStepsHtml() . '
 
     <a href="' . APP_URL . '/user_dashboard.php" class="cta-btn">View Your Purchase Details</a>
 
@@ -684,7 +684,7 @@ function sendAuctionWinnerEmail(array $user, array $auction, float $winningAmoun
     <p>Thank you for bidding with Auction Hub Group!</p>';
 
     $mail->Body    = _emailTemplate('You Won — ' . $auction['item_name'], $body);
-    $mail->AltBody = "Congratulations {$user['full_name']}! You won the auction for {$auction['item_name']} with a bid of R " . number_format($winningAmount, 2) . ". We will contact you within 1 business day. Visit " . APP_URL . "/user_dashboard.php for details.";
+    $mail->AltBody = "Congratulations {$user['full_name']}! You won the auction for {$auction['item_name']} with a bid of R " . number_format($winningAmount, 2) . ". Your invoice follows by email: pay in full by EFT within one business day of receiving it, then collect within 72 hours of your Release Note. Visit " . APP_URL . "/user_dashboard.php for details.";
 
     return _sendMail($mail, 'auction_winner');
 }

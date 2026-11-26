@@ -374,7 +374,7 @@ require_once __DIR__ . '/header.php';
                 <li>Send us proof of payment.</li>
                 <li>Wait for payment clearance and verification.</li>
                 <li>Receive your vehicle Release Note.</li>
-                <li>Arrange vehicle collection within 24 hours of the Release Note.</li>
+                <li>Arrange vehicle collection within 72 hours of the Release Note.</li>
                 <li>Present your ID and sign the delivery note.</li>
                 <li>Complete the ownership-transfer process and receive your registration documents.</li>
             </ol>

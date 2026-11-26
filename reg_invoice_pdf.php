@@ -191,7 +191,7 @@ function regAfterWinSteps(): array {
         ['Send POP',        'Send us proof of payment.'],
         ['Clearance',       'Wait for payment clearance and verification.'],
         ['Release Note',    'Receive your vehicle Release Note.'],
-        ['Collect in 24h',  'Arrange vehicle collection within 24 hours of the Release Note.'],
+        ['Collect in 72h',  'Arrange vehicle collection within 72 hours of the Release Note.'],
         ['ID & sign',       'Present your ID and sign the delivery note.'],
         ['Transfer',        'Complete the ownership-transfer process and receive your registration documents.'],
     ];
@@ -286,8 +286,8 @@ function regInvoicePdf(array $user, string $ref, array $bank): string {
     // Steps
     $p->label(12, 163, 'How bidding works');
     $y = regDrawSteps($p, 165.5, regBiddingSteps(), 5);
-    $p->label(12, $y + 5.5, 'After you win');
-    $y = regDrawSteps($p, $y + 8, regAfterWinSteps(), 5);
+    $p->text(12, $y + 5, 'When you win, we email you the steps from payment to collection. They are also in our bidding guide.', 8, false, $muted);
+    $y += 6;
 
     // Payment box + instructions: on page 1 when it fits, otherwise at the top of page 2
     $drawPay = function (float $top) use ($p, $amount, $ref, $line, $muted) {
