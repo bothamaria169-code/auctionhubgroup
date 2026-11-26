@@ -144,7 +144,7 @@ if ($activeTab === 'overview') {
     };
     $hi = fn(string $name) => 'Good day ' . ucfirst(explode(' ', trim($name))[0] ?: 'there') . ",\n\nThis is " . leadAgentName() . ' from *' . COMPANY_TRADING_AS . "*. ";
     $todoLists['pop'] = array_map(fn($r) => [$r['full_name'], 'Uploaded ' . leadTimeAgo((string)($r['pop_uploaded_at'] ?: $r['created_at'])), '?tab=pop',
-            waLink($r['phone'], $hi($r['full_name']) . "Thank you, we have your proof of payment for the registration deposit. We are verifying it and will activate your bidder number as soon as the funds reflect." . waSignOff())],
+            waToClient($r['phone'], $hi($r['full_name']) . "Thank you, we have your proof of payment for the registration deposit. We are verifying it and will activate your bidder number as soon as the funds reflect." . waSignOff())],
         $q("SELECT full_name, phone, pop_uploaded_at, created_at FROM users WHERE bidder_status = 'pending_approval' ORDER BY COALESCE(pop_uploaded_at, created_at) ASC LIMIT 5"));
     $todoLists['applications'] = array_map(function ($r) {
             $app = finDecode($r);
@@ -154,10 +154,10 @@ if ($activeTab === 'overview') {
     $todoLists['outbox'] = array_map(fn($r) => [$r['to_name'] ?: $r['to_email'], $r['subject'], '?tab=applications&view=outbox', ''],
         $q("SELECT to_name, to_email, subject FROM client_outbox WHERE status = 'pending' ORDER BY id ASC LIMIT 5"));
     $todoLists['banking'] = array_map(fn($r) => [$r['full_name'], 'Asked ' . leadTimeAgo((string)$r['created_at']), '?tab=banking',
-            waLink($r['phone'], $waTpl('bank', ['name' => $r['full_name'], 'user_id' => $r['user_id']]))],
+            waToClient($r['phone'], $waTpl('bank', ['name' => $r['full_name'], 'user_id' => $r['user_id']]))],
         $q("SELECT u.full_name, u.phone, br.user_id, br.created_at FROM bank_detail_requests br JOIN users u ON u.id = br.user_id WHERE br.status = 'pending' ORDER BY br.created_at ASC LIMIT 5"));
     $todoLists['refunds'] = array_map(fn($r) => [$r['full_name'], 'Asked ' . leadTimeAgo((string)$r['created_at']), '?tab=refunds',
-            waLink($r['phone'], $hi($r['full_name']) . "We have your refund request and are processing it. The refund is paid to the account you paid from. We'll let you know as soon as it is paid." . waSignOff())],
+            waToClient($r['phone'], $hi($r['full_name']) . "We have your refund request and are processing it. The refund is paid to the account you paid from. We'll let you know as soon as it is paid." . waSignOff())],
         $q("SELECT u.full_name, u.phone, r.created_at FROM refund_requests r JOIN users u ON u.id = r.user_id WHERE r.status IN ('pending','under_review') ORDER BY r.created_at ASC LIMIT 5"));
     $todoLists['leads'] = [];
     try {

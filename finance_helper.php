@@ -1637,7 +1637,7 @@ function finAdminWhatsAppText(array $app): string {
 }
 
 /** wa.me link to the client's number, '' when the number is unusable. */
-function waLink(?string $phone, string $text): string {
+function waToClient(?string $phone, string $text): string {
     $digits = preg_replace('/\D/', '', (string)$phone);
     if (str_starts_with($digits, '00')) $digits = substr($digits, 2);
     if (str_starts_with($digits, '0')) $digits = '27' . substr($digits, 1);
@@ -1647,7 +1647,7 @@ function waLink(?string $phone, string $text): string {
 
 /** The office's WhatsApp to the client with their next step. */
 function finAdminWhatsAppUrl(array $app): string {
-    return waLink($app['phone'] ?? '', finAdminWhatsAppText($app));
+    return waToClient($app['phone'] ?? '', finAdminWhatsAppText($app));
 }
 
 function finForEmail(string $email): array {
