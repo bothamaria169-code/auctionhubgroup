@@ -67,7 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
             ]);
             finLog($app, 'Submitted details');
-            $ok = finMailClient($app, 'Your Commitment Fee Letter — please confirm before we issue your invoice', preg_replace('~^<p>Dear [^<]*</p>~', '', paTermsLetterHtml($app)), 'Follow My Request');   // finMailClient() already opens with "Dear <name>"
+            require_once __DIR__ . '/commitment_letter_pdf.php';
+            $letterPdf = paTermsLetterFile($app);   // attached as a PDF copy of the letter
+            $ok = finMailClient($app, 'Your Commitment Fee Letter — please confirm before we issue your invoice',
+                preg_replace('~^<p>Dear [^<]*</p>~', '', paTermsLetterHtml($app))   // finMailClient() already opens with "Dear <name>"
+                . '<p style="font-size:13px;color:#555;">A PDF copy of this letter is attached for your records.</p>',
+                'Follow My Request', '', '', $letterPdf ? [$letterPdf => 'AHG Commitment Fee Letter ' . finRef($app) . '.pdf'] : []);
             finRecordMail($app, 'Request received', $ok);
             finSave($app);
             finMailOffice($app, 'New Pre-Auction Request — issue the proforma invoice');

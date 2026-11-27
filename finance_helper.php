@@ -1058,7 +1058,7 @@ function finViewingLabel(?array $v): string {
 
 // ── Email (AHG template from email_helper.php) ────────────────
 
-function finMailClient(array $app, string $subject, string $bodyHtml, string $button = 'View my application', string $anchor = '', string $tag = ''): bool {
+function finMailClient(array $app, string $subject, string $bodyHtml, string $button = 'View my application', string $anchor = '', string $tag = '', array $files = []): bool {
     try {
         if (function_exists('outboxTakeHeld')) outboxTakeHeld();
         $mail = _buildMailer();
@@ -1070,6 +1070,8 @@ function finMailClient(array $app, string $subject, string $bodyHtml, string $bu
               . '<p style="font-size:13px;color:#888;">This link is private to you. Questions? Contact us at <a href="mailto:' . COMPANY_EMAIL . '">' . COMPANY_EMAIL . '</a> or ' . COMPANY_PHONE . '.</p>';
         $mail->Body = _emailTemplate($subject, $body);
         $mail->AltBody = strip_tags(str_replace(['</p>', '<br>', '</li>'], "\n", $bodyHtml)) . "\n\nYour application: " . finLink($app, $anchor);
+        // Saved files (not in-memory) so the attachment survives a stay in the Outbox
+        foreach ($files as $path => $name) if (is_file($path)) $mail->addAttachment($path, $name);
         // Held in the Outbox until an admin approves it (outbox_helper.php); the admin can edit $body there.
         if (function_exists('outboxContext')) outboxContext(['app_id' => (int)$app['id'], 'inner' => $body, 'title' => $subject, 'tag' => $tag ?: null]);
         return _sendMail($mail, 'fin_' . $app['kind']);
