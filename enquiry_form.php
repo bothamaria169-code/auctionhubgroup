@@ -5,12 +5,14 @@
 //   $enqAuctionId (int|null)  — vehicle the enquiry is about
 //   $enqTitle     (string)    — card heading
 //   $enqCompact   (bool)      — smaller card for the vehicle page
+//   $enqType      (string)    — preselected topic (a key of ENQUIRY_TYPES), optional
 // Posts to enquiry.php; styles in style.css (.enq-*)
 // ============================================================
 require_once __DIR__ . '/leads_helper.php';
 $enqAuctionId = $enqAuctionId ?? null;
 $enqTitle     = $enqTitle ?? 'Send us a message';
 $enqCompact   = $enqCompact ?? false;
+$enqType      = isset(ENQUIRY_TYPES[$enqType ?? '']) ? $enqType : '';
 $enqUser      = $currentUser ?? null;
 $enqId        = 'enq' . substr(md5((string)$enqAuctionId . $enqTitle), 0, 6);
 ?>
@@ -50,7 +52,7 @@ $enqId        = 'enq' . substr(md5((string)$enqAuctionId . $enqTitle), 0, 6);
         <span>What is it about?</span>
         <select name="type">
           <?php foreach (ENQUIRY_TYPES as $k => $label): ?>
-            <option value="<?= $k ?>"><?= e($label) ?></option>
+            <option value="<?= $k ?>"<?= $k === $enqType ? ' selected' : '' ?>><?= e($label) ?></option>
           <?php endforeach; ?>
         </select>
       </label>

@@ -107,6 +107,13 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 - Client application page (`my_application.php`) shows **Read & Confirm — Request My Invoice** until
   confirmed.
 - Fixed: the letter email greeted the client twice.
+- **Vehicles live on one page** (`auctions.php`). `preauction.php` is information plus a
+  "Choose your vehicle" section: **Browse live vehicles** / **Coming soon** buttons and a pre-auction
+  enquiry form (type preselected with `$enqType = 'preauction'`, lands on the Pre-Auction desk). Its old
+  vehicle grid and the query behind it are gone; the count shown is vehicles with no bids that can still
+  be secured.
+- On each vehicle (`auction.php`) the client can **Bid**, and while it has no bids, **Secure it
+  (pre-auction)** → `preauction_request.php?id=` or **Get a finance quote** → `finance_apply.php?id=`.
 
 ### 3.4 Finance
 - Terms extended to 72 months (`finTiers()`), copy updated on `preauction.php`, `faq.php`,

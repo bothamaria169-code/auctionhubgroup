@@ -8,33 +8,14 @@ $pageDescription = 'Access repossessed and bank-stock vehicles at the financial 
 $bodyClass       = 'page-preauction';
 require_once __DIR__ . '/header.php';
 
-$preAuctionVehicles = $pdo->query("
-    SELECT a.id, a.item_name, a.year, a.mileage, a.fuel_type, a.transmission,
-           a.color, a.body_type, a.engine_size, a.start_price, a.reserve_price,
-           a.current_price, a.min_increment, a.status, a.end_time, a.start_time,
-           a.image_url, a.description, a.condition_grade, a.service_history,
-           a.branch_id,
-           m.name AS make_name,
-           b2.name AS branch_name,
-           b2.city AS branch_city,
-           b2.province AS branch_province,
-           (SELECT COUNT(*) FROM bids bx WHERE bx.auction_id = a.id) AS bid_count
-    FROM auctions a
-    LEFT JOIN makes m  ON m.id  = a.make_id
-    LEFT JOIN branches b2 ON b2.id = a.branch_id AND " . openBranchSql('b2') . "
-    WHERE a.status IN ('upcoming','active')
-    ORDER BY a.status DESC, a.end_time ASC
-")->fetchAll();
-
-$totalDeals = count($preAuctionVehicles);
-
-// Build branch counts for filter tabs
-$branchCounts = [];
-foreach ($preAuctionVehicles as $v) {
-    $bid = $v['branch_id'] ?? 0;
-    $branchCounts[$bid] = ($branchCounts[$bid] ?? 0) + 1;
-}
-$allBranches = $pdo->query("SELECT id, name, city, province FROM branches WHERE " . openBranchSql() . " ORDER BY sort_order")->fetchAll();
+// Vehicles live on one page (auctions.php). Here we only count the ones that can still be
+// secured before the auction: live or coming soon, not sold, no bids yet.
+$totalDeals = 0;
+try {
+    $totalDeals = (int)$pdo->query("SELECT COUNT(*) FROM auctions a
+        WHERE a.status IN ('upcoming','active') AND COALESCE(a.is_sold, 0) = 0
+          AND NOT EXISTS (SELECT 1 FROM bids bx WHERE bx.auction_id = a.id)")->fetchColumn();
+} catch (Throwable $e) { /* count stays 0 */ }
 ?>
 
 <style>
@@ -852,203 +833,46 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
 
 
 <!-- ══════════════════════════════════════════════════════════
-     VEHICLE LISTINGS
+     CHOOSE YOUR VEHICLE — vehicles live on one page (auctions.php);
+     on each vehicle the client can secure it, bid, or get a finance quote
 ══════════════════════════════════════════════════════════ -->
 <section id="vehicles" class="pa-section" style="background:#fff;">
 <div class="pa-container">
-
-    <!-- Section header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem;">
-        <div>
-            <span class="pa-section-label"><i class="fas fa-car"></i> Available Now</span>
-            <h2 class="pa-section-title" style="margin:.5rem 0 0;">
-                Pre-Auction Vehicles
-                <span id="paVehicleCount" style="font-size:1rem;color:#888;font-weight:400;font-family:'Barlow',sans-serif;">(<?= $totalDeals ?> available)</span>
-            </h2>
-        </div>
-        <a href="<?= APP_URL ?>/auctions.php" style="color:#005BA1;font-size:.88rem;text-decoration:none;font-weight:700;display:flex;align-items:center;gap:.4rem;">
-            View All Auctions <i class="fas fa-arrow-right"></i>
-        </a>
-    </div>
-
-    <!-- ── Branch Filter Tabs ─────────────────────────────────── -->
-    <div id="branchTabs" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.75rem;padding-bottom:1.25rem;border-bottom:2px solid #e8eef5;">
-        <button class="pa-branch-tab active" data-branch="all"
-                onclick="filterByBranch('all',this)">
-            <i class="fas fa-globe"></i> All Branches
-            <span class="pa-tab-count"><?= $totalDeals ?></span>
-        </button>
-        <?php foreach ($allBranches as $br):
-            $cnt = $branchCounts[$br['id']] ?? 0;
-            if ($cnt === 0) continue; // hide branches with no stock
-        ?>
-        <button class="pa-branch-tab" data-branch="<?= $br['id'] ?>"
-                onclick="filterByBranch('<?= $br['id'] ?>',this)">
-            <i class="fas fa-<?= $br['id'] == 1 ? 'building' : 'warehouse' ?>"></i>
-            <?= e($br['name']) ?>
-            <span class="pa-tab-count"><?= $cnt ?></span>
-        </button>
-        <?php endforeach; ?>
-    </div>
-
-    <!-- No-results message (hidden by default) -->
-    <div id="paNoBranch" style="display:none;text-align:center;padding:3rem 1rem;">
-        <i class="fas fa-warehouse" style="font-size:3rem;color:#c5d0da;margin-bottom:1rem;display:block;"></i>
-        <p style="color:#778899;font-size:1rem;margin:0;">No vehicles currently available at this branch.<br>
-        <a href="#" onclick="filterByBranch('all',document.querySelector('.pa-branch-tab'));return false;" style="color:#005BA1;font-weight:700;">View all branches</a></p>
-    </div>
-
-    <?php if ($totalDeals > 0): ?>
-    <div class="pa-vehicle-grid" id="paVehicleGrid">
-        <?php foreach ($preAuctionVehicles as $v):
-            $price       = (float)($v['current_price'] ?: $v['start_price']);
-            $vehicleName = trim($v['year'] . ' ' . ($v['make_name'] ?? '') . ' ' . $v['item_name']);
-            $timeLeft    = strtotime($v['end_time']) - time();
-            $isLive      = $v['status'] === 'active';
-            $branchId    = $v['branch_id'] ?? 0;
-        ?>
-        <div class="pa-card" data-branch="<?= $branchId ?>">
-            <!-- Image -->
-            <div class="pa-card-img">
-                <?php if (!empty($v['image_url'])): ?>
-                    <img src="<?= e(cldImg($v['image_url'], CLD_CARD)) ?>" alt="<?= e($vehicleName) ?>" loading="lazy">
-                <?php else: ?>
-                    <div style="display:flex;align-items:center;justify-content:center;height:100%;">
-                        <i class="fas fa-car" style="font-size:3rem;color:#b0bcc8;"></i>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Pre-auction badge -->
-                <span style="position:absolute;top:.75rem;left:.75rem;background:linear-gradient(135deg,#25D366,#1a9e50);color:#fff;font-size:.68rem;font-weight:800;padding:.3rem .85rem;border-radius:20px;text-transform:uppercase;letter-spacing:.05em;box-shadow:0 2px 8px rgba(0,0,0,.2);">
-                    <i class="fas fa-bolt"></i> Pre-Auction Deal
-                </span>
-
-                <?php if ($isLive && $v['bid_count'] > 0): ?>
-                <span style="position:absolute;top:.75rem;right:.75rem;background:rgba(163,0,0,.9);color:#fff;font-size:.68rem;font-weight:700;padding:.3rem .65rem;border-radius:10px;">
-                    <i class="fas fa-fire"></i> <?= $v['bid_count'] ?> bid<?= $v['bid_count']>1?'s':'' ?>
-                </span>
-                <?php endif; ?>
-
-                <?php if ($v['condition_grade']): ?>
-                <?php $stk = dekraSticker($v['condition_grade']); ?>
-                <span style="position:absolute;bottom:.75rem;left:.75rem;background:<?= $stk['color'] ?>;color:#fff;font-size:.68rem;font-weight:700;padding:.25rem .65rem;border-radius:8px;">
-                    <i class="fas <?= $stk['icon'] ?>"></i> DEKRA <?= e($stk['name']) ?>
-                </span>
-                <?php endif; ?>
+    <div class="pa-choose">
+        <div class="pa-choose-info">
+            <span class="pa-section-label"><i class="fas fa-car"></i> Choose your vehicle</span>
+            <h2 class="pa-section-title" style="margin:.5rem 0 .75rem;">All our vehicles are on one page</h2>
+            <p class="pa-section-sub" style="margin-bottom:1.25rem;">Open any vehicle to see its photos, details and DEKRA summary. On each vehicle you can:</p>
+            <ul class="pa-choose-list">
+                <li><i class="fas fa-key"></i><span><strong>Secure it (pre-auction)</strong> — while it has no bids, request it before the auction with a commitment fee.</span></li>
+                <li><i class="fas fa-gavel"></i><span><strong>Bid</strong> — as a registered bidder, live on the floor or online.</span></li>
+                <li><i class="fas fa-hand-holding-dollar"></i><span><strong>Get a finance quote</strong> — terms from 6 to 72 months, while it has no bids.</span></li>
+            </ul>
+            <div class="pa-choose-ctas">
+                <a href="<?= APP_URL ?>/auctions.php" class="pa-btn pa-btn-primary"><i class="fas fa-car"></i> Browse live vehicles</a>
+                <a href="<?= APP_URL ?>/auctions.php?status=upcoming" class="pa-btn pa-btn-outline"><i class="fas fa-clock"></i> Coming soon</a>
             </div>
-
-            <!-- Details -->
-            <div class="pa-card-body">
-                <h3 style="color:#003f73;font-size:1rem;font-weight:700;margin-bottom:.3rem;line-height:1.3;"><?= e($vehicleName) ?></h3>
-
-                <?php if (!empty($v['branch_name'])): ?>
-                <div style="display:inline-flex;align-items:center;gap:.35rem;background:#eef4fb;border:1px solid #c8dbee;border-radius:6px;padding:.2rem .6rem;font-size:.7rem;font-weight:700;color:#003f73;margin-bottom:.55rem;text-transform:uppercase;letter-spacing:.05em;">
-                    <i class="fas fa-<?= $v['branch_id'] == 1 ? 'building' : 'warehouse' ?>" style="color:#005BA1;"></i>
-                    <?= e($v['branch_name']) ?> &mdash; <?= e($v['branch_city']) ?>
-                </div>
-                <?php endif; ?>
-
-                <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem;font-size:.75rem;color:#667;">
-                    <?php if ($v['mileage']): ?><span><i class="fas fa-gauge-high" style="color:#005BA1;"></i> <?= number_format($v['mileage']) ?> km</span><?php endif; ?>
-                    <?php if ($v['transmission']): ?><span><i class="fas fa-gears" style="color:#005BA1;"></i> <?= e(ucfirst($v['transmission'])) ?></span><?php endif; ?>
-                    <?php if ($v['fuel_type']): ?><span><i class="fas fa-gas-pump" style="color:#005BA1;"></i> <?= e(ucfirst($v['fuel_type'])) ?></span><?php endif; ?>
-                    <?php if ($v['body_type']): ?><span><i class="fas fa-car-side" style="color:#005BA1;"></i> <?= e($v['body_type']) ?></span><?php endif; ?>
-                </div>
-
-                <!-- Trust pills -->
-                <div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.85rem;">
-                    <span style="background:#e6f9ee;color:#155724;font-size:.65rem;font-weight:600;padding:.2rem .55rem;border-radius:4px;"><i class="fas fa-shield-halved"></i> DEKRA Inspected</span>
-                    <span style="background:#e8f4fd;color:#003f73;font-size:.65rem;font-weight:600;padding:.2rem .55rem;border-radius:4px;"><i class="fas fa-truck"></i> Free Delivery</span>
-                    <span style="background:#f3e8ff;color:#6b21a8;font-size:.65rem;font-weight:600;padding:.2rem .55rem;border-radius:4px;"><i class="fas fa-id-badge"></i> Presold Under Your Name</span>
-                    <span style="background:#fff8e1;color:#7a4f00;font-size:.65rem;font-weight:600;padding:.2rem .55rem;border-radius:4px;"><i class="fas fa-rotate-left"></i> Cancel or Change Vehicle</span>
-                    <span style="background:#fce4e4;color:#7a0000;font-size:.65rem;font-weight:600;padding:.2rem .55rem;border-radius:4px;"><i class="fas fa-percent"></i> 0% Commission</span>
-                </div>
-
-                <!-- Price box -->
-                <div style="background:linear-gradient(135deg,#f0f6fc,#e8f4fd);border-radius:10px;padding:.9rem 1rem;margin-bottom:1rem;">
-                    <div style="font-size:.72rem;color:#667;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.3rem;font-weight:600;">Bank's Outstanding Balance</div>
-                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:.5rem;">
-                        <div style="color:#003f73;font-size:1.45rem;font-weight:900;font-family:'Barlow Condensed',sans-serif;"><?= formatRand($price) ?></div>
-                        <?php if ($isLive): ?>
-                        <span style="font-size:.72rem;color:#155724;font-weight:700;background:#d4edda;padding:.25rem .6rem;border-radius:4px;flex-shrink:0;"><i class="fas fa-circle" style="font-size:.4rem;vertical-align:middle;"></i> LIVE</span>
-                        <?php else: ?>
-                        <span style="font-size:.72rem;color:#856404;font-weight:700;background:#fff3cd;padding:.25rem .6rem;border-radius:4px;flex-shrink:0;">UPCOMING</span>
-                        <?php endif; ?>
-                    </div>
-                    <?php if ($isLive && $timeLeft > 0): ?>
-                    <div style="font-size:.72rem;color:#a30000;margin-top:.3rem;font-weight:600;">
-                        <i class="fas fa-clock"></i>
-                        Auction closes in <?= floor($timeLeft / 86400) ?>d <?= floor(($timeLeft % 86400) / 3600) ?>h —
-                        <strong>secure yours now</strong>
-                    </div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="pa-card-btns" style="margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
-                    <a href="<?= APP_URL ?>/auction.php?id=<?= $v['id'] ?>"
-                       style="background:#005BA1;color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
-                        <i class="fas fa-eye"></i> View Details
-                    </a>
-                    <?php $paOpen = (int)$v['bid_count'] === 0; ?>
-                    <a href="<?= $paOpen ? APP_URL . '/preauction_request.php?id=' . (int)$v['id'] : 'mailto:' . COMPANY_EMAIL . '?subject=Pre-Auction%20Enquiry%3A%20' . urlencode($vehicleName) ?>"
-                       style="background:linear-gradient(135deg,#c8860a,#e8a000);color:#fff;text-align:center;padding:.65rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:.4rem;">
-                        <?= $paOpen ? '<i class="fas fa-key"></i> Secure It' : '<i class="fas fa-envelope"></i> Enquire' ?>
-                    </a>
-                </div>
-            </div>
+            <p style="font-size:.85rem;color:#5a6a7a;margin:1rem 0 0;"><strong><?= $totalDeals ?></strong> vehicle<?= $totalDeals !== 1 ? 's have' : ' has' ?> no bids yet and can still be secured.</p>
         </div>
-        <?php endforeach; ?>
-    </div>
-
-    <?php else: ?>
-    <div style="background:#f5f7fa;border-radius:16px;padding:4rem 2rem;text-align:center;margin-top:1.5rem;">
-        <i class="fas fa-car-side" style="font-size:3rem;color:#c5d4e8;margin-bottom:1.5rem;display:block;"></i>
-        <h3 style="color:#003f73;font-size:1.25rem;margin-bottom:.75rem;">No Pre-Auction Deals Available Right Now</h3>
-        <p style="color:#667;max-width:460px;margin:0 auto 2rem;line-height:1.75;">
-            New bank-stock vehicles are added regularly. Register and be the <strong>first to know</strong> when the next batch arrives.
-        </p>
-        <div style="display:flex;justify-content:center;gap:.75rem;flex-wrap:wrap;">
-            <a href="mailto:<?= COMPANY_EMAIL ?>?subject=Pre-Auction%20Notification%20Request"
-               style="background:#005BA1;color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="fas fa-bell"></i> Notify Me When Available
-            </a>
-            <a href="<?= APP_URL ?>/auctions.php"
-               style="background:#005BA1;color:#fff;padding:.9rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:.5rem;">
-                <i class="fas fa-gavel"></i> Browse All Auctions
-            </a>
+        <div class="pa-choose-form">
+            <?php // Not sure which vehicle yet? A pre-auction enquiry lands on the Pre-Auction desk in admin.
+            $enqTitle = 'Not sure which vehicle? Ask us'; $enqAuctionId = null; $enqCompact = false; $enqType = 'preauction';
+            require __DIR__ . '/enquiry_form.php'; ?>
         </div>
     </div>
-    <?php endif; ?>
-
 </div>
 </section>
-
-<script>
-// ── Branch filter ─────────────────────────────────────────────
-function filterByBranch(branchId, btn) {
-    // Update active tab
-    document.querySelectorAll('.pa-branch-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-
-    const cards  = document.querySelectorAll('#paVehicleGrid .pa-card');
-    const noMsg  = document.getElementById('paNoBranch');
-    const grid   = document.getElementById('paVehicleGrid');
-    const countEl = document.getElementById('paVehicleCount');
-    let visible  = 0;
-
-    cards.forEach(card => {
-        const match = branchId === 'all' || card.dataset.branch == branchId;
-        card.style.display = match ? '' : 'none';
-        if (match) visible++;
-    });
-
-    const label = visible === 1 ? '1 vehicle' : visible + ' available';
-    if (countEl) countEl.textContent = '(' + label + ')';
-
-    if (grid)  grid.style.display  = visible > 0 ? '' : 'none';
-    if (noMsg) noMsg.style.display = visible === 0 ? 'block' : 'none';
-}
-</script>
+<style>
+.pa-choose { display:grid; grid-template-columns:1.1fr 1fr; gap:2rem; align-items:start; }
+.pa-choose-list { list-style:none; padding:0; margin:0 0 1.5rem; display:flex; flex-direction:column; gap:.75rem; }
+.pa-choose-list li { display:flex; gap:.75rem; align-items:flex-start; color:#334155; line-height:1.55; font-size:.95rem; }
+.pa-choose-list i { flex:none; width:2.1rem; height:2.1rem; border-radius:50%; background:rgba(0,91,161,.1); color:#005BA1; display:flex; align-items:center; justify-content:center; }
+.pa-choose-ctas { display:flex; gap:.75rem; flex-wrap:wrap; }
+.pa-btn { display:inline-flex; align-items:center; gap:.5rem; min-height:48px; padding:0 1.5rem; border-radius:10px; font-weight:800; text-decoration:none; font-size:.95rem; }
+.pa-btn-primary { background:linear-gradient(135deg,#005BA1,#003f73); color:#fff; box-shadow:0 4px 18px rgba(0,91,161,.3); }
+.pa-btn-outline { background:#fff; color:#005BA1; border:2px solid #005BA1; }
+@media (max-width:860px) { .pa-choose { grid-template-columns:1fr; } .pa-btn { flex:1 1 100%; justify-content:center; } }
+</style>
 
 
 <!-- ══════════════════════════════════════════════════════════
