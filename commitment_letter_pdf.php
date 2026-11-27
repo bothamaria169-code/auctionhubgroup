@@ -315,3 +315,131 @@ function paDeclineLetterFile(array $app, array $reasons, string $note, bool $inv
         return '';
     }
 }
+
+// ── Pre-auction: Commitment Declined letter (institution declined a paid commitment) ──
+
+/** The Commitment Declined letter (PDF): apology, figures, and the two choices. Uses details['review']. */
+function paCommitmentDeclinedPdf(array $app): string {
+    $navy = '#0d2b7b'; $muted = '#7a8499'; $line = '#d9dfe9'; $ink = '#222222';
+    $r     = $app['details']['review'];
+    $full  = (int)$r['percent'] >= 100;
+    $R     = fn($n) => 'R' . number_format((float)$n, 2, '.', ',');
+    $first = ucfirst(explode(' ', trim((string)$app['name']))[0] ?: 'Client');
+    $site  = defined('CANONICAL_URL') ? preg_replace('~^https?://(www\.)?~', '', CANONICAL_URL) : COMPANY_WEBSITE;
+
+    $p = new AhgPdf();
+    $p->setLogo(regLogoJpeg());
+    $p->addPage();
+    ahgPdfHeader($p, 'COMMITMENT DECLINED');
+
+    $p->label(12, 49, 'To');
+    $p->text(12, 56, (string)$app['name'], 12.5, true);
+    $by = 62;
+    foreach (array_filter([(string)($app['email'] ?? ''), (string)($app['phone'] ?? '')]) as $l) { $p->text(12, $by, $l, 8.6); $by += 5.3; }
+    foreach ([['Reference', finRef($app)], ['Date', date('d M Y', strtotime((string)$r['at']))], ['Institution', (string)$r['institution']]] as $i => [$k, $v]) {
+        $p->label(115, 49 + $i * 5.3, $k);
+        $p->text(198, 49 + $i * 5.3, $v, 8.6, true, $ink, 'R');
+    }
+    $p->rect(115, 66, 83, 15, '#fff4e5', '#f0c98a', 3, 0.6);
+    $p->label(156.5, 71, $full ? 'To settle in full' : 'Top-up to ' . (int)$r['percent'] . '%', '#8a5a00', 'C');
+    $p->text(156.5, 78, $R($r['topup']), 15, true, $navy, 'C');
+
+    $y = 90;
+    $lh = 8.6 * 1.55 / 2.834646;
+    $newPage = function () use ($p, &$y, $navy) { $p->addPage(); $p->rect(12, 7, 186, 2.2, $navy, null, 1); $y = 18; };
+    $need = function (float $h) use (&$y, $newPage) { if ($y + $h > 284) $newPage(); };
+    $para = function (string $t) use ($p, &$y, $need, $lh) {
+        $lines = AhgPdf::wrap($t, 8.6, false, 186);
+        $need(count($lines) * $lh);
+        foreach ($lines as $l) { $p->text(12, $y, $l, 8.6); $y += $lh; }
+        $y += 2.5;
+    };
+    $heading = function (string $t) use ($p, &$y, $need, $navy) { $need(14); $y += 2; $p->text(12, $y, mb_strtoupper($t), 11, true, $navy); $y += 6.5; };
+    $bullets = function (array $items, bool $numbered = false) use ($p, &$y, $need, $lh, $navy) {
+        foreach ($items as $i => [$lead, $t]) {
+            $leadW = $lead === '' ? 0 : AhgPdf::width($lead . ' ', 8.6, true) / 2.834646;
+            $lines = AhgPdf::wrap($t, 8.6, false, 178, 178 - $leadW);
+            $need(count($lines) * $lh + 1.5);
+            if ($numbered) { $p->rect(13, $y - 3.4, 4.2, 4.2, $navy, null, 2.1); $p->text(15.1, $y - 0.4, (string)($i + 1), 6.3, true, '#ffffff', 'C'); }
+            else $p->rect(13.6, $y - 2.6, 2.4, 2.4, $navy, null, 1.2);
+            if ($lead !== '') $p->text(20, $y, $lead, 8.6, true);
+            foreach ($lines as $li => $l) { $p->text($li === 0 ? 20 + $leadW : 20, $y, $l, 8.6); $y += $lh; }
+            $y += 1.5;
+        }
+        $y += 1.5;
+    };
+
+    $p->text(12, $y, 'Dear ' . $first . ',', 9.5, true); $y += 7;
+    $p->text(12, $y, 'RE: PRE-AUCTION COMMITMENT — ' . mb_strtoupper((string)$app['vehicle']), 9.5, true, $navy); $y += 8;
+    $para('Thank you for your commitment payment of ' . $R($r['paid']) . '. We have received it and it is safe and recorded in your name. '
+        . 'We are sorry to let you know that we are unable to accept a ' . (int)$r['paid_percent'] . '% commitment on this vehicle: it is sold on behalf of '
+        . $r['institution'] . ', which requires ' . ($full ? 'full settlement' : 'a commitment of at least ' . (int)$r['percent'] . '%')
+        . ' before we can issue your Buyer Code. We apologise for the inconvenience.');
+
+    // Figures
+    $rows = [['Vehicle', (string)$app['vehicle']], ['Vehicle price', $R($r['price'])], ['Commitment received', $R($r['paid']) . ' (' . (int)$r['paid_percent'] . '%)'],
+             [$full ? 'Required (full settlement)' : 'Required by ' . $r['institution'] . ' (' . (int)$r['percent'] . '%)', $R($r['required'])],
+             ['Top-up to pay', $R($r['topup'])]];
+    if (!$full) $rows[] = ['Balance after your test drive', $R($r['balance_after'])];
+    $need(8 + count($rows) * 7);
+    $p->rect(12, $y, 186, 7, $navy, null, 2.5);
+    $p->label(16, $y + 4.7, 'Your figures', '#ffffff');
+    $y += 7;
+    foreach ($rows as [$k, $v]) {
+        $p->text(16, $y + 4.6, $k, 8.6, false, '#6b7385');
+        $p->text(85, $y + 4.6, $v, 8.6, true);
+        $p->line(12, $y + 6.8, 198, $y + 6.8, $line, 0.5);
+        $y += 7;
+    }
+    $y += 6;
+
+    if (trim((string)$r['note']) !== '') { $heading('A note from our team'); $para((string)$r['note']); }
+
+    $heading('Your two choices — you decide');
+    $bullets([
+        ['Go ahead:', 'pay the top-up of ' . $R($r['topup']) . ' using the top-up invoice we send you. It comes off the price; it is not an extra cost. Once it reflects, your Buyer Code is issued and we book your test drive and inspection at our office'
+            . ($full ? '.' : '. The balance of ' . $R($r['balance_after']) . ' is only due once you sign off your final decision after the test drive.')],
+        ['Do not go ahead:', 'your commitment fee is refunded to the account you paid from within 3 to 5 business days, less ' . $R(PA_REFUND_FEE) . ' for administration and bank charges.'],
+    ], true);
+    $para('Choose on your request page: ' . finLink($app, 'review'));
+
+    $heading('Please note');
+    $bullets([
+        ['', 'The vehicle stays reserved in your name while you decide. Call us on ' . COMPANY_PHONE . ' if you have any questions.'],
+        ['', 'Pay only into the account on your official invoice. Our banking details never change by email, SMS or WhatsApp.'],
+    ]);
+    $para('We apologise for the inconvenience, and thank you for your understanding.');
+    $need(14);
+    $p->text(12, $y, 'Kind regards,', 8.6); $y += 5;
+    $p->text(12, $y, 'Pre-Auction Department, ' . COMPANY_TRADING_AS, 8.6, true); $y += 8;
+
+    $need(60);
+    $heading('Verify our company details');
+    $p->text(12, $y, 'Check these details against the CIPC and SARS records.', 8.2, false, $muted);
+    $y += 5;
+    foreach ([
+        ['Registered name', COMPANY_REGISTERED_NAME . ' (Pty) Ltd, trading as ' . COMPANY_TRADING_AS],
+        ['Registration no.', COMPANY_REG_NO . ' (registered ' . COMPANY_REG_DATE . ')'],
+        ['SARS tax no.', COMPANY_SARS_NO],
+        ['Address', COMPANY_ADDRESS],
+        ['Phone', COMPANY_PHONE . ' / ' . COMPANY_PHONE2],
+        ['Email', COMPANY_EMAIL],
+        ['Website', $site],
+    ] as [$k, $v]) {
+        $p->text(12, $y + 4, $k, 8.6, false, '#6b7385');
+        $p->text(60, $y + 4, $v, 8.6, true);
+        $p->line(12, $y + 6.2, 198, $y + 6.2, $line, 0.5);
+        $y += 6.8;
+    }
+    return $p->output();
+}
+
+function paCommitmentDeclinedFile(array $app): string {
+    try {
+        $path = finUploadDir((int)$app['id']) . 'commitment_declined_' . preg_replace('/[^A-Za-z0-9-]/', '', finRef($app)) . '.pdf';
+        return @file_put_contents($path, paCommitmentDeclinedPdf($app)) ? $path : '';
+    } catch (Throwable $e) {
+        error_log('[AHG] commitment declined PDF: ' . $e->getMessage());
+        return '';
+    }
+}

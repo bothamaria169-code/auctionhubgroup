@@ -71,6 +71,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($err !== '') finFlash('error', e($err));
         $to = 'documents';
+    } elseif (!$isFin && $action === 'review_choice' && $s === 'pop_uploaded') {
+        $err = paReviewChoose($app, (string)($_POST['choice'] ?? ''));
+        if ($err === '') {
+            finSave($app);
+            finFlash('success', ($app['details']['review']['status'] ?? '') === 'topup_requested'
+                ? 'Thank you. We are sending your top-up invoice. Your Buyer Code follows once it reflects.'
+                : 'Thank you. We are processing the refund of your commitment fee to the account you paid from.');
+        } else {
+            finFlash('error', e($err));
+        }
+        $to = 'review';
     } elseif (!$isFin && $action === 'decision' && $s === 'paid' && empty($app['details']['decision'])) {
         $choice = (string)($_POST['choice'] ?? '');
         if (in_array($choice, ['proceed', 'alternative', 'refund'], true) && ($choice !== 'alternative' || !empty($app['details']['alt']))) {
@@ -277,6 +288,23 @@ finHero($isFin ? '<i class="fas fa-hand-holding-dollar"></i> Finance · ' . e(fi
           <?php elseif ($s === 'invoiced' && $inv): ?>
             <div class="ap-notice"><i class="fas fa-clock"></i><div><strong>Valid for 24 hours</strong> — until <?= safeDate('l j F, H:i', $inv['expires_at']) ?>. This window is set by the financial institution; once it closes the vehicle returns to the auction process.</div></div>
             <a class="btn btn-primary btn-lg btn-block" href="<?= e(paInvoiceLink($inv)) ?>"><i class="fas fa-upload"></i> View Invoice &amp; Upload Proof of Payment</a>
+          <?php elseif ($s === 'pop_uploaded' && !empty($app['details']['review']) && paReviewOpen($app)): $rv = $app['details']['review']; $rvFull = (int)$rv['percent'] >= 100; ?>
+            <div id="review" class="ap-notice" style="margin-top:1rem;display:block">
+              <p style="margin:0 0 .5rem"><strong>About your commitment.</strong> Your payment of <?= e(formatRand($rv['paid'])) ?> is safe and recorded in your name. We are sorry: the vehicle is sold on behalf of <?= e($rv['institution']) ?>, which requires <?= $rvFull ? 'full settlement' : 'a commitment of at least ' . (int)$rv['percent'] . '%' ?> (<?= e(formatRand($rv['required'])) ?>) before we can issue your Buyer Code. The vehicle stays reserved in your name while you decide.</p>
+              <?php if (!empty($rv['note'])): ?><p style="margin:0 0 .5rem"><em><?= e($rv['note']) ?></em></p><?php endif; ?>
+              <?php if ($rv['status'] === 'declined'): ?>
+                <form method="post" style="display:grid;gap:.5rem;margin-top:.75rem">
+                  <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="review_choice">
+                  <button class="btn btn-primary btn-lg btn-block" name="choice" value="topup" onclick="return confirm('Go ahead and pay the top-up of <?= e(formatRand($rv['topup'])) ?>?')"><i class="fas fa-circle-check"></i> Go ahead — top up <?= e(formatRand($rv['topup'])) ?></button>
+                  <button class="btn btn-outline btn-block" name="choice" value="refund" onclick="return confirm('Not go ahead and be refunded <?= e(formatRand(max(0, $rv['paid'] - PA_REFUND_FEE))) ?> (less <?= e(formatRand(PA_REFUND_FEE)) ?> charges)?')"><i class="fas fa-rotate-left"></i> Do not go ahead — refund <?= e(formatRand(max(0, $rv['paid'] - PA_REFUND_FEE))) ?></button>
+                </form>
+                <p style="font-size:.82rem;margin:.5rem 0 0">The top-up comes off the price; it is not an extra cost. A refund is paid to the account you paid from within 3 to 5 business days, less <?= e(formatRand(PA_REFUND_FEE)) ?> for administration and bank charges.</p>
+              <?php elseif ($rv['status'] === 'topup_requested'): ?>
+                <p style="margin:.5rem 0 0"><i class="fas fa-hourglass-half"></i> You chose to go ahead. Your top-up invoice for <?= e(formatRand($rv['topup'])) ?> is on its way; your Buyer Code follows once it reflects.</p>
+              <?php else: ?>
+                <p style="margin:.5rem 0 0"><i class="fas fa-hourglass-half"></i> You chose not to go ahead. We are processing your refund.</p>
+              <?php endif; ?>
+            </div>
           <?php elseif ($s === 'pop_uploaded'): ?>
             <div class="alert alert-info" style="margin:1rem 0 0"><i class="fas fa-magnifying-glass-dollar"></i><span>We have your proof of payment and are verifying it with the financial institution. Your Buyer Code follows by email.</span></div>
           <?php elseif ($s === 'expired'): ?>

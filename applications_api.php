@@ -145,6 +145,18 @@ switch ($action) {
         $err = $isFin ? 'Not a pre-auction request.' : paApproveInvoice($app, $note, $by);
         $done = 'Approved — vehicle Presold, Buyer Code ' . ($app['buyer_code'] ?? '') . '. The Buyer Code email is in the Outbox for approval.';
         break;
+    case 'pa_review_decline':
+        $err = $isFin ? 'Not a pre-auction request.' : paReviewDecline($app, (string)($_POST['institution'] ?? ''), (int)($_POST['percent'] ?? 0), $note, $by);
+        $done = 'Commitment Declined letter is in the Outbox — check it and press Send. The vehicle stays reserved while the client decides.';
+        break;
+    case 'pa_review_topup':
+        $err = $isFin ? 'Not a pre-auction request.' : paReviewTopupPaid($app, $note, $by);
+        $done = 'Top-up received — approved. The Buyer Code email is in the Outbox for approval.';
+        break;
+    case 'pa_review_refund':
+        $err = $isFin ? 'Not a pre-auction request.' : paReviewRefund($app, $note, $by);
+        $done = 'Refund recorded — pay it from the bank, then the confirmation email in the Outbox can go.';
+        break;
     case 'decline':
         if (finClosed($app)) { $err = 'This application is already closed.'; break; }
         $reasons = array_map('strval', (array)($_POST['reasons'] ?? []));

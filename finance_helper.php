@@ -895,6 +895,7 @@ function paIssueInvoice(array &$app, int $percent, string $note, int $adminId, s
 /** Step 4 from this tab: same as Deal Builder → Approve (Buyer Code email). */
 function paApproveInvoice(array &$app, string $note, string $by): string {
     global $pdo;
+    if (paReviewOpen($app)) return 'The financial institution declined this commitment. Use "Top-up received" once the top-up is paid, or process the refund.';
     $inv = paInvoiceRow($app);
     if (!$inv || !in_array($inv['status'], ['pending', 'pop_uploaded'], true)) return 'There is no open invoice to approve.';
     $code = 'AHG-PA-' . date('Y') . '-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 7));
@@ -907,6 +908,127 @@ function paApproveInvoice(array &$app, string $note, string $by): string {
     }
     $app = paSync($app);
     finLog($app, 'Approved — Buyer Code emailed', $by);
+    return '';
+}
+
+// ── Pre-auction: commitment declined by the financial institution (after payment) ──
+// Adapted from BidCo's Buy Now review. The client has paid the commitment fee; the bank or
+// institution that owns the vehicle requires a higher commitment (up to full settlement).
+// The client gets an apology and a Commitment Declined letter with two choices: top up the
+// difference (it comes off the price; the Buyer Code follows), or not go ahead and be refunded.
+// The vehicle stays reserved while they decide. Stored in details['review'].
+
+/** Institutions the office picks from (free text is allowed too). */
+const PA_INSTITUTIONS = ['WesBank', 'ABSA', 'Standard Bank', 'Nedbank (MFC)', 'FNB', 'Capitec', 'Investec'];
+
+/** True while a declined commitment waits for the client's choice or the office's follow-up. */
+function paReviewOpen(array $app): bool {
+    return in_array($app['details']['review']['status'] ?? '', ['declined', 'topup_requested', 'refund_requested'], true);
+}
+
+/** Money for a declined commitment: what was paid, what the institution requires, the top-up. */
+function paReviewFigures(array $app, int $percent): array {
+    $price = (float)$app['price'];
+    $inv   = paInvoiceRow($app);
+    $paid  = $inv ? (float)$inv['commitment_fee_amount'] : paCommitment($app);
+    $required = $percent >= 100 ? $price : round($price * $percent / 100, 2);
+    return ['price' => $price, 'paid' => $paid, 'paid_percent' => $price > 0 ? (int)round($paid / $price * 100) : 0,
+            'percent' => $percent, 'required' => $required, 'topup' => max(0.0, round($required - $paid, 2)),
+            'balance_after' => max(0.0, round($price - $required, 2))];
+}
+
+/** Office: the institution declined the paid commitment. Emails the apology with the Commitment Declined letter. */
+function paReviewDecline(array &$app, string $institution, int $percent, string $note, string $by): string {
+    $institution = trim(mb_substr($institution, 0, 60));
+    if ($app['kind'] !== 'preauction' || $app['status'] !== 'pop_uploaded') return 'Only a request whose commitment fee has been paid can be declined by the institution.';
+    if ($institution === '') return 'Choose the bank or financial institution.';
+    $f = paReviewFigures($app, max(1, min(100, $percent)));
+    if ($f['topup'] <= 0) return 'The required percentage must be higher than the ' . $f['paid_percent'] . '% already paid.';
+    $app['details']['review'] = $f + ['status' => 'declined', 'institution' => $institution, 'note' => trim(mb_substr($note, 0, 500)),
+        'at' => date('Y-m-d H:i:s'), 'by' => $by];
+    finLog($app, 'Commitment declined by ' . $institution . ' (requires ' . ($f['percent'] >= 100 ? 'full settlement' : $f['percent'] . '%')
+        . '); top-up ' . formatRand($f['topup']) . ' or refund', $by);
+    require_once __DIR__ . '/commitment_letter_pdf.php';
+    $letter = paCommitmentDeclinedFile($app);
+    $full = $f['percent'] >= 100;
+    $R = fn($n) => formatRand((float)$n);
+    $ok = finMailClient($app, 'About your pre-auction commitment',
+        '<p>Thank you for your commitment payment of <strong>' . e($R($f['paid'])) . '</strong> for the <strong>' . e($app['vehicle'])
+        . '</strong>. It has been received and is safe and recorded in your name.</p>'
+        . '<p>We are sorry to let you know that we are unable to accept this commitment: the vehicle is sold on behalf of <strong>' . e($institution)
+        . '</strong>, which requires ' . ($full ? '<strong>full settlement</strong>' : 'a commitment of at least <strong>' . $f['percent'] . '%</strong>')
+        . ' before we can issue your Buyer Code. We apologise for the inconvenience.</p>'
+        . '<div class="highlight-box"><p><strong>Commitment received:</strong> ' . e($R($f['paid'])) . '</p>'
+        . '<p><strong>Required:</strong> ' . ($full ? 'Full settlement' : $f['percent'] . '%') . ' — ' . e($R($f['required'])) . '</p>'
+        . '<p><strong>Top-up to go ahead:</strong> ' . e($R($f['topup'])) . '</p>'
+        . ($app['details']['review']['note'] !== '' ? '<p><strong>Note from our team:</strong> ' . e($app['details']['review']['note']) . '</p>' : '') . '</div>'
+        . '<p><strong>You decide:</strong></p><ul>'
+        . '<li><strong>Go ahead</strong> — pay the top-up. It comes off the price; it is not an extra cost. Your Buyer Code follows once it reflects.</li>'
+        . '<li><strong>Do not go ahead</strong> — your commitment fee is refunded to the account you paid from within 3 to 5 business days, less '
+        . e($R(PA_REFUND_FEE)) . ' for administration and bank charges.</li></ul>'
+        . '<p>Choose on your request page with the button below. The vehicle stays reserved in your name while you decide.</p>'
+        . ($letter ? '<p>Our letter with the details is attached.</p>' : '')
+        . '<p style="font-size:13px;color:#666;">Pay only into the account on your official invoice. Our banking details never change by email, SMS or WhatsApp.</p>',
+        'Choose on My Request Page', 'review', 'commitment_declined', $letter ? [$letter => 'AHG Commitment Declined Letter ' . finRef($app) . '.pdf'] : []);
+    finRecordMail($app, 'Commitment declined letter', $ok);
+    return '';
+}
+
+/** Client: chooses to top up or to be refunded. */
+function paReviewChoose(array &$app, string $choice): string {
+    if (($app['details']['review']['status'] ?? '') !== 'declined') return 'This choice has already been made.';
+    if (!in_array($choice, ['topup', 'refund'], true)) return 'Please choose an option.';
+    $r = &$app['details']['review'];
+    $r['status'] = $choice === 'topup' ? 'topup_requested' : 'refund_requested';
+    $r['chosen_at'] = date('Y-m-d H:i:s');
+    $amount = $choice === 'topup' ? $r['topup'] : $r['paid'];
+    unset($r);
+    finLog($app, $choice === 'topup' ? 'Chose to go ahead: top-up of ' . formatRand($amount) : 'Chose not to go ahead: refund of the commitment fee');
+    finMailOffice($app, $choice === 'topup'
+        ? 'Commitment declined — client is going ahead: send the top-up invoice for ' . formatRand($amount)
+        : 'Commitment declined — client is not going ahead: refund ' . formatRand($amount) . ' less ' . formatRand(PA_REFUND_FEE));
+    return '';
+}
+
+/** Office: the top-up has been paid. The commitment becomes the required percentage; approve and send the Buyer Code. */
+function paReviewTopupPaid(array &$app, string $note, string $by): string {
+    global $pdo;
+    $r = $app['details']['review'] ?? [];
+    if (!in_array($r['status'] ?? '', ['declined', 'topup_requested'], true)) return 'There is no top-up waiting on this request.';
+    $inv = paInvoiceRow($app);
+    if ($inv) {
+        $pdo->prepare("UPDATE preauction_invoices SET commitment_fee_amount = ?, outstanding_amount = ? WHERE id = ?")
+            ->execute([$r['required'], $r['balance_after'], $inv['id']]);
+    }
+    $app['details']['review']['status'] = 'topped_up';
+    $app['details']['review']['topup_paid_at'] = date('Y-m-d H:i:s');
+    $app['details']['invoice_pct'] = (int)$r['percent'];
+    finLog($app, 'Top-up of ' . formatRand($r['topup']) . ' received — commitment now ' . ($r['percent'] >= 100 ? 'full settlement' : $r['percent'] . '%'), $by);
+    return paApproveInvoice($app, $note, $by);
+}
+
+/** Office: the client is not going ahead; the commitment fee is refunded. */
+function paReviewRefund(array &$app, string $note, string $by): string {
+    global $pdo;
+    $r = $app['details']['review'] ?? [];
+    if (!in_array($r['status'] ?? '', ['declined', 'refund_requested'], true)) return 'There is no refund waiting on this request.';
+    $app['details']['review']['status'] = 'refund';
+    $app['details']['review']['refund_at'] = date('Y-m-d H:i:s');
+    $app['status'] = 'refund';
+    $inv = paInvoiceRow($app);
+    if ($inv) $pdo->prepare("UPDATE preauction_invoices SET status = 'declined', declination_reason = ? WHERE id = ?")
+        ->execute(['Commitment declined by ' . $r['institution'] . '; client chose a refund.', $inv['id']]);
+    $amount = max(0.0, (float)$r['paid'] - PA_REFUND_FEE);
+    finLog($app, 'Refund of ' . formatRand($amount) . ' (' . formatRand($r['paid']) . ' less ' . formatRand(PA_REFUND_FEE) . ')' . ($note !== '' ? ': ' . $note : ''), $by);
+    $ok = finMailClient($app, 'Your pre-auction refund',
+        '<p>As you asked, we are refunding your commitment fee for the <strong>' . e($app['vehicle']) . '</strong>.</p>'
+        . '<div class="highlight-box"><p><strong>Commitment fee paid:</strong> ' . e(formatRand($r['paid'])) . '</p>'
+        . '<p><strong>Less admin and bank charges:</strong> ' . e(formatRand(PA_REFUND_FEE)) . '</p>'
+        . '<p><strong>Refund:</strong> ' . e(formatRand($amount)) . '</p></div>'
+        . '<p>It is paid to the account you paid from within 3 to 5 business days. If it does not reflect, contact us with your proof of payment.</p>'
+        . '<p>We are sorry this vehicle did not work out. Every coming-soon vehicle can be secured or financed before the auction — we are happy to suggest one.</p>',
+        'View My Request', '', 'refund');
+    finRecordMail($app, 'Refund confirmation', $ok);
     return '';
 }
 
@@ -1645,7 +1767,12 @@ function finAdminWhatsAppText(array $app): string {
                 ? "Thank you for your pre-auction request. We emailed you a commitment-fee letter that explains what the fee is for and what it means for you.\n\nNext step: read it and tap *Confirm and request my invoice*:\n" . APP_URL . "/confirm_terms.php?t=" . $app['token'] . "\n\nIf you'd rather not commit now, you can register and bid on auction day instead."
                 : "Thank you for confirming the commitment-fee letter. We are preparing your invoice and will send it shortly.",
             'invoiced'  => "Your commitment-fee invoice has been sent to your email. It is valid for 24 hours.\n\nNext steps:\n1. Pay by EFT using the reference on the invoice\n2. Upload your proof of payment here: $link\n\nOnce payment is verified you receive your Buyer Code and we book your test drive.",
-            'pop_uploaded' => "Thank you, we have your proof of payment. We are verifying it and will send your Buyer Code as soon as the funds reflect.",
+            'pop_uploaded' => match ($app['details']['review']['status'] ?? '') {
+                'declined' => "We are sorry: " . ($app['details']['review']['institution'] ?? 'the financial institution') . " requires " . ((int)($app['details']['review']['percent'] ?? 0) >= 100 ? 'full settlement' : (int)($app['details']['review']['percent'] ?? 0) . '%') . " on this vehicle, so we could not accept your commitment yet. Your payment is safe in your name and the vehicle stays reserved.\n\nYou decide on your request page:\n1. Go ahead: top up " . formatRand((float)($app['details']['review']['topup'] ?? 0)) . " (it comes off the price)\n2. Do not go ahead: refund of your commitment fee\n\n$link",
+                'topup_requested' => "Thank you for choosing to go ahead. We are sending your top-up invoice for " . formatRand((float)($app['details']['review']['topup'] ?? 0)) . ". Your Buyer Code follows once it reflects.",
+                'refund_requested' => "Thank you. We are processing the refund of your commitment fee to the account you paid from (3 to 5 business days, less " . formatRand(PA_REFUND_FEE) . " admin and bank charges).",
+                default => "Thank you, we have your proof of payment. We are verifying it and will send your Buyer Code as soon as the funds reflect.",
+            },
             'expired'   => "Your invoice for the $car has expired (it is valid for 24 hours). Would you still like the vehicle? I can re-issue the invoice if it is still available.",
             'paid'      => "Your payment is verified and the $car is reserved in your name. Your Buyer Code is *$code*.\n\nNext steps:\n1. We book your test drive and inspection at our office (1 hour 30 minutes, bring a mechanic if you like)\n2. Bring your ID and driver's licence\n3. After the test drive and inspection, you sign off your final decision\n\nWhich day suits you?",
             'completed' => "Thank you for buying with us, and enjoy the $car! If you need anything, we are a message away.",

@@ -116,7 +116,23 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 - Client application page (`my_application.php`) shows **Read & Confirm — Request My Invoice** until
   confirmed.
 - Fixed: the letter email greeted the client twice.
-- **Pre-auction decline** (adapted from BidCo's Buy Now Letter of Decline, in the AHG layout): admin
+- **Commitment declined by the financial institution** (after payment; adapted from BidCo's Buy Now
+  review, `includes/buynow-review.php`). When the client's commitment fee is paid (status "Proof of
+  payment uploaded"), the bank or institution that owns the vehicle may require a higher commitment,
+  up to full settlement. Admin opens **The bank / institution declined this commitment…**, enters the
+  institution (`PA_INSTITUTIONS` list or free text), the required % (100 = full settlement) and an
+  optional note. The client gets an apology email with the **Commitment Declined** letter (PDF,
+  `paCommitmentDeclinedPdf()`): payment safe in their name, figures (paid, required, top-up, balance),
+  and two choices: **Go ahead** (pay the top-up; it comes off the price; Buyer Code follows) or **Do not
+  go ahead** (refund to the paying account within 3–5 business days, less R102.00). The vehicle stays
+  reserved while they decide. The client chooses on their application page (`#review`); the office is
+  alerted. Admin then **Top-up Received — Approve & Send Buyer Code** (invoice amounts updated to the
+  required %) or **Refund** (request closed as refund). Plain "Approve" is blocked while the review is
+  open. Logic: `paReviewFigures/Decline/Choose/TopupPaid/Refund()` in `finance_helper.php`; state in
+  `details['review']`. The top-up invoice itself is issued by admin (New walk-in deal → Pre-Auction).
+  AHG difference from BidCo: BidCo refunds in full with no charge when it declines; AHG applies its
+  existing R102.00 admin and bank charge (owner can change this).
+- **Pre-auction decline before payment** (adapted from BidCo's Buy Now Letter of Decline, in the AHG layout): admin
   ticks reasons (`PA_DECLINE_REASONS`: a bid came in first, another buyer paid first, the financial
   institution did not accept, percentage too low, vehicle withdrawn) and/or writes one, then
   **Decline & Send Letter**. The client gets the notice plus a **Letter of Decline** PDF
@@ -224,6 +240,8 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
   5. Win an auction (test) → winning email shows the 10 steps.
   6. Bid Desk: choose a floor bidder, place a bid, check the public bid list shows only name and number.
   7. Decline a test pre-auction request → Outbox shows the notice with the Letter of Decline attached.
+  9. Commitment declined: on a paid test request, send the letter, choose top-up on the client page,
+     then Top-up Received → Buyer Code; repeat with a refund.
   8. Split Live Stock on a copy of the stock → coming-soon vehicles show Secure it / Get a finance quote.
 
 ---
@@ -244,9 +262,12 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 8. Run the split tool on live stock only after admin confirms the picks.
 9. Bid Desk: no maximum / auto-bids yet (BidCo has them in `includes/max-bids.php`). Tested against a
    sample database only; try a real bid for a floor bidder on staging first.
-10. The pre-auction Letter of Decline is emailed as a PDF but is not yet downloadable from the client's
+10. Commitment declined: the top-up invoice is issued manually by admin; consider generating it
+    automatically (BidCo does). Confirm with the owner whether the R102.00 charge should apply when the
+    institution (not the client) declines; BidCo refunds in full.
+11. The pre-auction Letter of Decline is emailed as a PDF but is not yet downloadable from the client's
     application page (finance decline letters are, via `application_doc.php?doc=decline`).
-11. `admin_place_bid` does not check the auction end time (only `status = closed`); the Bid Desk only
+12. `admin_place_bid` does not check the auction end time (only `status = closed`); the Bid Desk only
     lists lots that have not ended, but the Manual Bids page can still bid on an ended lot.
 
 ---
