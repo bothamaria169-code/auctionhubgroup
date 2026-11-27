@@ -164,11 +164,20 @@ function finVehicleTitle(?array $a): string {
     return trim($title);
 }
 
-/** Price for finance / pre-auction, or 0 when the lot is no longer open (bids, ended, sold). */
+/**
+ * Price for finance / pre-auction, or 0 when the lot does not qualify.
+ * Rule: coming-soon (upcoming) vehicles always qualify; live (active) vehicles qualify
+ * only while they have no bids and the auction has not ended. Sold lots never qualify.
+ */
 function finPrice(array $a): float {
-    if ((int)($a['bid_count'] ?? 0) > 0) return 0.0;
-    if (!in_array($a['status'] ?? '', ['upcoming', 'active'], true)) return 0.0;
-    if (!empty($a['end_time']) && strtotime($a['end_time']) < time()) return 0.0;
+    if (!empty($a['is_sold'])) return 0.0;
+    $status = $a['status'] ?? '';
+    if ($status === 'active') {
+        if ((int)($a['bid_count'] ?? 0) > 0) return 0.0;
+        if (!empty($a['end_time']) && strtotime($a['end_time']) < time()) return 0.0;
+    } elseif ($status !== 'upcoming') {
+        return 0.0;
+    }
     return (float)($a['current_price'] ?: $a['start_price']);
 }
 
@@ -185,7 +194,7 @@ function finReservedIds(): array {
 function finEligibleLots(): array {
     global $pdo;
     $rows = $pdo->query(finVehicleSql() . " WHERE a.status IN ('upcoming','active') AND COALESCE(a.is_sold,0) = 0
-                                            AND (a.end_time IS NULL OR a.end_time > NOW())
+                                            AND (a.status = 'upcoming' OR a.end_time IS NULL OR a.end_time > NOW())
                                             AND COALESCE(NULLIF(a.current_price,0), a.start_price) > 0
                                             ORDER BY m.name, a.item_name, a.year DESC LIMIT 600")->fetchAll();
     $reserved = array_flip(finReservedIds());

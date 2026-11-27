@@ -205,9 +205,9 @@ $vinVisible = vinVisibleToVisitor($currentUser);
 if (!$vinVisible) {
     $auction['description'] = vinScrub($auction['description'] ?? '');
 }
-// No bids yet and not Presold: pre-auction purchase and finance are open.
-$canBuyBefore = !$isSold && in_array($auction['status'], ['upcoming', 'active'], true) && $bidCount === 0
-                && (float)($auction['current_price'] ?: $auction['start_price']) > 0
+// Pre-auction purchase and finance: coming-soon vehicles always qualify; live ones only while
+// they have no bids (finPrice). Never when sold or already Presold through an application.
+$canBuyBefore = !$isSold && finPrice($auction + ['bid_count' => $bidCount]) > 0
                 && !in_array($auctionId, ahgSchemaReady() ? finReservedIds() : [], true);
 
 // ── PAGE META ─────────────────────────────────────────────────
@@ -1122,7 +1122,7 @@ $breadcrumbLd = [
             <?php if ($canBuyBefore): ?>
             <!-- Other ways to buy: only while the lot has no bids -->
             <div class="buy-before" style="margin-top:1.1rem;background:linear-gradient(135deg,#f0f6fc,#e8f4fd);border:1.5px solid #b8d4ee;border-radius:12px;padding:1rem">
-                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#003f73;font-size:1.05rem;letter-spacing:.02em;margin:0 0 .6rem;text-transform:uppercase"><i class="fas fa-bolt" style="color:#e8a000" aria-hidden="true"></i> No bids yet — secure it or get a finance quote</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:#003f73;font-size:1.05rem;letter-spacing:.02em;margin:0 0 .6rem;text-transform:uppercase"><i class="fas fa-bolt" style="color:#e8a000" aria-hidden="true"></i> <?= $auction['status'] === 'upcoming' ? 'Coming soon' : 'No bids yet' ?> — secure it or get a finance quote</div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem">
                     <a href="preauction_request.php?id=<?= $auctionId ?>" class="btn btn-primary btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-key" aria-hidden="true"></i> Secure it (pre-auction)</a>
                     <a href="finance_apply.php?id=<?= $auctionId ?>" class="btn btn-outline btn-sm" style="white-space:normal;text-align:center;min-width:0"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> Get a finance quote</a>

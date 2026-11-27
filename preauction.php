@@ -8,13 +8,15 @@ $pageDescription = 'Access repossessed and bank-stock vehicles at the financial 
 $bodyClass       = 'page-preauction';
 require_once __DIR__ . '/header.php';
 
-// Vehicles live on one page (auctions.php). Here we only count the ones that can still be
-// secured before the auction: live or coming soon, not sold, no bids yet.
+// Vehicles that qualify for pre-auction and finance (same rule as finPrice()):
+// every coming-soon vehicle, and live vehicles with no bids yet. Never sold ones.
 $totalDeals = 0;
 try {
     $totalDeals = (int)$pdo->query("SELECT COUNT(*) FROM auctions a
-        WHERE a.status IN ('upcoming','active') AND COALESCE(a.is_sold, 0) = 0
-          AND NOT EXISTS (SELECT 1 FROM bids bx WHERE bx.auction_id = a.id)")->fetchColumn();
+        WHERE COALESCE(a.is_sold, 0) = 0 AND (
+              a.status = 'upcoming'
+           OR (a.status = 'active' AND (a.end_time IS NULL OR a.end_time > NOW())
+               AND NOT EXISTS (SELECT 1 FROM bids bx WHERE bx.auction_id = a.id)))")->fetchColumn();
 } catch (Throwable $e) { /* count stays 0 */ }
 ?>
 
@@ -833,26 +835,20 @@ $isPendingBidder  = $currentUser && in_array($currentUser['bidder_status'], ['pe
 
 
 <!-- ══════════════════════════════════════════════════════════
-     CHOOSE YOUR VEHICLE — vehicles live on one page (auctions.php);
-     on each vehicle the client can secure it, bid, or get a finance quote
+     FIND YOUR VEHICLE — links to the vehicle list and a pre-auction enquiry form
 ══════════════════════════════════════════════════════════ -->
 <section id="vehicles" class="pa-section" style="background:#fff;">
 <div class="pa-container">
     <div class="pa-choose">
         <div class="pa-choose-info">
-            <span class="pa-section-label"><i class="fas fa-car"></i> Choose your vehicle</span>
-            <h2 class="pa-section-title" style="margin:.5rem 0 .75rem;">All our vehicles are on one page</h2>
-            <p class="pa-section-sub" style="margin-bottom:1.25rem;">Open any vehicle to see its photos, details and DEKRA summary. On each vehicle you can:</p>
-            <ul class="pa-choose-list">
-                <li><i class="fas fa-key"></i><span><strong>Secure it (pre-auction)</strong> — while it has no bids, request it before the auction with a commitment fee.</span></li>
-                <li><i class="fas fa-gavel"></i><span><strong>Bid</strong> — as a registered bidder, live on the floor or online.</span></li>
-                <li><i class="fas fa-hand-holding-dollar"></i><span><strong>Get a finance quote</strong> — terms from 6 to 72 months, while it has no bids.</span></li>
-            </ul>
+            <span class="pa-section-label"><i class="fas fa-car"></i> Available for pre-auction</span>
+            <h2 class="pa-section-title" style="margin:.5rem 0 .75rem;">Find your vehicle</h2>
+            <p class="pa-section-sub" style="margin-bottom:1.25rem;">Every coming-soon vehicle can be secured or financed before the auction, and so can live vehicles that have no bids yet.</p>
             <div class="pa-choose-ctas">
-                <a href="<?= APP_URL ?>/auctions.php" class="pa-btn pa-btn-primary"><i class="fas fa-car"></i> Browse live vehicles</a>
-                <a href="<?= APP_URL ?>/auctions.php?status=upcoming" class="pa-btn pa-btn-outline"><i class="fas fa-clock"></i> Coming soon</a>
+                <a href="<?= APP_URL ?>/auctions.php?status=upcoming" class="pa-btn pa-btn-primary"><i class="fas fa-clock"></i> Coming soon</a>
+                <a href="<?= APP_URL ?>/auctions.php" class="pa-btn pa-btn-outline"><i class="fas fa-car"></i> Live vehicles</a>
             </div>
-            <p style="font-size:.85rem;color:#5a6a7a;margin:1rem 0 0;"><strong><?= $totalDeals ?></strong> vehicle<?= $totalDeals !== 1 ? 's have' : ' has' ?> no bids yet and can still be secured.</p>
+            <p style="font-size:.85rem;color:#5a6a7a;margin:1rem 0 0;"><strong><?= $totalDeals ?></strong> vehicle<?= $totalDeals !== 1 ? 's' : '' ?> available for pre-auction and finance right now.</p>
         </div>
         <div class="pa-choose-form">
             <?php // Not sure which vehicle yet? A pre-auction enquiry lands on the Pre-Auction desk in admin.

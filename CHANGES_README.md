@@ -43,6 +43,12 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 - Admin-created ("floor") bidders are already verified and get a bidder number `AHG-YYYY-NNN`.
   Their bids show **only name and bidder number**; nothing shows that the office bid for them.
 
+**Who qualifies for pre-auction and finance** (`finPrice()` in `finance_helper.php`)
+- **Coming soon** (status `upcoming`): always qualifies.
+- **Live** (status `active`): only while it has **no bids** and the auction has not ended.
+- Sold vehicles, closed auctions and vehicles already Presold through an application never qualify.
+- Admin decides which vehicles are live and which are coming soon (Auctions → Split Live Stock).
+
 **Pre-auction**
 - Client offers a commitment-fee percentage between **30% and 50%**. Usual figures:
   **50%** up to R100,000; **40%** R100,000–R150,000; **30%** above R150,000. The office approves or
@@ -107,12 +113,11 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 - Client application page (`my_application.php`) shows **Read & Confirm — Request My Invoice** until
   confirmed.
 - Fixed: the letter email greeted the client twice.
-- **Vehicles live on one page** (`auctions.php`). `preauction.php` is information plus a
-  "Choose your vehicle" section: **Browse live vehicles** / **Coming soon** buttons and a pre-auction
-  enquiry form (type preselected with `$enqType = 'preauction'`, lands on the Pre-Auction desk). Its old
-  vehicle grid and the query behind it are gone; the count shown is vehicles with no bids that can still
-  be secured.
-- On each vehicle (`auction.php`) the client can **Bid**, and while it has no bids, **Secure it
+- Vehicles are listed in one place only (`auctions.php`, live and coming soon). `preauction.php` is
+  information plus a "Find your vehicle" section (**Coming soon** / **Live vehicles** buttons and a
+  pre-auction enquiry form, preselected with `$enqType = 'preauction'`, landing on the Pre-Auction desk).
+  Its old vehicle grid is gone; the count uses the qualification rule above.
+- On each vehicle (`auction.php`) the client can **Bid**, and when it qualifies, **Secure it
   (pre-auction)** → `preauction_request.php?id=` or **Get a finance quote** → `finance_apply.php?id=`.
 
 ### 3.4 Finance
