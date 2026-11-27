@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'message'   => trim(mb_substr((string)($_POST['message'] ?? ''), 0, 2000)),
             ]);
             finLog($app, 'Submitted details');
-            $ok = finMailClient($app, 'Your Commitment Fee Letter — please confirm before we issue your invoice', paTermsLetterHtml($app), 'Follow My Request');
+            $ok = finMailClient($app, 'Your Commitment Fee Letter — please confirm before we issue your invoice', preg_replace('~^<p>Dear [^<]*</p>~', '', paTermsLetterHtml($app)), 'Follow My Request');   // finMailClient() already opens with "Dear <name>"
             finRecordMail($app, 'Request received', $ok);
             finSave($app);
             finMailOffice($app, 'New Pre-Auction Request — issue the proforma invoice');
