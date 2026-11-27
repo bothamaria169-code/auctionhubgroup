@@ -688,7 +688,7 @@ require_once 'header.php';
       ['templates', 'Email &amp; WA Templates', 'fa-pen-to-square', 0],
       ['news',      'Website Content',        'fa-newspaper',    0, array_keys($adminSubTabs['content'])],
     ],
-    'Settings &amp; Staff' => [
+    'Settings & Staff' => [
       ['banking', 'Banking Details',  'fa-university', (int)$stats['bank_requests']],
       ['workers', 'Workers',          'fa-id-badge',   0],
       ['careers', 'Job Applications', 'fa-user-tie',   0],
