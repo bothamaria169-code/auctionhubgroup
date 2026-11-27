@@ -163,8 +163,8 @@ switch ($action) {
                 $done = 'Declined. Nothing has been emailed yet — check the decline letter, then put it in the Outbox.';
             }
         } else {
-            $err = paDecline($app, $note, $by);
-            $done = 'Declined — the notice to the client is in the Outbox for approval.';
+            $err = paDecline($app, $note, $by, $reasons);
+            $done = 'Declined — the notice and the Letter of Decline (PDF) are in the Outbox for approval.';
         }
         break;
     case 'propose_deposit':

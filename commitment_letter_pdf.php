@@ -173,3 +173,145 @@ function paTermsLetterFile(array $app): string {
         return '';
     }
 }
+
+// ── Pre-auction: Letter of Decline ───────────────────────────
+
+/** Reasons the office can tick when declining a pre-auction request. */
+const PA_DECLINE_REASONS = [
+    'bid'         => 'The vehicle received a bid before the commitment fee was paid.',
+    'other_buyer' => 'Another buyer\'s commitment fee on this vehicle was paid first.',
+    'institution' => 'The financial institution holding the vehicle did not accept a sale before the auction.',
+    'percentage'  => 'The commitment percentage offered was below what the financial institution requires on this vehicle.',
+    'withdrawn'   => 'The vehicle has been withdrawn from sale.',
+];
+
+/** The apologetic Letter of Decline (PDF) for a pre-auction request: what they asked for, why, and what they can do next. */
+function paDeclineLetterPdf(array $app, array $reasons, string $note, bool $invoiced): string {
+    $navy = '#0d2b7b'; $muted = '#7a8499'; $line = '#d9dfe9'; $ink = '#222222';
+    $d     = $app['details'] ?? [];
+    $price = (float)$app['price'];
+    $pct   = (int)($d['invoice_pct'] ?? $d['offer_pct'] ?? $d['usual_pct'] ?? paBandPercent($price));
+    $fee   = round($price * $pct / 100, 2);
+    $R     = fn($n) => 'R' . number_format((float)$n, 2, '.', ',');
+    $first = ucfirst(explode(' ', trim((string)$app['name']))[0] ?: 'Client');
+    $site  = defined('CANONICAL_URL') ? preg_replace('~^https?://(www\.)?~', '', CANONICAL_URL) : COMPANY_WEBSITE;
+
+    $p = new AhgPdf();
+    $p->setLogo(regLogoJpeg());
+    $p->addPage();
+    ahgPdfHeader($p, 'LETTER OF DECLINE');
+
+    // To / refs
+    $p->label(12, 49, 'To');
+    $p->text(12, 56, (string)$app['name'], 12.5, true);
+    $by = 62;
+    foreach (array_filter([(string)($app['email'] ?? ''), (string)($app['phone'] ?? '')]) as $l) { $p->text(12, $by, $l, 8.6); $by += 5.3; }
+    foreach ([['Reference', finRef($app)], ['Date', date('d M Y')], ['Requested on', date('d M Y', strtotime((string)($app['created_at'] ?? 'now')))]] as $i => [$k, $v]) {
+        $p->label(115, 49 + $i * 5.3, $k);
+        $p->text(198, 49 + $i * 5.3, $v, 8.6, true, $ink, 'R');
+    }
+
+    // Flowing body
+    $y = 80;
+    $lh = 8.6 * 1.55 / 2.834646;
+    $newPage = function () use ($p, &$y, $navy) { $p->addPage(); $p->rect(12, 7, 186, 2.2, $navy, null, 1); $y = 18; };
+    $need = function (float $h) use (&$y, $newPage) { if ($y + $h > 284) $newPage(); };
+    $para = function (string $t, bool $bold = false) use ($p, &$y, $need, $lh) {
+        $lines = AhgPdf::wrap($t, 8.6, $bold, 186);
+        $need(count($lines) * $lh);
+        foreach ($lines as $l) { $p->text(12, $y, $l, 8.6, $bold); $y += $lh; }
+        $y += 2.5;
+    };
+    $heading = function (string $t) use ($p, &$y, $need, $navy) { $need(14); $y += 2; $p->text(12, $y, mb_strtoupper($t), 11, true, $navy); $y += 6.5; };
+    $bullets = function (array $items) use ($p, &$y, $need, $lh, $navy) {
+        foreach ($items as [$lead, $t]) {
+            $leadW = $lead === '' ? 0 : AhgPdf::width($lead . ' ', 8.6, true) / 2.834646;
+            $lines = AhgPdf::wrap($t, 8.6, false, 178, 178 - $leadW);
+            $need(count($lines) * $lh + 1.5);
+            $p->rect(13.6, $y - 2.6, 2.4, 2.4, $navy, null, 1.2);
+            if ($lead !== '') $p->text(20, $y, $lead, 8.6, true);
+            foreach ($lines as $li => $l) { $p->text($li === 0 ? 20 + $leadW : 20, $y, $l, 8.6); $y += $lh; }
+            $y += 1.5;
+        }
+        $y += 1.5;
+    };
+
+    $p->text(12, $y, 'Dear ' . $first . ',', 9.5, true); $y += 7;
+    $p->text(12, $y, 'RE: PRE-AUCTION REQUEST — ' . mb_strtoupper((string)$app['vehicle']), 9.5, true, $navy); $y += 8;
+    $para('Thank you for choosing ' . COMPANY_TRADING_AS . ' and for your interest in this vehicle. We are sorry to let you know that we are unable to approve your pre-auction request at this time. We understand this is disappointing, and we sincerely apologise for any inconvenience.');
+
+    // Request table
+    $need(32);
+    $p->rect(12, $y, 186, 7, $navy, null, 2.5);
+    $p->label(16, $y + 4.7, 'Your request', '#ffffff');
+    $y += 7;
+    foreach ([['Vehicle', (string)$app['vehicle']], ['Vehicle price', $R($price)], ['Commitment offered', $pct . '% — ' . $R($fee)]] as [$k, $v]) {
+        $p->text(16, $y + 4.6, $k, 8.6, false, '#6b7385');
+        $p->text(70, $y + 4.6, $v, 8.6, true);
+        $p->line(12, $y + 6.8, 198, $y + 6.8, $line, 0.5);
+        $y += 7;
+    }
+    $y += 6;
+
+    $heading('Why we could not approve it');
+    $why = array_values(array_filter(array_map(fn($k) => PA_DECLINE_REASONS[$k] ?? null, $reasons)));
+    if (trim($note) !== '') $why[] = trim($note);
+    if (!$why) $why[] = 'A pre-auction sale is only possible while the vehicle qualifies and the financial institution holding it accepts a sale before the auction. On this vehicle we are not able to go ahead this time.';
+    $bullets(array_map(fn($t) => ['', $t], $why));
+
+    $heading($invoiced ? 'Your commitment fee' : 'You owe us nothing');
+    if ($invoiced) {
+        $bullets([
+            ['Refund.', 'If you have already paid the commitment fee, it is refunded within 3 to 5 business days to the same account it was paid from.'],
+            ['Charges.', 'A deduction of ' . $R(PA_REFUND_FEE) . ' applies for administration and bank processing charges.'],
+            ['Not reflecting?', 'If the refund does not reflect within 5 business days, contact us with your proof of payment.'],
+        ]);
+    } else {
+        $para('No commitment fee has been invoiced or charged on this request, so there is nothing to pay.');
+    }
+
+    $heading('What you can do next');
+    $bullets([
+        ['Choose another vehicle.', 'Every coming-soon vehicle can be secured or financed before the auction, and so can live vehicles with no bids yet. Reply to this letter or call ' . COMPANY_PHONE . ' and we will suggest vehicles that suit your budget.'],
+        ['Bid at auction.', 'Register as a bidder with a refundable R10,000 deposit and bid live on the floor or online. The full DEKRA report can be viewed at our office.'],
+        ['Get a finance quote.', 'Terms from 6 to 72 months on qualifying vehicles: apply on our website.'],
+    ]);
+    $para('This decision is not a reflection of your creditworthiness or standing; it relates only to this vehicle. Thank you for your understanding. We value your interest and hope to help you find the right vehicle soon.');
+
+    $need(22);
+    $y += 2;
+    $p->text(12, $y, 'Kind regards,', 8.6); $y += 5;
+    $p->text(12, $y, 'Pre-Auction Department, ' . COMPANY_TRADING_AS, 8.6, true); $y += 8;
+
+    // Company details
+    $need(66);
+    $heading('Verify our company details');
+    $p->text(12, $y, 'Check these details against the CIPC and SARS records. Our banking details never change by email, SMS or WhatsApp.', 8.2, false, $muted);
+    $y += 5;
+    foreach ([
+        ['Registered name', COMPANY_REGISTERED_NAME . ' (Pty) Ltd, trading as ' . COMPANY_TRADING_AS],
+        ['Registration no.', COMPANY_REG_NO . ' (registered ' . COMPANY_REG_DATE . ')'],
+        ['SARS tax no.', COMPANY_SARS_NO],
+        ['Address', COMPANY_ADDRESS],
+        ['Phone', COMPANY_PHONE . ' / ' . COMPANY_PHONE2],
+        ['Email', COMPANY_EMAIL],
+        ['Website', $site],
+    ] as [$k, $v]) {
+        $p->text(12, $y + 4, $k, 8.6, false, '#6b7385');
+        $p->text(60, $y + 4, $v, 8.6, true);
+        $p->line(12, $y + 6.2, 198, $y + 6.2, $line, 0.5);
+        $y += 6.8;
+    }
+    return $p->output();
+}
+
+/** Saves the decline letter in the application's private folder; returns the path ('' on failure). */
+function paDeclineLetterFile(array $app, array $reasons, string $note, bool $invoiced): string {
+    try {
+        $path = finUploadDir((int)$app['id']) . 'letter_of_decline_' . preg_replace('/[^A-Za-z0-9-]/', '', finRef($app)) . '.pdf';
+        return @file_put_contents($path, paDeclineLetterPdf($app, $reasons, $note, $invoiced)) ? $path : '';
+    } catch (Throwable $e) {
+        error_log('[AHG] decline letter PDF: ' . $e->getMessage());
+        return '';
+    }
+}

@@ -848,6 +848,9 @@ function sendDeclinationEmail(array $data): bool {
         This notice is issued by Auction Hub Group in our capacity as authorised agent for the relevant financial institution. This communication is not a reflection of your creditworthiness or financial standing — it relates solely to the status of the specific vehicle referenced above.
     </p>';
 
+    $body .= !empty($data['attach']) ? '<p style="font-size:14px;">Your <strong>Letter of Decline</strong> is attached as a PDF for your records.</p>' : '';
+    foreach ($data['attach'] ?? [] as $path => $name) if (is_file($path)) $mail->addAttachment($path, $name);   // a saved file, so it survives the Outbox
+
     $mail->Body    = _emailTemplate('Pre-Auction Commitment — Financial Institution Decision', $body);
     $mail->AltBody = "Dear {$data['buyer_name']}, the financial institution holding the vehicle referenced in invoice {$data['invoice_number']} has determined that the pre-auction commitment cannot proceed. Reason: {$data['reason']}. Your commitment fee will be refunded within 3-5 business days (less R102 admin fee). We apologise for the inconvenience. Contact: " . COMPANY_EMAIL;
 

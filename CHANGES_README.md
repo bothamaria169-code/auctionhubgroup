@@ -113,6 +113,14 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 - Client application page (`my_application.php`) shows **Read & Confirm — Request My Invoice** until
   confirmed.
 - Fixed: the letter email greeted the client twice.
+- **Pre-auction decline** (adapted from BidCo's Buy Now Letter of Decline, in the AHG layout): admin
+  ticks reasons (`PA_DECLINE_REASONS`: a bid came in first, another buyer paid first, the financial
+  institution did not accept, percentage too low, vehicle withdrawn) and/or writes one, then
+  **Decline & Send Letter**. The client gets the notice plus a **Letter of Decline** PDF
+  (`paDeclineLetterPdf()` in `commitment_letter_pdf.php`): their request, why, the refund (3–5 business
+  days, less R102.00, when an invoice was issued) or "you owe us nothing" (before an invoice), what
+  they can do next (another vehicle, bid at auction, finance quote) and the company details. The PDF
+  is saved in the application's private folder and both emails wait in the Outbox for approval.
 - Vehicles are listed in one place only (`auctions.php`, live and coming soon). `preauction.php` is
   information plus a "Find your vehicle" section (**Coming soon** / **Live vehicles** buttons and a
   pre-auction enquiry form, preselected with `$enqType = 'preauction'`, landing on the Pre-Auction desk).

@@ -911,20 +911,29 @@ function paApproveInvoice(array &$app, string $note, string $by): string {
 }
 
 /** Decline: an open invoice is declined the AHG way (financial institution email); a request without one gets a polite email. */
-function paDecline(array &$app, string $reason, string $by): string {
+function paDecline(array &$app, string $reason, string $by, array $reasons = []): string {
     global $pdo;
+    require_once __DIR__ . '/commitment_letter_pdf.php';
+    $reasons = array_values(array_intersect($reasons, array_keys(PA_DECLINE_REASONS)));
+    // The reason in words: the ticked reasons plus anything the office typed
+    $words = trim(implode(' ', array_map(fn($k) => PA_DECLINE_REASONS[$k], $reasons)) . ' ' . $reason);
     $inv = paInvoiceRow($app);
     if ($inv && $inv['status'] !== 'approved') {
-        if ($reason === '') return 'A reason is required — it goes to the buyer in the financial institution notice.';
-        $pdo->prepare("UPDATE preauction_invoices SET status = 'declined', declination_reason = ? WHERE id = ?")->execute([$reason, $inv['id']]);
+        if ($words === '') return 'Tick a reason or write one — it goes to the buyer in the Letter of Decline.';
+        $pdo->prepare("UPDATE preauction_invoices SET status = 'declined', declination_reason = ? WHERE id = ?")->execute([$words, $inv['id']]);
+        $letter = paDeclineLetterFile($app, $reasons, $reason, true);
         if ($inv['buyer_email']) {
             sendDeclinationEmail(['buyer_name' => $inv['buyer_name'], 'buyer_email' => $inv['buyer_email'],
-                'invoice_number' => $inv['invoice_number'], 'vehicle_description' => $inv['vehicle_description'], 'reason' => $reason]);
+                'invoice_number' => $inv['invoice_number'], 'vehicle_description' => $inv['vehicle_description'], 'reason' => $words,
+                'attach' => $letter ? [$letter => 'AHG Letter of Decline ' . finRef($app) . '.pdf'] : []]);
         }
         $app = paSync($app);
+        $app['details']['declined'] = ['at' => date('Y-m-d H:i:s'), 'reason' => $reason, 'reasons' => $reasons, 'by' => $by, 'letter' => $letter !== ''];
         return '';
     }
-    finDecline($app, $reason, $by);
+    $letter = paDeclineLetterFile($app, $reasons, $reason, false);
+    finDecline($app, $words, $by, [], $letter ? [$letter => 'AHG Letter of Decline ' . finRef($app) . '.pdf'] : []);
+    $app['details']['declined']['reasons'] = $reasons;
     return '';
 }
 
@@ -1328,7 +1337,7 @@ function finCounterDeposit(array &$app, float $deposit, string $note, string $by
  * (what the client can do to fix it) and approves it in the Outbox.
  * Pre-auction request before any invoice: a polite email (held in the Outbox).
  */
-function finDecline(array &$app, string $reason, string $by, array $reasons = []): void {
+function finDecline(array &$app, string $reason, string $by, array $reasons = [], array $files = []): void {
     $app['status'] = 'declined';
     $app['details']['declined'] = ['at' => date('Y-m-d H:i:s'), 'reason' => $reason,
         'reasons' => array_values(array_intersect($reasons, array_keys(FIN_DECLINE_REASONS))), 'by' => $by];
@@ -1340,9 +1349,10 @@ function finDecline(array &$app, string $reason, string $by, array $reasons = []
         '<p>Thank you for your trust in Auction Hub Group. We are sorry to let you know that we are <strong>not able to proceed</strong> with your '
         . ($isFin ? 'finance application' : 'pre-auction request') . ' on this vehicle.</p>'
         . ($reason !== '' ? '<div class="highlight-box"><p>' . nl2br(e($reason)) . '</p></div>' : '')
-        . '<p>This is not a reflection of your creditworthiness or standing. Our inventory updates regularly and new bank-stock vehicles arrive every week.</p>'
-        . '<a href="' . APP_URL . '/preauction.php" class="cta-btn">Browse Available Vehicles</a>',
-        'View my application');
+        . '<p>This is not a reflection of your creditworthiness or standing. No commitment fee has been charged, so you owe us nothing.</p>'
+        . ($files ? '<p>Your <strong>Letter of Decline</strong> is attached, with what you can do next: choose another vehicle, bid at auction, or get a finance quote.</p>' : '')
+        . '<a href="' . APP_URL . '/auctions.php?status=upcoming" class="cta-btn">See Coming-Soon Vehicles</a>',
+        'View my application', '', '', $files);
     finRecordMail($app, 'Decline', $ok);
 }
 
