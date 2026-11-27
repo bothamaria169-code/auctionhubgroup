@@ -680,7 +680,8 @@ require_once 'header.php';
     'Vehicles' => [
       ['auctions',   'Auctions',            'fa-car',          0],
       ['stock',      'Import Vehicles',     'fa-file-import',  0, array_keys($adminSubTabs['import'])],
-      ['manual_bid', 'Manual Bids &amp; Floor', 'fa-gavel',    0],
+      ['url:admin_bid_desk.php', 'Bid Desk',   'fa-gavel',    0],
+      ['manual_bid', 'Manual Bids &amp; Floor', 'fa-people-group', 0],
       ['events',     'Events',              'fa-calendar-alt', 0],
     ],
     'Marketing' => [
@@ -2731,9 +2732,12 @@ require_once 'header.php';
         <h1><i class="fas fa-gavel"></i> Manual Bids &amp; Floor Bidders</h1>
         <p class="text-muted">Bid for customers at floor or live auctions and over the phone. Floor bidders can't log in; only staff bid for them here.</p>
       </div>
-      <button type="button" class="btn btn-primary" onclick="openFloorBidder()">
-        <i class="fas fa-user-plus"></i> Add floor bidder
-      </button>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <a href="admin_bid_desk.php" class="btn btn-gold" style="background:#fbbf24;color:#001F5C"><i class="fas fa-gavel"></i> Open Bid Desk</a>
+        <button type="button" class="btn btn-primary" onclick="openFloorBidder()">
+          <i class="fas fa-user-plus"></i> Add floor bidder
+        </button>
+      </div>
     </div>
 
     <!-- Floor / phone bidders -->
