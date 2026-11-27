@@ -16,6 +16,9 @@ page hero.
 | To go live | Merge the branch into `main`, then deploy in cPanel (Git Version Control → Update from Remote → Deploy HEAD Commit). See `DEPLOY_CHECKLIST.md`. |
 | Database | New columns are added automatically on first use by `db_schema.php` (`ahgSchemaReady()`). No manual migration. |
 
+| New files | `admin_bid_desk.php`, `admin_split_stock.php`, `admin_relist.php`, `confirm_terms.php`, `reg_invoice_pdf.php`, `commitment_letter_pdf.php`, `CHANGES_README.md` |
+| Full commit list | Section 8 at the end of this file |
+
 **First thing to do in the new session:** `git checkout fix/no-dekra-report-by-message && git pull`.
 Ask the owner before merging to `main`; merging puts everything live.
 
@@ -211,12 +214,17 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
   on PDFs, and function-level tests.
 - **`php -l` does not catch duplicate function names across files.** Before pushing, load all
   helpers together in one PHP process (or grep `function name(` across `*.php`).
+- The Bid Desk was rendered against an in-memory SQLite copy of the tables it reads (users, makes,
+  auctions, bids, auction_gallery) with sample lots and photos.
 - Needs a real check on staging or live after deploy:
   1. Register a test bidder → welcome email arrives with the registration invoice PDF.
   2. Pre-auction enquiry → letter email with PDF → confirm → admin issues invoice.
   3. Finance application → quote → choose term → request invoice.
   4. Admin on a phone: to-do list, sub-tabs, a WhatsApp button.
   5. Win an auction (test) → winning email shows the 10 steps.
+  6. Bid Desk: choose a floor bidder, place a bid, check the public bid list shows only name and number.
+  7. Decline a test pre-auction request → Outbox shows the notice with the Letter of Decline attached.
+  8. Split Live Stock on a copy of the stock → coming-soon vehicles show Secure it / Get a finance quote.
 
 ---
 
@@ -234,6 +242,12 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
 6. The registration invoice PDF has a blank signature line (no uploaded signature image).
 7. A few older tap targets are under 32 px (checkboxes, password-show toggle on login).
 8. Run the split tool on live stock only after admin confirms the picks.
+9. Bid Desk: no maximum / auto-bids yet (BidCo has them in `includes/max-bids.php`). Tested against a
+   sample database only; try a real bid for a floor bidder on staging first.
+10. The pre-auction Letter of Decline is emailed as a PDF but is not yet downloadable from the client's
+    application page (finance decline letters are, via `application_doc.php?doc=decline`).
+11. `admin_place_bid` does not check the auction end time (only `status = closed`); the Bid Desk only
+    lists lots that have not ended, but the Manual Bids page can still bid on an ended lot.
 
 ---
 
@@ -272,6 +286,13 @@ DESIGN PRINCIPLES
    new libraries. Keep Font Awesome as it is.
 7. Accessibility: WCAG AA contrast, visible focus states, alt text, form labels, aria for icons.
 8. Consistent empty, loading and error states.
+
+NOTES
+- Vehicles are listed in one place only: auctions.php (live and coming soon). preauction.php is
+  information plus a "Find your vehicle" section and an enquiry form; do not add a vehicle grid back.
+- Vehicle page actions: Bid always; Secure it (pre-auction) and Get a finance quote only when the
+  vehicle qualifies (finPrice(): coming soon always, live only with no bids). Keep that logic.
+- Admin pages (admin_*.php) are out of scope unless asked.
 
 PAGES TO REVIEW AND POLISH (in this order)
 index.php (home), auctions.php (listing + filters), auction.php (vehicle page), register-to-bid.php,
@@ -338,3 +359,40 @@ QUALITY BAR
 - Check at 360, 390, 768, 1280 and 1440 px; send screenshots.
 - Do not change business rules or invent figures (see CHANGES_README.md section 2).
 ```
+
+---
+
+## 8. Commit list (branch `fix/no-dekra-report-by-message`, after live commit `4e6923b`)
+
+| Commit | Date | Change |
+|---|---|---|
+| `9b63cc6` | 2026-11-25 | Stop offering DEKRA reports in enquiry follow-ups |
+| `4cb6126` | 2026-11-25 | Show DEKRA report policy on vehicle pages |
+| `b4163d1` | 2026-11-25 | Point full DEKRA reports to viewing at the office across public pages |
+| `84b1521` | 2026-11-25 | Ask pre-auction clients for their bank and state the sign-off step |
+| `25840ae` | 2026-11-25 | Let pre-auction clients offer a commitment fee percentage |
+| `dede3f5` | 2026-11-25 | Send pre-auction clients a commitment-fee letter to confirm before invoicing |
+| `e0aceac` | 2026-11-25 | Extend finance terms to 72 months and add company and deposit details to client documents |
+| `2f4162f` | 2026-11-25 | Fix admin term note wording |
+| `6f6ac47` | 2026-11-25 | Wrap confirm-terms buttons for small screens; test harness fixes |
+| `b71ddb6` | 2026-11-25 | Redesign finance quotation to match the office quotation |
+| `b427704` | 2026-11-25 | Pre-auction: explain the commitment fee for the selected vehicle, then confirm and request invoice |
+| `fc91873` | 2026-11-25 | Remove unused company helper; add CIPC verification line |
+| `0815a6e` | 2026-11-25 | Admin tools: split live stock into coming soon, and relist unsold no-bid vehicles |
+| `f876b16` | 2026-11-25 | Office bids show only the bidder's name and number |
+| `83c6772` | 2026-11-26 | Admin: group menu, add split/relist links, filter applications by type |
+| `2a5e92f` | 2026-11-26 | Registration invoice PDF, bank on every form, simpler admin, WhatsApp next steps |
+| `6cccc2b` | 2026-11-26 | Fix: rename client WhatsApp helper that clashed with waLink() |
+| `9e1ddec` | 2026-11-26 | Mobile fixes: admin sub-tab styles, styled bank dropdown |
+| `5dba4e3` | 2026-11-26 | After-win steps on the winning letter; collect within 72 hours |
+| `c785f27` | 2026-11-26 | Registration invoice: registration-stage content only |
+| `5c5777c` | 2026-11-27 | Commitment-fee letter email: greet the client once |
+| `5445dfd` | 2026-11-27 | Pre-auction enquiry: attach the commitment-fee letter as a PDF |
+| `cf06c1e` | 2026-11-27 | Admin menu: show "Settings & Staff" heading correctly |
+| `e38213b` | 2026-11-27 | Add CHANGES_README.md: all changes, business rules, open items, design briefs |
+| `da74955` | 2026-11-27 | Admin Bid Desk for the bidders we bid for |
+| `a620c44` | 2026-11-27 | Separate follow-up desks: Registrations, Finance, Pre-Auction, General |
+| `0c14b8d` | 2026-11-27 | Pre-auction page: information and enquiry; vehicles on one page |
+| `e10e689` | 2026-11-27 | Pre-auction and finance: coming-soon vehicles always qualify |
+| `e03334f` | 2026-11-27 | Pre-auction decline: reasons and a Letter of Decline PDF |
+| (this commit) | 2026-11-27 | README: new files, commit list, open items, design-brief notes |
