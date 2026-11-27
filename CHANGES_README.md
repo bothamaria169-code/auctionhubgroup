@@ -137,16 +137,33 @@ Use these exact rules in any page, email, PDF or WhatsApp text. Do not invent ne
   "coming soon"; admin reviews and confirms the picks.
 - `admin_relist.php` (new): relists unsold vehicles that closed with no bids.
 - Office bid note no longer leaks into the public bidder name (`api.php`, `admin_place_bid`).
+- **Bid Desk** (`admin_bid_desk.php`, menu Vehicles → Bid Desk, and a button on Manual Bids & Floor):
+  every live, unsold lot as a photo card with its gallery thumbnails, current and next bid, time left,
+  bid count and leader. Pick the floor/phone bidder once (kept for the session; recent bidders one tap
+  away) and how the bid came in (phone, floor, WhatsApp), then **Bid** (next bid), **+2 steps** or an
+  own amount. Bids go through `api.php` → `admin_place_bid` (minimum bid, outbid alert, bid email) and
+  the channel is logged as the internal note. Only verified floor bidders appear in the picker. The
+  card turns green when our bidder leads. Modelled on BidCo's `admin/bid-desk.php`, simplified
+  (no auto-bid / max bids yet).
 
 ### 3.8 Admin simplification
-- Menu cut from 27 items to 16, in groups: **Today**, **Clients**, **Payments**, **Vehicles**,
-  **Marketing**, **Settings & Staff** (`$adminNav` in `admin_dashboard.php`).
+- Menu cut from 27 items to 19, in groups: **Today**, **Clients**, **Payments**, **Vehicles**,
+  **Marketing**, **Settings & Staff** (`$adminNav` in `admin_dashboard.php`). Menu items can carry a
+  desk parameter (`applications?kind=finance`, `leads?topic=registration`); `$navIsOn` decides which
+  item is highlighted.
+- **Separate follow-up desks** under Clients: **Registrations** (sign-ups, banking-detail requests,
+  "registering to bid" enquiries), **Finance** (applications + finance enquiries), **Pre-Auction**
+  (requests + pre-auction enquiries) and **General Enquiries**. Each has its own waiting count.
+  Finance and Pre-Auction pages have **Applications | Enquiries** tabs. Every lead carries a `topic`
+  (`LEAD_TOPICS`, `leadEntryTopic()` in `leads_helper.php`; a person's desk is the most specific of
+  their entries: pre-auction > finance > registration > general). Counts: `leadWaitingByTopic()`.
 - Pages that share one menu item get a row of tabs (`$adminSubTabs`): Payments & Refunds, Import
   Vehicles, Send Email, Website Content.
 - Add Vehicle, Split Live Stock and Relist Unsold are buttons on **Auctions**; Deal Builder is a
   **New walk-in deal** button on Finance & Pre-Auction.
-- **Overview is a to-do list**: "Waiting on you" boxes (leads, finance and pre-auction, outbox emails,
-  proofs of payment, banking requests, refunds), up to five names each, oldest first.
+- **Overview is a to-do list**: "Waiting on you" boxes per desk (registrations, finance applications,
+  finance enquiries, pre-auction requests, pre-auction enquiries, general enquiries) plus outbox
+  emails, proofs of payment, banking requests and refunds; up to five names each, oldest first.
 - Finance & Pre-Auction list has an **All types / Finance / Pre-auction** filter with "to action"
   counts.
 

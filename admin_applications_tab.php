@@ -117,9 +117,16 @@ $faForm = fn(int $id, string $action, string $inner, string $btn, string $cls = 
 .fa2-letter { width:100%; min-height:380px; font-size:.86rem; line-height:1.55; }
 </style>
 
+<?php if ($faKind !== ''):
+    $faEnqWaiting = function_exists('leadWaitingByTopic') ? (leadWaitingByTopic()[$faKind] ?? 0) : 0; ?>
+<nav class="admin-subtabs" aria-label="Sections" style="margin-bottom:1rem">
+  <a href="?tab=applications&amp;kind=<?= $faKind ?>" class="on">Applications<?php if ($faKindTodo[$faKind]): ?> <span class="sidebar-badge sidebar-badge-danger"><?= $faKindTodo[$faKind] ?></span><?php endif; ?></a>
+  <a href="?tab=leads&amp;topic=<?= $faKind ?>">Enquiries<?php if ($faEnqWaiting): ?> <span class="sidebar-badge sidebar-badge-danger"><?= $faEnqWaiting ?></span><?php endif; ?></a>
+</nav>
+<?php endif; ?>
 <div class="dashboard-header">
   <div>
-    <h1><i class="fas fa-handshake"></i> Finance &amp; Pre-Auction</h1>
+    <h1><i class="fas fa-handshake"></i> <?= $faKind === 'finance' ? 'Finance' : ($faKind === 'preauction' ? 'Pre-Auction' : 'Finance &amp; Pre-Auction') ?></h1>
     <p class="text-muted">Online finance applications and pre-auction purchase requests. For a walk-in or phone client who did not apply online, use <strong>New walk-in deal</strong>.</p>
   </div>
   <div style="display:flex;gap:.5rem;flex-wrap:wrap">

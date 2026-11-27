@@ -9,6 +9,11 @@ require_once __DIR__ . '/leads_helper.php';
 
 $ldDays   = in_array((int)($_GET['days'] ?? 30), [7, 30, 90, 365], true) ? (int)($_GET['days'] ?? 30) : 30;
 $ldPeople = leadPeople($ldDays);
+// Desk: registration, finance, pre-auction or general enquiries, worked separately
+$ldTopic = isset(LEAD_TOPICS[$_GET['topic'] ?? '']) ? $_GET['topic'] : '';
+$ldTopicCounts = array_fill_keys(array_keys(LEAD_TOPICS), 0);
+foreach ($ldPeople as $p) $ldTopicCounts[$p['topic']]++;
+if ($ldTopic !== '') $ldPeople = array_values(array_filter($ldPeople, fn($p) => $p['topic'] === $ldTopic));
 $ldStageCounts = array_fill_keys(array_keys(LEAD_STAGES), 0);
 $ldTypeCounts  = array_fill_keys(array_keys(LEAD_TYPES), 0);
 $ldDue = 0;
@@ -37,8 +42,8 @@ $ldStageIcon = ['new' => 'fa-circle-dot', 'contacted' => 'fa-paper-plane', 'call
 ?>
 <div class="dashboard-header">
   <div>
-    <h1><i class="fas fa-user-plus"></i> Leads</h1>
-    <p class="text-muted">Everyone who got in touch — one card per person. Contact the New ones first, then log each call.</p>
+    <h1><i class="fas fa-user-plus"></i> <?= $ldTopic === 'registration' ? 'Registrations' : ($ldTopic === 'finance' ? 'Finance enquiries' : ($ldTopic === 'preauction' ? 'Pre-auction enquiries' : ($ldTopic === 'general' ? 'General enquiries' : 'All leads'))) ?></h1>
+    <p class="text-muted"><?= $ldTopic === 'registration' ? 'New sign-ups, banking-detail requests and people asking about registering to bid.' : 'One card per person. Contact the New ones first, then log each call.' ?></p>
   </div>
   <div class="ld-head-actions">
     <a class="btn btn-sm btn-outline" href="?tab=templates"><i class="fas fa-pen-to-square"></i> Templates</a>
@@ -46,6 +51,12 @@ $ldStageIcon = ['new' => 'fa-circle-dot', 'contacted' => 'fa-paper-plane', 'call
   </div>
 </div>
 
+<?php if ($ldTopic === 'finance' || $ldTopic === 'preauction'): ?>
+<nav class="admin-subtabs" aria-label="Sections">
+  <a href="?tab=applications&amp;kind=<?= $ldTopic ?>">Applications</a>
+  <a href="?tab=leads&amp;topic=<?= $ldTopic ?>" class="on">Enquiries <span class="sidebar-badge sidebar-badge-danger"><?= $ldTopicCounts[$ldTopic] ?></span></a>
+</nav>
+<?php endif; ?>
 <div class="ld-toolbar card">
   <div class="ld-chips" role="tablist" aria-label="Filter by stage">
     <button type="button" class="ld-chip active" data-stage="open">To do <b><?= $ldStageCounts['new'] + $ldStageCounts['contacted'] + $ldStageCounts['called'] ?></b></button>
@@ -57,13 +68,19 @@ $ldStageIcon = ['new' => 'fa-circle-dot', 'contacted' => 'fa-paper-plane', 'call
   </div>
   <div class="ld-filters">
     <input type="search" id="ldSearch" class="form-control" placeholder="Search name, phone, email, vehicle…" aria-label="Search leads">
+    <select class="form-control" aria-label="Desk" onchange="location.href='?tab=leads&days=<?= $ldDays ?>&topic='+this.value">
+      <option value="">All desks (<?= array_sum($ldTopicCounts) ?>)</option>
+      <?php foreach (LEAD_TOPICS as $k => $l): ?>
+        <option value="<?= $k ?>"<?= $k === $ldTopic ? ' selected' : '' ?>><?= $l ?> (<?= $ldTopicCounts[$k] ?>)</option>
+      <?php endforeach; ?>
+    </select>
     <select id="ldType" class="form-control" aria-label="Lead type">
       <option value="">All lead types</option>
       <?php foreach (LEAD_TYPES as $k => [$label]): if (!$ldTypeCounts[$k]) continue; ?>
         <option value="<?= $k ?>"><?= $label ?> (<?= $ldTypeCounts[$k] ?>)</option>
       <?php endforeach; ?>
     </select>
-    <select class="form-control" aria-label="Period" onchange="location.href='?tab=leads&days='+this.value">
+    <select class="form-control" aria-label="Period" onchange="location.href='?tab=leads&topic=<?= $ldTopic ?>&days='+this.value">
       <?php foreach ([7 => 'Last 7 days', 30 => 'Last 30 days', 90 => 'Last 90 days', 365 => 'Last year'] as $d => $l): ?>
         <option value="<?= $d ?>"<?= $d === $ldDays ? ' selected' : '' ?>><?= $l ?></option>
       <?php endforeach; ?>

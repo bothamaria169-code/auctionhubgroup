@@ -89,9 +89,13 @@ try { $stats['pending_refunds'] = $pdo->query("SELECT COUNT(*) FROM refund_reque
 // Leads waiting for a first contact (last 7 days) + call-backs due — menu badge and Overview strip
 require_once __DIR__ . '/leads_helper.php';
 require_once __DIR__ . '/finance_helper.php';   // to-do list: application next-step WhatsApp
-$stats['leads_waiting'] = leadWaitingCount();
+$stats['leads_by_topic'] = leadWaitingByTopic();
+$stats['leads_waiting'] = array_sum($stats['leads_by_topic']);
 $stats['applications_waiting'] = 0;   // finance / pre-auction applications waiting on the office
-try { if (ahgSchemaReady()) $stats['applications_waiting'] = (int)$pdo->query("SELECT COUNT(*) FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed')")->fetchColumn(); } catch (Exception $e) {}
+$stats['apps_by_kind'] = ['finance' => 0, 'preauction' => 0];
+try { if (ahgSchemaReady()) foreach ($pdo->query("SELECT kind, COUNT(*) n FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed') GROUP BY kind") as $r) {
+    $stats['apps_by_kind'][$r['kind']] = (int)$r['n']; $stats['applications_waiting'] += (int)$r['n'];
+} } catch (Exception $e) {}
 $stats['outbox_waiting'] = function_exists('outboxPendingCount') ? outboxPendingCount() : 0;   // client emails waiting for approval
 $stats['applications_waiting'] += $stats['outbox_waiting'];
 $stats['bank_requests'] = 0;
@@ -146,11 +150,13 @@ if ($activeTab === 'overview') {
     $todoLists['pop'] = array_map(fn($r) => [$r['full_name'], 'Uploaded ' . leadTimeAgo((string)($r['pop_uploaded_at'] ?: $r['created_at'])), '?tab=pop',
             waToClient($r['phone'], $hi($r['full_name']) . "Thank you, we have your proof of payment for the registration deposit. We are verifying it and will activate your bidder number as soon as the funds reflect." . waSignOff())],
         $q("SELECT full_name, phone, pop_uploaded_at, created_at FROM users WHERE bidder_status = 'pending_approval' ORDER BY COALESCE(pop_uploaded_at, created_at) ASC LIMIT 5"));
-    $todoLists['applications'] = array_map(function ($r) {
-            $app = finDecode($r);
-            return [$app['name'], ($app['kind'] === 'finance' ? 'Finance' : 'Pre-auction') . ($app['vehicle'] ? ' · ' . $app['vehicle'] : '') . ' · ' . (FIN_STATUS_LABELS[$app['kind']][$app['status']] ?? $app['status']),
-                    '?tab=applications&app=' . (int)$app['id'], finAdminWhatsAppUrl($app)];
-        }, $q("SELECT * FROM client_applications WHERE status IN ('chosen','requested','invoiced','confirmed') ORDER BY updated_at ASC LIMIT 5"));
+    foreach (['finance', 'preauction'] as $todoKind) {
+        $todoLists['apps_' . $todoKind] = array_map(function ($r) {
+                $app = finDecode($r);
+                return [$app['name'], ($app['vehicle'] ? $app['vehicle'] . ' · ' : '') . (FIN_STATUS_LABELS[$app['kind']][$app['status']] ?? $app['status']),
+                        '?tab=applications&kind=' . $app['kind'] . '&app=' . (int)$app['id'], finAdminWhatsAppUrl($app)];
+            }, $q("SELECT * FROM client_applications WHERE kind = " . $pdo->quote($todoKind) . " AND status IN ('chosen','requested','invoiced','confirmed') ORDER BY updated_at ASC LIMIT 5"));
+    }
     $todoLists['outbox'] = array_map(fn($r) => [$r['to_name'] ?: $r['to_email'], $r['subject'], '?tab=applications&view=outbox', ''],
         $q("SELECT to_name, to_email, subject FROM client_outbox WHERE status = 'pending' ORDER BY id ASC LIMIT 5"));
     $todoLists['banking'] = array_map(fn($r) => [$r['full_name'], 'Asked ' . leadTimeAgo((string)$r['created_at']), '?tab=banking',
@@ -159,15 +165,15 @@ if ($activeTab === 'overview') {
     $todoLists['refunds'] = array_map(fn($r) => [$r['full_name'], 'Asked ' . leadTimeAgo((string)$r['created_at']), '?tab=refunds',
             waToClient($r['phone'], $hi($r['full_name']) . "We have your refund request and are processing it. The refund is paid to the account you paid from. We'll let you know as soon as it is paid." . waSignOff())],
         $q("SELECT u.full_name, u.phone, r.created_at FROM refund_requests r JOIN users u ON u.id = r.user_id WHERE r.status IN ('pending','under_review') ORDER BY r.created_at ASC LIMIT 5"));
-    $todoLists['leads'] = [];
+    foreach (array_keys(LEAD_TOPICS) as $t) $todoLists['leads_' . $t] = [];
     try {
         foreach (leadPeople(7) as $lp) {
             $due = $lp['call_back_at'] && $lp['call_back_at'] <= date('Y-m-d') && !in_array($lp['stage'], ['won', 'lost'], true);
             if ($lp['stage'] !== 'new' && !$due) continue;
             $tpl = $due ? 'follow_up' : (LEAD_WA_FOR_TYPE[$lp['type']] ?? 'follow_up');
-            $todoLists['leads'][] = [$lp['name'], ($due ? 'Call back due' : 'New') . ' · ' . $lp['detail'], '?tab=leads',
+            if (count($todoLists['leads_' . $lp['topic']]) >= 5) continue;
+            $todoLists['leads_' . $lp['topic']][] = [$lp['name'], ($due ? 'Call back due' : 'New') . ' · ' . $lp['detail'], '?tab=leads&topic=' . $lp['topic'],
                                      $lp['wa'] ? 'https://wa.me/' . $lp['wa'] . '?text=' . rawurlencode($waTpl($tpl, $lp)) : ''];
-            if (count($todoLists['leads']) >= 5) break;
         }
     } catch (Throwable $e) {}
     ahgSchemaReady(); // creates admin_activity_log on first use
@@ -669,10 +675,13 @@ require_once 'header.php';
       ['overview',   'To-do &amp; Overview', 'fa-list-check', 0],
       ['analytics',  'Analytics',  'fa-chart-line', 0],
     ],
+    // Each desk is followed up on its own: registrations, finance, pre-auction, general enquiries
     'Clients' => [
-      ['leads',        'Leads',                     'fa-user-plus', (int)$stats['leads_waiting']],
-      ['applications', 'Finance &amp; Pre-Auction', 'fa-handshake', (int)$stats['applications_waiting']],
-      ['users',        'Bidders',                   'fa-users',     0],
+      ['leads?topic=registration',      'Registrations',     'fa-id-card',      (int)$stats['leads_by_topic']['registration']],
+      ['applications?kind=finance',     'Finance',           'fa-file-signature', $stats['apps_by_kind']['finance'] + (int)$stats['leads_by_topic']['finance']],
+      ['applications?kind=preauction',  'Pre-Auction',       'fa-handshake',    $stats['apps_by_kind']['preauction'] + (int)$stats['leads_by_topic']['preauction']],
+      ['leads?topic=general',           'General Enquiries', 'fa-comments',     (int)$stats['leads_by_topic']['general']],
+      ['users',                         'Bidders',           'fa-users',        0],
     ],
     'Payments' => [
       ['pop', 'Payments &amp; Refunds', 'fa-file-invoice', (int)$stats['pending_pops'] + (int)$stats['pending_refunds'], array_keys($adminSubTabs['payments'])],
@@ -695,17 +704,35 @@ require_once 'header.php';
       ['careers', 'Job Applications', 'fa-user-tie',   0],
     ],
   ];
+  /** Menu item target: [tab, required GET params]. 'applications?kind=finance' → ['applications', ['kind' => 'finance']]. */
+  $navTarget = function (string $t): array {
+      [$tab, $qs] = array_pad(explode('?', $t, 2), 2, '');
+      parse_str($qs, $want);
+      return [$tab, $want];
+  };
+  /** Is this menu item the page being shown? For leads/applications the desk parameter must match too. */
+  $navIsOn = function (array $item) use ($activeTab, $navTarget): bool {
+      if (strpos($item[0], 'url:') === 0) return false;
+      [$tab, $want] = $navTarget($item[0]);
+      // Inside the Finance or Pre-Auction desk, its Enquiries tab (leads?topic=…) belongs to the same menu item
+      if ($tab === 'applications' && $activeTab === 'leads' && isset($want['kind'])) return ($_GET['topic'] ?? '') === $want['kind'];
+      if (!in_array($activeTab, array_merge([$tab], $item[4] ?? []), true)) return false;
+      foreach ($want as $k => $v) if (($_GET[$k] ?? '') !== $v) return false;
+      return true;
+  };
   $tabLabels = [];
   foreach ($adminNav as $items) foreach ($items as $it) {
       if (strpos($it[0], 'url:') === 0) continue;
-      foreach (array_merge([$it[0]], $it[4] ?? []) as $t) $tabLabels[$t] = $it[1];
+      [$tab] = $navTarget($it[0]);
+      foreach (array_merge([$tab], $it[4] ?? []) as $t) $tabLabels[$t] ??= $it[1];
+      if ($navIsOn($it)) $tabLabels[$activeTab] = $it[1];
   }
   /** One admin menu link (sidebar or phone menu) */
-  $navLink = function (array $item, string $cls) use ($activeTab): string {
+  $navLink = function (array $item, string $cls) use ($navIsOn): string {
       [$t, $label, $icon, $badge] = $item;
       $isUrl = strpos($t, 'url:') === 0;
-      $href  = $isUrl ? substr($t, 4) : '?tab=' . $t;
-      $on    = !$isUrl && in_array($activeTab, array_merge([$t], $item[4] ?? []), true) ? ' active' : '';
+      $href  = $isUrl ? substr($t, 4) : '?tab=' . str_replace('?', '&', $t);
+      $on    = $navIsOn($item) ? ' active' : '';
       $b     = $badge > 0 ? ' <span class="sidebar-badge sidebar-badge-danger">' . $badge . '</span>' : '';
       return '<a href="' . htmlspecialchars($href) . '" class="' . $cls . $on . '"><i class="fas ' . $icon . '"></i><span>' . $label . '</span>' . $b . '</a>';
   };
@@ -749,7 +776,7 @@ require_once 'header.php';
     </div>
     <nav class="sidebar-nav">
       <?php foreach ($adminNav as $group => $items):
-          $groupOn = in_array($activeTab, array_merge(array_column($items, 0), ...array_map(fn($i) => $i[4] ?? [], $items)), true); ?>
+          $groupOn = (bool)array_filter($items, $navIsOn); ?>
         <div class="sidebar-group<?= $groupOn ? ' active' : '' ?>"><?= e($group) ?></div>
         <?php foreach ($items as $item) echo $navLink($item, 'sidebar-link'); ?>
       <?php endforeach; ?>
@@ -824,8 +851,12 @@ require_once 'header.php';
 
     <!-- To-do: the jobs only a person can do, with who is waiting. Each name opens the job. -->
     <?php $todo = [
-        ['leads',        'fa-user-plus',     (int)$stats['leads_waiting'],   'Leads to contact',                   '?tab=leads'],
-        ['applications', 'fa-handshake',     (int)$stats['applications_waiting'] - (int)$stats['outbox_waiting'], 'Finance &amp; pre-auction to action', '?tab=applications'],
+        ['leads_registration', 'fa-id-card',        (int)$stats['leads_by_topic']['registration'], 'Registrations to follow up',  '?tab=leads&topic=registration'],
+        ['apps_finance',       'fa-file-signature', (int)$stats['apps_by_kind']['finance'],        'Finance applications to action', '?tab=applications&kind=finance'],
+        ['leads_finance',      'fa-file-signature', (int)$stats['leads_by_topic']['finance'],      'Finance enquiries to contact', '?tab=leads&topic=finance'],
+        ['apps_preauction',    'fa-handshake',      (int)$stats['apps_by_kind']['preauction'],     'Pre-auction requests to action', '?tab=applications&kind=preauction'],
+        ['leads_preauction',   'fa-handshake',      (int)$stats['leads_by_topic']['preauction'],   'Pre-auction enquiries to contact', '?tab=leads&topic=preauction'],
+        ['leads_general',      'fa-comments',       (int)$stats['leads_by_topic']['general'],      'General enquiries to contact', '?tab=leads&topic=general'],
         ['outbox',       'fa-inbox',         (int)$stats['outbox_waiting'],  'Client emails waiting for approval', '?tab=applications&view=outbox'],
         ['pop',          'fa-file-invoice',  (int)$stats['pending_pops'],    'Proofs of payment to approve',       '?tab=pop'],
         ['banking',      'fa-university',    (int)$stats['bank_requests'],   'Banking-detail requests',            '?tab=banking'],

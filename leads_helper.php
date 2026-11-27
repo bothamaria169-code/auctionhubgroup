@@ -30,6 +30,20 @@ const LEAD_TYPES = [
 /** When one person is several leads, the most specific one decides the type, the script and the message. */
 const LEAD_PRIORITY = ['enquiry', 'bank', 'alert', 'signup', 'worker', 'newsletter'];
 
+/** Follow-up desks: every lead belongs to one, so registration, finance and pre-auction are worked separately. */
+const LEAD_TOPICS = [
+    'registration' => 'Registrations',
+    'finance'      => 'Finance',
+    'preauction'   => 'Pre-auction',
+    'general'      => 'General',
+];
+
+/** The desk one lead entry belongs to. */
+function leadEntryTopic(array $e): string {
+    if ($e['type'] === 'enquiry') return in_array($e['enq_type'] ?? '', ['registration', 'finance', 'preauction'], true) ? $e['enq_type'] : 'general';
+    return in_array($e['type'], ['bank', 'signup'], true) ? 'registration' : 'general';
+}
+
 const LEAD_STAGES = [
     'new'       => 'New',
     'contacted' => 'Contacted',
@@ -159,7 +173,7 @@ function leadEntries(string $since): array {
     $run("SELECT e.*, a.item_name, a.year AS a_year FROM enquiries e LEFT JOIN auctions a ON a.id = e.auction_id
           WHERE e.created_at >= ? ORDER BY e.id DESC LIMIT 1000",
         fn($r) => [
-            'type' => 'enquiry', 'id' => (int)$r['id'], 'at' => $r['created_at'], 'name' => $r['name'],
+            'type' => 'enquiry', 'enq_type' => (string)$r['type'], 'id' => (int)$r['id'], 'at' => $r['created_at'], 'name' => $r['name'],
             'email' => $r['email'], 'phone' => $r['phone'],
             'detail' => (ENQUIRY_TYPES[$r['type']] ?? 'Enquiry') . ($r['item_name'] ? ': ' . leadVehicleTitle($r['a_year'], $r['item_name']) : '')
                       . ($r['message'] ? ' — “' . mb_strimwidth(trim($r['message']), 0, 140, '…') . '”' : ''),
@@ -273,9 +287,15 @@ function leadPeople(int $days = 30): array {
         // A verified bidder who never had a status is already a win.
         if (!$s && $bs === 'verified_bidder') $stage = 'won';
 
+        // Desk: the most specific topic among this person's entries
+        $topics = array_map('leadEntryTopic', $items);
+        $topic = 'general';
+        foreach (['preauction', 'finance', 'registration'] as $t) if (in_array($t, $topics, true)) { $topic = $t; break; }
+
         $people[] = [
             'key'          => $key,
             'type'         => $main['type'],
+            'topic'        => $topic,
             'at'           => max(array_column($items, 'at')),
             'first_at'     => min(array_column($items, 'at')),
             'name'         => $name !== '' ? $name : 'Unknown',
@@ -303,19 +323,24 @@ function leadPeople(int $days = 30): array {
     return $people;
 }
 
-/** People still waiting for a first contact in the last 7 days + call-backs due. For the menu badge; cached 60 s. */
-function leadWaitingCount(): int {
-    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['ahg_lead_badge']) && $_SESSION['ahg_lead_badge']['at'] > time() - 60) {
-        return (int)$_SESSION['ahg_lead_badge']['n'];
+/** People still waiting for a first contact in the last 7 days + call-backs due, per desk (topic). Cached 60 s. */
+function leadWaitingByTopic(): array {
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['ahg_lead_badge2']) && $_SESSION['ahg_lead_badge2']['at'] > time() - 60) {
+        return $_SESSION['ahg_lead_badge2']['n'];
     }
-    $n = 0;
+    $n = array_fill_keys(array_keys(LEAD_TOPICS), 0);
     try {
         foreach (leadPeople(7) as $p) {
-            if ($p['stage'] === 'new' || ($p['call_back_at'] && $p['call_back_at'] <= date('Y-m-d') && !in_array($p['stage'], ['won', 'lost'], true))) $n++;
+            if ($p['stage'] === 'new' || ($p['call_back_at'] && $p['call_back_at'] <= date('Y-m-d') && !in_array($p['stage'], ['won', 'lost'], true))) $n[$p['topic']]++;
         }
-    } catch (Throwable $e) { $n = 0; }
-    if (session_status() === PHP_SESSION_ACTIVE) $_SESSION['ahg_lead_badge'] = ['at' => time(), 'n' => $n];
+    } catch (Throwable $e) { /* counts stay 0 */ }
+    if (session_status() === PHP_SESSION_ACTIVE) $_SESSION['ahg_lead_badge2'] = ['at' => time(), 'n' => $n];
     return $n;
+}
+
+/** All waiting leads, for the menu badge. */
+function leadWaitingCount(): int {
+    return array_sum(leadWaitingByTopic());
 }
 
 /** Writes progress for one person. $fields: stage, outcome, note, call_back_at, emailed (bool), called (bool). */
